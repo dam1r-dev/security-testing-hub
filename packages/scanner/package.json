@@ -1,0 +1,17 @@
+{
+  "name": "@security-hub/scanner",
+  "version": "0.1.0",
+  "description": "Core AST parsing, taint analysis and vulnerability detection engine",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest"
+  },
+  "dependencies": {
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-javascript": "^0.23.1",
+    "tree-sitter-typescript": "^0.23.2"
+  },
+  "license": "MIT"
+}

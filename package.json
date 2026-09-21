@@ -1,0 +1,37 @@
+{
+  "name": "security-testing-hub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source SAST scanner for Node.js/Express apps — catches SQL injection, XSS, command injection, path traversal and CSRF in vibe-coded JS/TS projects.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @security-hub/scanner && npm run build -w @security-hub/cli",
+    "pretest": "npm run build",
+    "test": "npm run test -w @security-hub/scanner && npm run test -w @security-hub/cli",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"packages/**/*.ts\"",
+    "scan": "node packages/cli/bin/security-hub.js"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.2",
+    "@typescript-eslint/eslint-plugin": "^8.19.0",
+    "@typescript-eslint/parser": "^8.19.0",
+    "eslint": "^8.57.1",
+    "jest": "^29.7.0",
+    "prettier": "^3.4.2",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "author": "Damir Panzhazov",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dam1r-dev/security-testing-hub.git"
+  }
+}
