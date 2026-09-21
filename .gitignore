@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+.DS_Store
+coverage/
+*.tsbuildinfo
+.env
+.env.local
+*.sarif
+/tmp/
