@@ -5,8 +5,9 @@ import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
 // trailing property/index access, e.g. req.params.id, req.query['name'].
 const SOURCE_PATTERN = /^req\.(params|query|body|cookies|headers)(\.\w+|\[[^\]]*\])?$/;
 
-// db.query(...), pool.execute(...), knex.raw(...), sequelize.query(...), etc.
-const SINK_CALLEE_PATTERN = /(^|\.)(query|execute|raw)$/;
+// db.query(...), pool.execute(...), knex.raw(...), sequelize.query(...),
+// db.prepare(...) (better-sqlite3, node:sqlite), etc.
+const SINK_CALLEE_PATTERN = /(^|\.)(query|execute|raw|prepare)$/;
 
 function isSource(node: SyntaxNode): boolean {
   if (node.type !== "member_expression" && node.type !== "subscript_expression") return false;
@@ -23,7 +24,8 @@ function isSink(node: SyntaxNode): boolean {
 
 /**
  * Detects raw, un-parameterized string concatenation/interpolation of
- * request data into SQL query calls (db.query, pool.execute, knex.raw, ...).
+ * request data into SQL query calls (db.query, pool.execute, knex.raw,
+ * db.prepare, ...).
  *
  * Only flags string interpolation into the query text — calls that pass the
  * tainted value as a bound parameter (the 2nd+ argument to db.query(sql, [id]))

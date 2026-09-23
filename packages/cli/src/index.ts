@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { runScan } from "./commands/scan";
+import { runLab } from "./commands/lab";
 import { Severity } from "@security-hub/scanner";
 
 const VALID_SEVERITIES: Severity[] = ["low", "medium", "high", "critical"];
@@ -45,11 +46,11 @@ export function run(argv: string[]): void {
     });
 
   program
-    .command("lab <name>")
-    .description("Spin up a Docker vulnerability lab to practice against (coming in Phase 6)")
-    .action((name: string) => {
-      console.log(chalk.yellow(`'lab ${name}' isn't implemented yet — Docker labs land in Phase 6 of the dev plan.`));
-      process.exitCode = 1;
+    .command("lab [name]")
+    .description("Start (or stop, with --stop) a Docker vulnerability lab to practice against")
+    .option("--stop", "stop and clean up the lab instead of starting it")
+    .action((name: string | undefined, opts) => {
+      process.exitCode = runLab(name, { stop: !!opts.stop });
     });
 
   program

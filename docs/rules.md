@@ -18,8 +18,9 @@ disclosure) that have no rule at all.
 
 - **Sources:** `req.params`, `req.query`, `req.body`, `req.cookies`, `req.headers`
   (with or without a property/index access).
-- **Sinks:** any call whose callee ends in `.query`, `.execute`, or `.raw`
-  (covers `db.query`, `pool.execute`, `knex.raw`, `sequelize.query`, ...).
+- **Sinks:** any call whose callee ends in `.query`, `.execute`, `.raw`, or
+  `.prepare` (covers `db.query`, `pool.execute`, `knex.raw`,
+  `sequelize.query`, `db.prepare` as used by `better-sqlite3`/`node:sqlite`, ...).
 - **Not flagged:** calls whose first argument is a static string with no
   `${...}` interpolation and a second argument — the parameterized-query
   pattern (`db.query("... WHERE id = ?", [id])`).
