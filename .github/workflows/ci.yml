@@ -42,6 +42,11 @@ jobs:
       - name: DEBUG jest --runInBand
         continue-on-error: true
         run: cd packages/scanner && npx jest --runInBand
+      - name: DEBUG rebuild tree-sitter from source, then retest
+        continue-on-error: true
+        run: |
+          npm rebuild tree-sitter tree-sitter-javascript tree-sitter-typescript --build-from-source
+          cd packages/scanner && npx jest
       # --- end temporary diagnostics ---
 
       - name: Test
