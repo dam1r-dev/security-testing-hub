@@ -30,6 +30,20 @@ jobs:
       - name: Build
         run: npm run build
 
+      # --- TEMPORARY DIAGNOSTICS for a CI-only tree-sitter native binding
+      # issue (passes on every local OS tested, fails deterministically here).
+      # Remove this block once root-caused.
+      - name: DEBUG native module info
+        continue-on-error: true
+        run: |
+          node -e "console.log(process.versions)"
+          find . -name "*.node" -not -path "*/node_modules/.bin/*" -exec ls -la {} \; 2>&1 || true
+          node scripts/debug-parse.js
+      - name: DEBUG jest --runInBand
+        continue-on-error: true
+        run: cd packages/scanner && npx jest --runInBand
+      # --- end temporary diagnostics ---
+
       - name: Test
         run: npm test
 
