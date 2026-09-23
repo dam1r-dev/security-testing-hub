@@ -75,4 +75,29 @@ describe("SqlInjectionAnalyzer", () => {
     const result = scanSource(source, "app.js", analyzers);
     expect(result.findings).toHaveLength(1);
   });
+
+  it("flags SQL injection via db.prepare (better-sqlite3 style)", () => {
+    const source = `
+      app.get("/products", (req, res) => {
+        const category = req.query.category;
+        const sql = \`SELECT id FROM products WHERE category = '\${category}'\`;
+        const rows = db.prepare(sql).all();
+        res.json(rows);
+      })
+    `;
+    const result = scanSource(source, "app.js", analyzers);
+    expect(result.findings).toHaveLength(1);
+  });
+
+  it("does not flag a parameterized db.prepare(...).all(param) call", () => {
+    const source = `
+      app.get("/products", (req, res) => {
+        const category = req.query.category;
+        const rows = db.prepare("SELECT id FROM products WHERE category = ?").all(category);
+        res.json(rows);
+      })
+    `;
+    const result = scanSource(source, "app.js", analyzers);
+    expect(result.findings).toHaveLength(0);
+  });
 });

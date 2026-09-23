@@ -149,6 +149,11 @@ it's confirmed.
 **Fix:** parameterized queries (prepared statements) only — never build SQL
 by concatenating user input into it.
 
+> 🧪 Want to try this for real instead of just reading about it?
+> `npm run lab:sql-injection:up` starts a runnable version of exactly this
+> bug (see [labs/sql-injection/README.md](../labs/sql-injection/README.md)) —
+> exploit it, then flip `SAFE_MODE=1` and watch the same payload fail.
+
 ## 15. SQL Injection — login bypass
 
 **CWE-89 / CWE-287** · Auto-detected: ✅ `sql-injection`

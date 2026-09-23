@@ -1,0 +1,15 @@
+{
+  "name": "sql-injection-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deliberately vulnerable app for the SQL Injection Docker lab. DO NOT deploy this.",
+  "main": "server.js",
+  "scripts": {
+    "seed": "node seed.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "express": "^4.21.2"
+  }
+}

@@ -89,6 +89,26 @@ Try it against the bundled, deliberately-broken fixture app:
 npm run scan -- scan examples/vulnerable-express-app
 ```
 
+## Hands-on labs
+
+Beyond static scanning, `labs/` has runnable Docker labs — a real vulnerable
+app you exploit for real, not just a scanner finding to read.
+
+```bash
+npm run lab:sql-injection:up      # starts the lab on localhost:3300
+# ... follow labs/sql-injection/README.md to exploit it ...
+npm run lab:sql-injection:down    # stop and clean up
+
+# or let the CLI drive it:
+node packages/cli/bin/security-hub.js lab sql-injection
+```
+
+`npm run lab:sql-injection:e2e` runs the whole thing non-interactively: it
+proves the vulnerable version leaks the flag via SQL injection, then proves
+the parameterized-query fix actually closes it — the same check CI runs on
+every push. Currently just SQL Injection; more labs (XSS, CSRF, ...) are a
+post-MVP goal (see [docs/dev-plan.md](docs/dev-plan.md)).
+
 ## Scope & limitations
 
 This is a v1 MVP, built to a **realistic** plan (see
@@ -125,7 +145,9 @@ packages/
   cli/       `security-hub` command-line interface
 examples/
   vulnerable-express-app/   deliberately vulnerable fixture app (do not deploy)
-docs/        rule docs, dev plan, Russian docs
+labs/
+  sql-injection/   runnable Docker lab: exploit it, then verify the fix
+docs/        rule docs, dev plan, attack playbook (EN/RU/KK)
 ```
 
 ## Contributing

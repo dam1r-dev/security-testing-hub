@@ -148,7 +148,10 @@ function analyzeFunctionBody(funcNode, sourcePatterns, sinkPatterns) {
 - ✅ **Phase 3/4 (5 базовых типов атак)** — SQLi, XSS, Command Injection, Path Traversal, CSRF реализованы
   как первая версия (глубже per-type edge cases — ещё предстоит по мере роста набора тестов)
 - ✅ **Phase 5 (CLI + SARIF)** — `security-hub scan` с text/json/sarif выводом, `--fail-on` для CI
-- ⬜ **Phase 6 (Docker Lab)** — не начато
+- ✅ **Phase 6 (Docker Lab)** — SQL Injection lab (`labs/sql-injection/`): уязвимый + safe-mode
+  в одном образе (переключение `SAFE_MODE` env), E2E-скрипт (`labs/sql-injection/e2e.js`)
+  доказывает эксплуатируемость И то, что фикс реально закрывает баг, CLI-команда `security-hub lab`,
+  отдельная CI-джоба. Остальные лабы (XSS, CSRF) — после MVP.
 - 🟡 **Phase 7 (Documentation)** — README (EN+RU), `docs/rules.md`, `docs/attack-playbook.md` (EN/RU/KK) есть; полные гайды — в процессе
 - 🟡 **Phase 8 (Testing + CSRF Lab)** — Jest-тесты для всех анализаторов есть, coverage-таргет и Docker-лабы — не начато
 - ✅ **Phase 9 (частично)** — CONTRIBUTING.md, CODE_OF_CONDUCT.md, PR/Issue шаблоны, CI на GitHub Actions
