@@ -1,16 +1,10 @@
 import { SyntaxNode } from "../parsers/utils";
 import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
-
-const SOURCE_PATTERN = /^req\.(params|query|body|cookies|headers)(\.\w+|\[[^\]]*\])?$/;
+import { isRequestSource } from "./sources";
 
 const FS_METHOD_PATTERN =
   /^(readFile|readFileSync|writeFile|writeFileSync|appendFile|appendFileSync|unlink|unlinkSync|createReadStream|createWriteStream|open|openSync)$/;
 const FS_OBJECT_PATTERN = /^(fs|fsPromises|promises)$/;
-
-function isSource(node: SyntaxNode): boolean {
-  if (node.type !== "member_expression" && node.type !== "subscript_expression") return false;
-  return SOURCE_PATTERN.test(node.text);
-}
 
 function isSink(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;
@@ -33,7 +27,7 @@ export class PathTraversalAnalyzer extends BaseAnalyzer {
       ruleId: "path-traversal",
       severity: "high",
       confidence: "low",
-      isSource,
+      isSource: isRequestSource,
       isSink,
       messageFor: (via) =>
         `User-controlled input ('${via}') is used to build a filesystem path. ` +

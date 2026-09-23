@@ -25,5 +25,5 @@
       }
     }
   ],
-  "ignorePatterns": ["dist", "node_modules", "examples/vulnerable-express-app"]
+  "ignorePatterns": ["dist", "node_modules", "examples/vulnerable-express-app", "examples/vulnerable-nextjs-app"]
 }

@@ -1,16 +1,11 @@
 import { SyntaxNode } from "../parsers/utils";
 import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
+import { isRequestSource } from "./sources";
 
-const SOURCE_PATTERN = /^req\.(params|query|body|cookies|headers)(\.\w+|\[[^\]]*\])?$/;
 const RESPONSE_OBJECT_PATTERN = /^(res|response)$/;
 const RESPONSE_METHOD_PATTERN = /^(send|write|end)$/;
 
-function isSource(node: SyntaxNode): boolean {
-  if (node.type !== "member_expression" && node.type !== "subscript_expression") return false;
-  return SOURCE_PATTERN.test(node.text);
-}
-
-function isSink(node: SyntaxNode): boolean {
+function isExpressSink(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;
   const callee = node.childForFieldName("function");
   if (!callee || callee.type !== "member_expression") return false;
@@ -18,6 +13,18 @@ function isSink(node: SyntaxNode): boolean {
   const property = callee.childForFieldName("property");
   if (!object || !property) return false;
   return RESPONSE_OBJECT_PATTERN.test(object.text) && RESPONSE_METHOD_PATTERN.test(property.text);
+}
+
+// Next.js / Web API: `new Response(html, ...)` / `new NextResponse(html, ...)` with a
+// raw body — unlike NextResponse.json(...), this doesn't escape anything for you.
+function isWebResponseSink(node: SyntaxNode): boolean {
+  if (node.type !== "new_expression") return false;
+  const constructor = node.childForFieldName("constructor");
+  return !!constructor && /^(Response|NextResponse)$/.test(constructor.text);
+}
+
+function isSink(node: SyntaxNode): boolean {
+  return isExpressSink(node) || isWebResponseSink(node);
 }
 
 /**
@@ -34,7 +41,7 @@ export class XssAnalyzer extends BaseAnalyzer {
       ruleId: "xss",
       severity: "high",
       confidence: "medium",
-      isSource,
+      isSource: isRequestSource,
       isSink,
       messageFor: (via) =>
         `User-controlled input ('${via}') is written directly into the HTTP response without escaping. ` +

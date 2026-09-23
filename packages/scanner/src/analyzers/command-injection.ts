@@ -1,16 +1,10 @@
 import { SyntaxNode } from "../parsers/utils";
 import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
-
-const SOURCE_PATTERN = /^req\.(params|query|body|cookies|headers)(\.\w+|\[[^\]]*\])?$/;
+import { isRequestSource } from "./sources";
 
 // child_process.exec / execSync spawn a shell and interpret the whole string,
 // which is what makes them command-injection sinks (unlike execFile/spawn with an argv array).
 const SINK_CALLEE_PATTERN = /(^|\.)(exec|execSync)$/;
-
-function isSource(node: SyntaxNode): boolean {
-  if (node.type !== "member_expression" && node.type !== "subscript_expression") return false;
-  return SOURCE_PATTERN.test(node.text);
-}
 
 function isSink(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;
@@ -33,7 +27,7 @@ export class CommandInjectionAnalyzer extends BaseAnalyzer {
       ruleId: "command-injection",
       severity: "critical",
       confidence: "medium",
-      isSource,
+      isSource: isRequestSource,
       isSink,
       messageFor: (via) =>
         `User-controlled input ('${via}') flows into a shell command. ` +

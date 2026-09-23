@@ -14,10 +14,22 @@ bug is structural (a missing check, a trusted client value) rather than
 by hand, and for the two attack classes (2FA bypass, response-field
 disclosure) that have no rule at all.
 
+## Sources (shared by all five data-flow rules)
+
+Defined once in `src/analyzers/sources.ts` so every rule stays in sync:
+
+- **Express:** `req.params`, `req.query`, `req.body`, `req.cookies`, `req.headers`
+  (with or without a property/index access), e.g. `req.params.id`.
+- **Next.js App Router / Web Request API:** `request.nextUrl.searchParams.get(...)`,
+  `new URL(request.url).searchParams.get(...)` (including the common
+  `const { searchParams } = new URL(request.url)` destructured form),
+  `request.cookies.get(...)`, and body readers `request.json()` / `.text()` / `.formData()`.
+  Not yet covered: dynamic route segments (the `{ params }` second handler
+  argument) — the name `params` is too generic to match safely without more
+  context, so it's a known gap.
+
 ## `sql-injection` (critical)
 
-- **Sources:** `req.params`, `req.query`, `req.body`, `req.cookies`, `req.headers`
-  (with or without a property/index access).
 - **Sinks:** any call whose callee ends in `.query`, `.execute`, `.raw`, or
   `.prepare` (covers `db.query`, `pool.execute`, `knex.raw`,
   `sequelize.query`, `db.prepare` as used by `better-sqlite3`/`node:sqlite`, ...).
@@ -30,7 +42,6 @@ disclosure) that have no rule at all.
 
 ## `xss` (high)
 
-- **Sources:** same as above.
 - **Sinks:** `res.send(...)`, `res.write(...)`, `res.end(...)` (object name
   must be `res` or `response`).
 - **Not flagged:** `res.render(...)` — most template engines (EJS, Pug,
@@ -39,7 +50,6 @@ disclosure) that have no rule at all.
 
 ## `command-injection` (critical)
 
-- **Sources:** same as above.
 - **Sinks:** `exec(...)`, `execSync(...)` (from `child_process`) — these run
   their string argument through a shell.
 - **Not flagged:** `execFile`/`spawn` with an argv array — the shell never
@@ -47,7 +57,6 @@ disclosure) that have no rule at all.
 
 ## `path-traversal` (high)
 
-- **Sources:** same as above.
 - **Sinks:** `fs.readFile`/`readFileSync`/`writeFile`/`writeFileSync`/
   `appendFile`/`appendFileSync`/`unlink`/`unlinkSync`/`createReadStream`/
   `createWriteStream`/`open`/`openSync` (object must be `fs`, `fsPromises`,
@@ -72,7 +81,6 @@ disclosure) that have no rule at all.
 
 ## `ssrf` (high)
 
-- **Sources:** same as above.
 - **Sinks:** `fetch(url)`, `request(url)`, `got(url)`, and
   `axios`/`http`/`https` client methods (`.get`, `.post`, `.put`, `.delete`,
   `.patch`, `.head`, `.request`).

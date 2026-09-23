@@ -4,11 +4,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 An open-source static analysis (SAST) scanner built for **"vibe coders"** —
-people shipping Node.js/Express apps fast with AI coding assistants, who
-don't always have time to review every line an LLM generates for injection
-bugs. Point it at your project; it parses the real AST (via
-[Tree-sitter](https://tree-sitter.github.io/tree-sitter/)) and flags
-untrusted input flowing into dangerous sinks.
+people shipping Node.js apps fast with AI coding assistants, who don't
+always have time to review every line an LLM generates for injection bugs.
+Point it at your project (Express **or** Next.js App Router); it parses the
+real AST (via [Tree-sitter](https://tree-sitter.github.io/tree-sitter/)) and
+flags untrusted input flowing into dangerous sinks.
 
 > 🇷🇺 Русская документация: [docs/README.ru.md](docs/README.ru.md) ·
 > 🇰🇿 Қазақша: [attack playbook](docs/attack-playbook.kk.md)
@@ -48,8 +48,11 @@ that need manual testing — the scanner can't catch everything).
 1. **Parse** — each `.js`/`.jsx`/`.ts`/`.tsx` file is parsed into a real AST
    with Tree-sitter (not regex).
 2. **Taint-track** — for the five data-flow rules, the analyzer finds
-   "source" expressions (`req.params`, `req.query`, `req.body`, ...),
-   follows them through local variable assignments and template-literal
+   "source" expressions — Express's `req.params`/`req.query`/`req.body`, or
+   Next.js App Router's `request.nextUrl.searchParams.get(...)`,
+   `request.cookies.get(...)`, `request.json()` (see
+   [docs/rules.md](docs/rules.md#sources-shared-by-all-five-data-flow-rules))
+   — follows them through local variable assignments and template-literal
    interpolation **within the same function** (intra-procedural — see
    [Scope & limitations](#scope--limitations)), and checks whether a
    "sink" call (`db.query`, `res.send`, `exec`, `fs.readFile`, ...) uses
@@ -83,10 +86,11 @@ npm run scan -- scan ./my-express-app --format sarif --out results.sarif
 npm run scan -- scan ./my-express-app --fail-on high
 ```
 
-Try it against the bundled, deliberately-broken fixture app:
+Try it against the bundled, deliberately-broken fixture apps:
 
 ```bash
 npm run scan -- scan examples/vulnerable-express-app
+npm run scan -- scan examples/vulnerable-nextjs-app
 ```
 
 ## Hands-on labs
@@ -136,6 +140,15 @@ This is a v1 MVP, built to a **realistic** plan (see
   API response body (needs modeling response shapes). Both are documented
   as manual-testing checklist items in
   [docs/attack-playbook.md](docs/attack-playbook.md).
+- **Next.js dynamic route segments** (the `{ params }` second handler
+  argument, e.g. `export async function GET(request, { params })`) aren't
+  recognized as a taint source yet — `params` alone is too generic a name to
+  match safely without more context. `searchParams`/cookies/body readers are covered.
+- **The `csrf`/`idor`/`broken-access-control` route heuristics are
+  Express-only** (they look for `app.get(...)`/`router.post(...)`
+  registration calls, which Next.js's file-based routing doesn't have) —
+  they won't fire on a Next.js project. The five data-flow rules
+  (SQLi/XSS/command injection/path traversal/SSRF) work on both.
 
 ## Project layout
 
@@ -144,7 +157,8 @@ packages/
   scanner/   core: Tree-sitter parsing, taint analysis, analyzers, SARIF output
   cli/       `security-hub` command-line interface
 examples/
-  vulnerable-express-app/   deliberately vulnerable fixture app (do not deploy)
+  vulnerable-express-app/   deliberately vulnerable Express fixture app (do not deploy)
+  vulnerable-nextjs-app/    same idea, Next.js App Router style (do not deploy)
 labs/
   sql-injection/   runnable Docker lab: exploit it, then verify the fix
 docs/        rule docs, dev plan, attack playbook (EN/RU/KK)
