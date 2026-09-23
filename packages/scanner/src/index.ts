@@ -7,6 +7,12 @@ import { XssAnalyzer } from "./analyzers/xss";
 import { CommandInjectionAnalyzer } from "./analyzers/command-injection";
 import { PathTraversalAnalyzer } from "./analyzers/path-traversal";
 import { CsrfAnalyzer } from "./analyzers/csrf";
+import { SsrfAnalyzer } from "./analyzers/ssrf";
+import { IdorAnalyzer } from "./analyzers/idor";
+import { BrokenAccessControlAnalyzer } from "./analyzers/broken-access-control";
+import { InsecureRoleAssignmentAnalyzer } from "./analyzers/insecure-role-assignment";
+import { InsecureFileUploadAnalyzer } from "./analyzers/insecure-file-upload";
+import { UsernameEnumerationAnalyzer } from "./analyzers/username-enumeration";
 import { ScanResult, ScanSummary } from "./types";
 
 export * from "./types";
@@ -23,6 +29,12 @@ export function defaultAnalyzers(): Analyzer[] {
     new CommandInjectionAnalyzer(),
     new PathTraversalAnalyzer(),
     new CsrfAnalyzer(),
+    new SsrfAnalyzer(),
+    new IdorAnalyzer(),
+    new BrokenAccessControlAnalyzer(),
+    new InsecureRoleAssignmentAnalyzer(),
+    new InsecureFileUploadAnalyzer(),
+    new UsernameEnumerationAnalyzer(),
   ];
 }
 

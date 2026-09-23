@@ -1,8 +1,18 @@
 # Rule reference
 
-Every rule except CSRF works the same way: **source → alias propagation →
-sink**, scoped to a single function body (intra-procedural). See
+`sql-injection`, `xss`, `command-injection`, `path-traversal`, and `ssrf`
+share one engine: **source → alias propagation → sink**, scoped to a single
+function body (intra-procedural). See
 [README.md](../README.md#scope--limitations) for why that scope was chosen.
+
+The rest (`csrf`, `idor`, `broken-access-control`,
+`insecure-role-assignment`, `insecure-file-upload`, `username-enumeration`)
+are pattern/heuristic checks — they don't need a data-flow sink because the
+bug is structural (a missing check, a trusted client value) rather than
+"tainted data reached a dangerous call". See
+[docs/attack-playbook.md](attack-playbook.md) for how to verify any of these
+by hand, and for the two attack classes (2FA bypass, response-field
+disclosure) that have no rule at all.
 
 ## `sql-injection` (critical)
 
@@ -58,6 +68,92 @@ sink**, scoped to a single function body (intra-procedural). See
 - **False positives:** pure bearer-token/JWT APIs (not cookie-based) aren't
   exploitable via CSRF at all; this rule doesn't yet distinguish that and
   will still flag them. Session/cookie auth is the assumed case.
+
+## `ssrf` (high)
+
+- **Sources:** same as above.
+- **Sinks:** `fetch(url)`, `request(url)`, `got(url)`, and
+  `axios`/`http`/`https` client methods (`.get`, `.post`, `.put`, `.delete`,
+  `.patch`, `.head`, `.request`).
+- **Known gap:** doesn't distinguish the URL argument from other arguments
+  (e.g. request body/headers) — taint anywhere in the call's arguments is
+  flagged, same simplification as the other taint rules.
+
+## `idor` (high) — heuristic, route-scoped
+
+- Flags `app`/`router` routes whose path has an id-like param (`:id`,
+  `:userId`, `:accountId`, `:orderId`, ...) when the handler has **no**
+  reference to `req.user`, `req.session`, `req.auth`, or `req.currentUser`
+  anywhere in it.
+- **Doesn't distinguish predictable vs. unpredictable (GUID) ids** — both
+  get flagged identically, because the underlying bug (no per-object
+  authorization check) is the same either way; an unguessable id only makes
+  the attack slower to find manually, not impossible.
+- **False positives:** routes that look up shared/public resources by id
+  (e.g. `/api/products/:id`) don't need an ownership check and will still be
+  flagged — this rule can't tell "belongs to a user" apart from "public data".
+
+## `broken-access-control` (critical) — heuristic, route-scoped
+
+- Flags `app`/`router` routes whose path looks privileged (`/admin`,
+  `/internal`, `/manage`, `/management`, `/dashboard`, `/debug`, `/superuser`,
+  `/root`) when the route registration has **no** reference to common
+  auth/role-check identifiers (`isAuthenticated`, `requireAuth`,
+  `requireAdmin`, `passport`, `req.user.role`, `jwt.verify`, ...).
+- **On purpose, a hidden/unguessable URL is flagged exactly the same as an
+  obvious one** — the path being secret isn't access control.
+- **False positives:** a route whose auth check lives in a global
+  `app.use(...)` middleware earlier in the file (rather than passed inline
+  to this specific route, or named something this rule doesn't recognize)
+  will still be flagged.
+
+## `insecure-role-assignment` (critical) — pattern match, no sink
+
+- Flags any read of a role/admin/permission-looking field directly from
+  `req.body`/`req.query`/`req.cookies`/`req.headers`
+  (`req.cookies.Admin`, `req.body.isAdmin`, `req.query.role`, ...).
+- No taint-tracking needed here — the read itself is the bug, since the
+  client fully controls that value regardless of where it's later used.
+- **False positives:** legitimate uses like an admin-only *filter* parameter
+  on a public search endpoint (`?role=admin` to filter a public directory,
+  not to grant privileges) will still be flagged.
+
+## `insecure-file-upload` (high)
+
+- Flags a `multer({ fileFilter: ... })` whose filter function checks
+  `file.mimetype` (client-supplied, from the `Content-Type` header) without
+  also checking the file's extension/name (`file.originalname`,
+  `path.extname`, ...).
+- Only covers this specific, common bug shape; a `multer(...)` call with no
+  `fileFilter` at all isn't flagged (broader risk, different fix).
+
+## `username-enumeration` (medium) — heuristic, exact-wording only
+
+- Within a function whose text mentions login/auth-ish keywords, flags two
+  **distinct** string literals — one implying "no such user" (`invalid
+  username`, `user not found`, ...) and another implying "wrong password"
+  (`invalid password`, `incorrect password`, ...).
+- **Narrow by design:** only catches differing message text. It cannot see
+  differences in HTTP status code or response timing, which are just as
+  exploitable for enumeration — those need manual/dynamic testing (see
+  [docs/attack-playbook.md](attack-playbook.md)).
+
+## Not covered by static analysis (see the manual testing guide instead)
+
+Two classes from the same attack list this scanner targets aren't reliably
+catchable by parsing source code, and there's no rule for them:
+
+- **2FA bypass by URL/state manipulation** — whether a "2FA verified" flag is
+  actually enforced on every protected route is a property of runtime
+  session state and request flow, not something visible in a single file's
+  AST.
+- **IDOR variants that leak a password field in a response** — this scanner
+  doesn't model response JSON shapes, so it can't tell a leaked password
+  field from any other field. The `idor` rule above still catches the root
+  cause (missing ownership check) for the same routes.
+
+Both are covered as manual checklist items in
+[docs/attack-playbook.md](attack-playbook.md).
 
 ## Output formats
 

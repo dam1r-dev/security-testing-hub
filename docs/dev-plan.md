@@ -145,10 +145,21 @@ function analyzeFunctionBody(funcNode, sourcePatterns, sinkPatterns) {
 
 - ✅ **Phase 1 (Architecture Setup)** — монорепо, TypeScript, Tree-sitter config
 - ✅ **Phase 2 (Parser + Basic Taint)** — `ast-parser.ts`, `simple-taint.ts`, SQL injection analyzer
-- ✅ **Phase 3/4 (все 5 типов атак)** — SQLi, XSS, Command Injection, Path Traversal, CSRF реализованы
+- ✅ **Phase 3/4 (5 базовых типов атак)** — SQLi, XSS, Command Injection, Path Traversal, CSRF реализованы
   как первая версия (глубже per-type edge cases — ещё предстоит по мере роста набора тестов)
 - ✅ **Phase 5 (CLI + SARIF)** — `security-hub scan` с text/json/sarif выводом, `--fail-on` для CI
 - ⬜ **Phase 6 (Docker Lab)** — не начато
-- 🟡 **Phase 7 (Documentation)** — README (EN+RU), `docs/rules.md` есть; полные гайды — в процессе
-- 🟡 **Phase 8 (Testing + CSRF Lab)** — Jest-тесты для всех 5 анализаторов есть, coverage-таргет и CSRF lab — не начато
+- 🟡 **Phase 7 (Documentation)** — README (EN+RU), `docs/rules.md`, `docs/attack-playbook.md` (EN/RU/KK) есть; полные гайды — в процессе
+- 🟡 **Phase 8 (Testing + CSRF Lab)** — Jest-тесты для всех анализаторов есть, coverage-таргет и Docker-лабы — не начато
 - ✅ **Phase 9 (частично)** — CONTRIBUTING.md, CODE_OF_CONDUCT.md, PR/Issue шаблоны, CI на GitHub Actions
+
+### Расширение за пределы исходного плана
+
+По запросу (сопоставление с классическим списком из 15 категорий веб-атак
+— PortSwigger/OWASP-стиль) набор правил расширен с 5 до 11 типов:
+добавлены SSRF, IDOR, Broken Access Control, Insecure Role Assignment,
+Insecure File Upload и Username Enumeration (последние пять — эвристики
+по паттернам/роутам, не taint-анализ). Два класса из списка (2FA bypass,
+утечка пароля в теле ответа) статически не детектируются — они
+задокументированы как чек-лист для ручного тестирования в
+[docs/attack-playbook.md](attack-playbook.md).

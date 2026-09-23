@@ -6,7 +6,7 @@ import { runScan } from "../src/commands/scan";
 const FIXTURE_APP = path.resolve(__dirname, "../../../examples/vulnerable-express-app");
 
 describe("runScan against the vulnerable-express-app fixture", () => {
-  it("finds all five vulnerability classes, none in the safe route", () => {
+  it("finds all eleven vulnerability classes, none in the safe routes", () => {
     const outFile = path.join(os.tmpdir(), `security-hub-test-${Date.now()}.json`);
     const exitCode = runScan(FIXTURE_APP, { format: "json", out: outFile });
     const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
@@ -17,13 +17,37 @@ describe("runScan against the vulnerable-express-app fixture", () => {
     );
 
     expect(ruleIds).toEqual(
-      new Set(["sql-injection", "xss", "command-injection", "path-traversal", "csrf"]),
+      new Set([
+        "sql-injection",
+        "xss",
+        "command-injection",
+        "path-traversal",
+        "csrf",
+        "ssrf",
+        "idor",
+        "broken-access-control",
+        "insecure-role-assignment",
+        "insecure-file-upload",
+        "username-enumeration",
+      ]),
     );
-    // Safe, parameterized route must not be flagged.
+    // Safe, parameterized query in users.js (the /user-safe/:id route) must not be
+    // flagged as SQL injection, even though it's still flagged for IDOR (no
+    // ownership check) — that's a separate, still-real concern in this fixture.
     const usersFile = summary.results.find((r: { file: string }) => r.file.endsWith("users.js"));
-    expect(usersFile.findings.some((f: { location: { startLine: number } }) => f.location.startLine >= 17)).toBe(
-      false,
+    expect(
+      usersFile.findings.some(
+        (f: { ruleId: string; location: { startLine: number } }) =>
+          f.ruleId === "sql-injection" && f.location.startLine >= 17,
+      ),
+    ).toBe(false);
+    // Safe, ownership-checked route in accounts.js must not be flagged as IDOR.
+    const accountsFile = summary.results.find((r: { file: string }) => r.file.endsWith("accounts.js"));
+    expect(accountsFile.findings.every((f: { ruleId: string }) => f.ruleId !== "idor")).toBe(false); // vulnerable route IS flagged
+    const accountsSafeFindings = accountsFile.findings.filter(
+      (f: { location: { startLine: number } }) => f.location.startLine >= 9,
     );
+    expect(accountsSafeFindings).toHaveLength(0);
     expect(exitCode).toBe(0);
   });
 

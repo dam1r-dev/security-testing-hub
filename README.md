@@ -10,7 +10,8 @@ bugs. Point it at your project; it parses the real AST (via
 [Tree-sitter](https://tree-sitter.github.io/tree-sitter/)) and flags
 untrusted input flowing into dangerous sinks.
 
-> 🇷🇺 Русская документация: [docs/README.ru.md](docs/README.ru.md)
+> 🇷🇺 Русская документация: [docs/README.ru.md](docs/README.ru.md) ·
+> 🇰🇿 Қазақша: [attack playbook](docs/attack-playbook.kk.md)
 
 ## Why this exists
 
@@ -28,16 +29,25 @@ tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 | Cross-Site Scripting (reflected) | [CWE-79](https://cwe.mitre.org/data/definitions/79.html) | `res.send`/`write`/`end` taint tracking |
 | OS Command Injection | [CWE-78](https://cwe.mitre.org/data/definitions/78.html) | `child_process.exec`/`execSync` taint tracking |
 | Path Traversal | [CWE-22](https://cwe.mitre.org/data/definitions/22.html) | `fs.*` taint tracking |
+| Server-Side Request Forgery (SSRF) | [CWE-918](https://cwe.mitre.org/data/definitions/918.html) | `fetch`/`axios`/`http(s)`/`request`/`got` taint tracking |
 | CSRF | [CWE-352](https://cwe.mitre.org/data/definitions/352.html) | route heuristic (no token check found) |
+| IDOR | [CWE-639](https://cwe.mitre.org/data/definitions/639.html) | route heuristic (id-like param, no ownership check) |
+| Broken Access Control | [OWASP A01:2021](https://owasp.org/Top10/A01_2021-Broken_Access_Control/) | route heuristic (admin-looking path, no auth check) |
+| Insecure Role Assignment | [CWE-639](https://cwe.mitre.org/data/definitions/639.html) | pattern match (role/admin field read from client input) |
+| Insecure File Upload | [CWE-434](https://cwe.mitre.org/data/definitions/434.html) | pattern match (upload filter trusts Content-Type only) |
+| Username Enumeration | [CWE-203](https://cwe.mitre.org/data/definitions/203.html) | pattern match (distinct login error messages) |
 
 See [docs/rules.md](docs/rules.md) for how each rule works and its known
-false-positive/false-negative tradeoffs.
+false-positive/false-negative tradeoffs, and
+[docs/attack-playbook.md](docs/attack-playbook.md) for a hands-on guide to
+testing every one of these (plus 2FA bypass and a couple of IDOR variants
+that need manual testing — the scanner can't catch everything).
 
 ## How it works
 
 1. **Parse** — each `.js`/`.jsx`/`.ts`/`.tsx` file is parsed into a real AST
    with Tree-sitter (not regex).
-2. **Taint-track** — for the four data-flow rules, the analyzer finds
+2. **Taint-track** — for the five data-flow rules, the analyzer finds
    "source" expressions (`req.params`, `req.query`, `req.body`, ...),
    follows them through local variable assignments and template-literal
    interpolation **within the same function** (intra-procedural — see
@@ -95,11 +105,17 @@ This is a v1 MVP, built to a **realistic** plan (see
   comparison, Snyk sits around 15–20% FP and SonarQube around 20–30% FP —
   a v1 tool from a solo dev landing in that range is an honest result, not
   a bug. Expect to triage findings, not treat every one as gospel.
-- **CSRF detection is heuristic**, not taint-based: it flags state-changing
-  routes (`POST`/`PUT`/`DELETE`/`PATCH`) in files with no visible CSRF
-  middleware/token check. It assumes cookie/session-based auth; pure
-  bearer-token APIs aren't CSRF-exploitable and should be filtered out
-  manually for now.
+- **CSRF, IDOR, Broken Access Control, Insecure Role Assignment, Insecure
+  File Upload and Username Enumeration are heuristic/pattern checks, not
+  taint-based** — each is documented in [docs/rules.md](docs/rules.md)
+  with its specific known false-positive shapes. CSRF, for example, assumes
+  cookie/session-based auth; pure bearer-token APIs aren't CSRF-exploitable
+  and should be filtered out manually for now.
+- **Two attack classes have no rule at all**: 2FA bypass (needs modeling
+  session/request-flow state) and detecting a password field leaked in an
+  API response body (needs modeling response shapes). Both are documented
+  as manual-testing checklist items in
+  [docs/attack-playbook.md](docs/attack-playbook.md).
 
 ## Project layout
 

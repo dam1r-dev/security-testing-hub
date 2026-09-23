@@ -31,6 +31,36 @@ const RULE_DESCRIPTIONS: Record<VulnerabilityType, { name: string; description: 
     description: "State-changing route with no detected CSRF protection.",
     helpUri: "https://owasp.org/www-community/attacks/csrf",
   },
+  ssrf: {
+    name: "Server-Side Request Forgery",
+    description: "User-controlled input is used to build a URL that the server fetches.",
+    helpUri: "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+  },
+  idor: {
+    name: "Insecure Direct Object Reference",
+    description: "Route selects a record by an id-like param with no visible ownership check.",
+    helpUri: "https://cwe.mitre.org/data/definitions/639.html",
+  },
+  "broken-access-control": {
+    name: "Broken Access Control",
+    description: "Privileged-looking route with no visible auth/role check.",
+    helpUri: "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
+  },
+  "insecure-role-assignment": {
+    name: "Insecure Role Assignment",
+    description: "Role/permission is read directly from client-controlled input.",
+    helpUri: "https://cwe.mitre.org/data/definitions/639.html",
+  },
+  "insecure-file-upload": {
+    name: "Insecure File Upload",
+    description: "Upload filter trusts the client-supplied Content-Type/MIME type only.",
+    helpUri: "https://cwe.mitre.org/data/definitions/434.html",
+  },
+  "username-enumeration": {
+    name: "Username Enumeration",
+    description: "Login handler returns distinguishable errors for unknown users vs. wrong passwords.",
+    helpUri: "https://cwe.mitre.org/data/definitions/203.html",
+  },
 };
 
 function levelFor(severity: Severity): "error" | "warning" | "note" {

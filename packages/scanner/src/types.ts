@@ -3,7 +3,13 @@ export type VulnerabilityType =
   | "xss"
   | "command-injection"
   | "path-traversal"
-  | "csrf";
+  | "csrf"
+  | "ssrf"
+  | "idor"
+  | "broken-access-control"
+  | "insecure-role-assignment"
+  | "insecure-file-upload"
+  | "username-enumeration";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 
