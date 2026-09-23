@@ -4,6 +4,7 @@ import * as path from "path";
 import { runScan } from "../src/commands/scan";
 
 const FIXTURE_APP = path.resolve(__dirname, "../../../examples/vulnerable-express-app");
+const NEXTJS_FIXTURE_APP = path.resolve(__dirname, "../../../examples/vulnerable-nextjs-app");
 
 describe("runScan against the vulnerable-express-app fixture", () => {
   it("finds all eleven vulnerability classes, none in the safe routes", () => {
@@ -65,5 +66,23 @@ describe("runScan against the vulnerable-express-app fixture", () => {
     fs.unlinkSync(outFile);
     expect(sarif.version).toBe("2.1.0");
     expect(sarif.runs[0].results.length).toBeGreaterThan(0);
+  });
+});
+
+describe("runScan against the vulnerable-nextjs-app fixture", () => {
+  it("finds all four vulnerability classes via Next.js App Router request patterns, none in the safe route", () => {
+    const outFile = path.join(os.tmpdir(), `security-hub-test-nextjs-${Date.now()}.json`);
+    const exitCode = runScan(NEXTJS_FIXTURE_APP, { format: "json", out: outFile });
+    const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
+    fs.unlinkSync(outFile);
+
+    const ruleIds = new Set(
+      summary.results.flatMap((r: { findings: { ruleId: string }[] }) => r.findings.map((f) => f.ruleId)),
+    );
+    expect(ruleIds).toEqual(new Set(["sql-injection", "ssrf", "xss", "command-injection"]));
+
+    const safeRoute = summary.results.find((r: { file: string }) => /user-safe[/\\]route\.ts$/.test(r.file));
+    expect(safeRoute.findings).toHaveLength(0);
+    expect(exitCode).toBe(0);
   });
 });

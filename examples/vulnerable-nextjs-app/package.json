@@ -1,0 +1,9 @@
+{
+  "name": "vulnerable-nextjs-app-example",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deliberately vulnerable Next.js App Router app used as a scanner test fixture. DO NOT deploy this.",
+  "dependencies": {
+    "next": "^15.0.0"
+  }
+}

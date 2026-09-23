@@ -1,18 +1,10 @@
 import { SyntaxNode } from "../parsers/utils";
 import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
-
-// req.params / req.query / req.body / req.cookies / req.headers, with or without a
-// trailing property/index access, e.g. req.params.id, req.query['name'].
-const SOURCE_PATTERN = /^req\.(params|query|body|cookies|headers)(\.\w+|\[[^\]]*\])?$/;
+import { isRequestSource } from "./sources";
 
 // db.query(...), pool.execute(...), knex.raw(...), sequelize.query(...),
 // db.prepare(...) (better-sqlite3, node:sqlite), etc.
 const SINK_CALLEE_PATTERN = /(^|\.)(query|execute|raw|prepare)$/;
-
-function isSource(node: SyntaxNode): boolean {
-  if (node.type !== "member_expression" && node.type !== "subscript_expression") return false;
-  return SOURCE_PATTERN.test(node.text);
-}
 
 function isSink(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;
@@ -37,7 +29,7 @@ export class SqlInjectionAnalyzer extends BaseAnalyzer {
       ruleId: "sql-injection",
       severity: "critical",
       confidence: "medium",
-      isSource,
+      isSource: isRequestSource,
       isSink: (node) => isSink(node) && !usesParameterizedArgs(node),
       messageFor: (via) =>
         `User-controlled input ('${via}') flows into a SQL query without parameterization. ` +

@@ -1,18 +1,12 @@
 import { SyntaxNode } from "../parsers/utils";
 import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
-
-const SOURCE_PATTERN = /^req\.(params|query|body|cookies|headers)(\.\w+|\[[^\]]*\])?$/;
+import { isRequestSource } from "./sources";
 
 // fetch(url), request(url), got(url) — direct function calls.
 const DIRECT_CALLEE_PATTERN = /^(fetch|request|got)$/;
 // axios.get(url), http.get(url), https.request(url), axios({ url }) style client methods.
 const HTTP_CLIENT_OBJECT_PATTERN = /^(axios|http|https)$/;
 const HTTP_CLIENT_METHOD_PATTERN = /^(get|post|put|delete|patch|head|request)$/;
-
-function isSource(node: SyntaxNode): boolean {
-  if (node.type !== "member_expression" && node.type !== "subscript_expression") return false;
-  return SOURCE_PATTERN.test(node.text);
-}
 
 function isSink(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;
@@ -46,7 +40,7 @@ export class SsrfAnalyzer extends BaseAnalyzer {
       ruleId: "ssrf",
       severity: "high",
       confidence: "medium",
-      isSource,
+      isSource: isRequestSource,
       isSink,
       messageFor: (via) =>
         `User-controlled input ('${via}') is used to build a URL that the server fetches. ` +
