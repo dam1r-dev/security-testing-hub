@@ -13,6 +13,13 @@ is intentionally vulnerable.
 | `GET /files/:name` | Path Traversal |
 | `POST /ping` | OS Command Injection |
 | `POST /transfer` | CSRF (no token check anywhere in the file) |
+| `GET /api/accounts/:accountId` | IDOR (no ownership check) |
+| `GET /api/accounts-safe/:accountId` | Safe (checks `account.ownerId === req.user.id`) — should **not** be flagged as IDOR |
+| `GET /admin/delete-user` | Broken Access Control (no auth check) |
+| `GET /dashboard` | Insecure Role Assignment (`req.cookies.Admin` trusted) |
+| `POST /check-stock` | SSRF (`req.body.stockApi` fetched directly) |
+| `POST /login` | Username Enumeration (distinct "invalid username" vs. "invalid password") |
+| `upload.js` (`multer` config, no route) | Insecure File Upload (filter checks `file.mimetype` only) |
 
 Run the scanner against it from the repo root:
 
