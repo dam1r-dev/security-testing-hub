@@ -2,6 +2,7 @@ import { ParsedFile } from "../parsers/ast-parser";
 import { findNodes, snippet, toLocation, SyntaxNode } from "../parsers/utils";
 import { Finding } from "../types";
 import { Analyzer } from "./base-analyzer";
+import { findNextHandlers, isNextRouteFile, STATE_CHANGING_METHOD_NAMES } from "./nextjs-routes";
 
 const STATE_CHANGING_METHODS = new Set(["post", "put", "delete", "patch"]);
 const ROUTER_OBJECT_PATTERN = /^(app|router)$/i;
@@ -31,24 +32,38 @@ function isStateChangingRouteRegistration(node: SyntaxNode): boolean {
  * with app.use(...) elsewhere in the file, not per-route, so per-route detection
  * would just re-derive the same false negative. Cookie-based auth (session
  * cookies) is assumed, since CSRF isn't exploitable against pure bearer-token APIs.
+ *
+ * Also covers Next.js App Router `route.ts` handlers — those are plain HTTP
+ * endpoints with no built-in CSRF protection (unlike Server Actions, which
+ * Next.js protects with an Origin-header check since v14; this rule doesn't
+ * apply to those since they aren't route.ts files).
  */
 export class CsrfAnalyzer implements Analyzer {
   analyze(parsed: ParsedFile, filePath: string): Finding[] {
     if (CSRF_PROTECTION_HINT.test(parsed.sourceCode)) return [];
 
-    const routes = findNodes(parsed.tree.rootNode, isStateChangingRouteRegistration);
+    if (isNextRouteFile(filePath)) {
+      return findNextHandlers(parsed.tree.rootNode)
+        .filter((h) => STATE_CHANGING_METHOD_NAMES.has(h.method))
+        .map((h) => this.toFinding(h.node, filePath, parsed.sourceCode));
+    }
 
-    return routes.map((route) => ({
-      ruleId: "csrf" as const,
-      severity: "medium" as const,
-      confidence: "low" as const,
+    const routes = findNodes(parsed.tree.rootNode, isStateChangingRouteRegistration);
+    return routes.map((route) => this.toFinding(route, filePath, parsed.sourceCode));
+  }
+
+  private toFinding(node: SyntaxNode, filePath: string, sourceCode: string): Finding {
+    return {
+      ruleId: "csrf",
+      severity: "medium",
+      confidence: "low",
       message:
         "State-changing route (POST/PUT/DELETE/PATCH) found with no CSRF protection detected in this file " +
         "(no csurf middleware, req.csrfToken(), or similar). If this route relies on session cookies for " +
         "auth, add CSRF token verification; SameSite=strict cookies or a pure bearer-token API make this a non-issue.",
-      location: toLocation(route, filePath),
+      location: toLocation(node, filePath),
       sourceSnippet: "(no CSRF token check found in file)",
-      sinkSnippet: snippet(route, parsed.sourceCode),
-    }));
+      sinkSnippet: snippet(node, sourceCode),
+    };
   }
 }

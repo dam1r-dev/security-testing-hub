@@ -2,6 +2,7 @@ import { ParsedFile } from "../parsers/ast-parser";
 import { findNodes, snippet, toLocation, SyntaxNode } from "../parsers/utils";
 import { Finding } from "../types";
 import { Analyzer } from "./base-analyzer";
+import { findNextHandlers, idLikeDynamicSegments, isNextRouteFile, routeSegments } from "./nextjs-routes";
 
 const ROUTER_OBJECT_PATTERN = /^(app|router)$/i;
 const ROUTER_SUFFIX_PATTERN = /router$/i;
@@ -10,8 +11,10 @@ const HTTP_METHODS = new Set(["get", "post", "put", "delete", "patch"]);
 // it selects a specific record.
 const ID_PARAM_PATTERN = /:([A-Za-z0-9_]*[Ii]d[A-Za-z0-9_]*)\b/;
 // Any reference to the authenticated user/session in the handler is treated as
-// evidence of an ownership check (req.user.id === ..., req.session.userId, ...).
-const OWNERSHIP_CHECK_HINT = /req\.(user|session|auth|currentUser)\b/;
+// evidence of an ownership check — Express's req.user/req.session, and common
+// Next.js session helpers (NextAuth's getServerSession/auth(), Clerk's currentUser(), ...).
+const OWNERSHIP_CHECK_HINT =
+  /req\.(user|session|auth|currentUser)\b|getServerSession|currentUser\s*\(|auth\s*\(\)|session\??\.\w*user/;
 
 interface RouteRegistration {
   call: SyntaxNode;
@@ -55,6 +58,8 @@ function findIdParamRoutes(root: SyntaxNode): RouteRegistration[] {
  */
 export class IdorAnalyzer implements Analyzer {
   analyze(parsed: ParsedFile, filePath: string): Finding[] {
+    if (isNextRouteFile(filePath)) return this.analyzeNextRoute(parsed, filePath);
+
     const routes = findIdParamRoutes(parsed.tree.rootNode);
 
     return routes
@@ -71,6 +76,34 @@ export class IdorAnalyzer implements Analyzer {
         location: toLocation(route.call, filePath),
         sourceSnippet: `route param :${route.paramName}`,
         sinkSnippet: snippet(route.call, parsed.sourceCode),
+      }));
+  }
+
+  /**
+   * Next.js App Router: the id-like param comes from the FILE PATH (a
+   * `[accountId]` folder), not a string in the code, so there's no single
+   * "route registration" node to flag — each exported HTTP method handler
+   * in the file is checked independently instead.
+   */
+  private analyzeNextRoute(parsed: ParsedFile, filePath: string): Finding[] {
+    const idSegments = idLikeDynamicSegments(routeSegments(filePath));
+    if (idSegments.length === 0) return [];
+
+    const handlers = findNextHandlers(parsed.tree.rootNode);
+    return handlers
+      .filter((h) => !OWNERSHIP_CHECK_HINT.test(h.node.text))
+      .map((h) => ({
+        ruleId: "idor" as const,
+        severity: "high" as const,
+        confidence: "low" as const,
+        message:
+          `This route's path takes an id-like dynamic segment ('[${idSegments.join("]', '[")}]') and its ` +
+          `${h.method} handler looks up a record, but no ownership check (session/auth) was found in it. ` +
+          "Any authenticated user may be able to read or modify another user's data by changing the id in " +
+          "the URL. Verify the requested record belongs to the current user before returning/mutating it.",
+        location: toLocation(h.node, filePath),
+        sourceSnippet: `dynamic segment [${idSegments.join("], [")}]`,
+        sinkSnippet: snippet(h.node, parsed.sourceCode),
       }));
   }
 }
