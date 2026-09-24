@@ -82,9 +82,21 @@ npm run scan -- scan ./my-express-app --format json
 # SARIF, for GitHub code scanning / other SAST dashboards
 npm run scan -- scan ./my-express-app --format sarif --out results.sarif
 
+# HTML report you can open in a browser — a colored 0-100 score, severity
+# breakdown, and a filterable findings list. Defaults to security-report.html.
+npm run scan -- scan ./my-express-app --format html
+
 # CI gate: exit 1 if anything critical/high is found
 npm run scan -- scan ./my-express-app --fail-on high
 ```
+
+Every format includes a **0-100 score** (also shown as a colored line at the
+end of `text` output): 100 minus a penalty per finding, weighted by severity
+*and* by the rule's own confidence (a low-confidence heuristic hit costs less
+than a taint-tracked, high-confidence one). Green ≥80, yellow 50-79, red
+<50. It's a skimmable signal for "did this get better or worse", not a
+certification — see [docs/rules.md](docs/rules.md) for what each rule can
+get wrong. The math lives in `packages/scanner/src/output/score.ts`.
 
 Try it against the bundled, deliberately-broken fixture apps:
 
@@ -162,7 +174,7 @@ This is a v1 MVP, built to a **realistic** plan (see
 
 ```
 packages/
-  scanner/   core: Tree-sitter parsing, taint analysis, analyzers, SARIF output
+  scanner/   core: Tree-sitter parsing, taint analysis, analyzers, SARIF/HTML/score output
   cli/       `security-hub` command-line interface
 examples/
   vulnerable-express-app/   deliberately vulnerable Express fixture app (do not deploy)

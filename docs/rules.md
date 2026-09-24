@@ -199,7 +199,36 @@ Both are covered as manual checklist items in
 
 ## Output formats
 
-- `text` — colored terminal output.
-- `json` — the full `ScanSummary` (see `packages/scanner/src/types.ts`).
+- `text` — colored terminal output, ending with a colored score line.
+- `json` — the full `ScanSummary` plus a `score` field (see
+  `packages/scanner/src/types.ts` and `output/score.ts`).
 - `sarif` — [SARIF 2.1.0](https://sarifweb.azurewebsites.net/), for GitHub
   code scanning and other SAST dashboards.
+- `html` — a self-contained report file (no server, no external assets) with
+  the score as a colored ring, a severity breakdown, and a filterable
+  findings list. Always writes to a file (`security-report.html` by default,
+  or `--out <path>`) since raw HTML isn't useful printed to a terminal.
+
+## The 0-100 score
+
+Every format carries a score: `100 - Σ(severity weight × confidence
+multiplier)` over all findings, clamped to `[0, 100]`.
+
+| Severity | Weight | | Confidence | Multiplier |
+|---|---|---|---|---|
+| critical | 20 | | high | 1.0 |
+| high | 10 | | medium | 0.7 |
+| medium | 4 | | low | 0.4 |
+| low | 1 | | | |
+
+Confidence weighting exists because our own heuristic rules
+(csrf/idor/broken-access-control/...) self-report `confidence: "low"` — a
+route-shape guess shouldn't cost the score as much as a taint-tracked SQL
+injection at `confidence: "high"`. Bands: green ≥80, yellow 50-79, red <50.
+
+This is deliberately simple and auditable (linear, no hidden curve) rather
+than tuned to produce a "nice" distribution — treat it as a rough signal for
+tracking whether a codebase is trending better or worse over time, not a
+score to optimize for its own sake or compare across unrelated projects
+(a project with 3 files and one critical finding scores the same as one
+with 300 files and one critical finding).
