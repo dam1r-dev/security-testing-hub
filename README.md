@@ -144,11 +144,19 @@ This is a v1 MVP, built to a **realistic** plan (see
   argument, e.g. `export async function GET(request, { params })`) aren't
   recognized as a taint source yet — `params` alone is too generic a name to
   match safely without more context. `searchParams`/cookies/body readers are covered.
-- **The `csrf`/`idor`/`broken-access-control` route heuristics are
-  Express-only** (they look for `app.get(...)`/`router.post(...)`
-  registration calls, which Next.js's file-based routing doesn't have) —
-  they won't fire on a Next.js project. The five data-flow rules
-  (SQLi/XSS/command injection/path traversal/SSRF) work on both.
+- **`csrf`/`idor`/`broken-access-control` now understand Next.js App
+  Router too** — a route's path comes from its folder structure
+  (`app/api/accounts/[accountId]/route.ts`, including route groups like
+  `(admin)`), not a string literal, and `idor`/`broken-access-control`
+  recognize common Next.js session helpers (`getServerSession`, `auth()`,
+  `currentUser()`) as ownership/auth evidence. `broken-access-control` also
+  checks for a project-root `middleware.ts` mentioning an auth check before
+  flagging — Next.js commonly centralizes access control there instead of
+  per-route — but can't verify its `matcher` actually covers the specific
+  route (that needs evaluating Next.js's matcher syntax, out of scope for
+  v1), so it can still miss a route that middleware *should* cover but
+  doesn't. `insecure-role-assignment`/`insecure-file-upload`/
+  `username-enumeration` are still Express-pattern-only.
 
 ## Project layout
 

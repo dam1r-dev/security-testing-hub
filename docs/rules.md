@@ -68,16 +68,27 @@ Defined once in `src/analyzers/sources.ts` so every rule stays in sync:
 
 ## `csrf` (medium) — heuristic, not taint-based
 
-- Flags `app.post/put/delete/patch(...)` and `router.post/put/delete/patch(...)`
-  registrations in any file that contains **no** occurrence of `/csrf/i`
-  anywhere (covers `csurf`, `req.csrfToken()`, a custom `csrfProtection`
-  middleware, etc.).
+- **Express:** flags `app.post/put/delete/patch(...)` and
+  `router.post/put/delete/patch(...)` registrations in any file that
+  contains **no** occurrence of `/csrf/i` anywhere (covers `csurf`,
+  `req.csrfToken()`, a custom `csrfProtection` middleware, etc.).
+- **Next.js App Router:** flags `export async function POST/PUT/DELETE/PATCH`
+  handlers in a `route.ts` file under the same "no `/csrf/i` anywhere in the
+  file" rule. Doesn't apply to Server Actions (`"use server"` functions) —
+  those aren't `route.ts` files, and Next.js has protected them with an
+  Origin-header check since v14, so they're a non-issue for this rule.
 - **File-scoped, not route-scoped on purpose:** CSRF middleware is normally
-  registered once per file with `app.use(...)`, not repeated per route, so
-  per-route detection would just miss it and always fire.
+  registered once per file (`app.use(...)` in Express), not repeated per
+  route, so per-route detection would just miss it and always fire.
 - **False positives:** pure bearer-token/JWT APIs (not cookie-based) aren't
   exploitable via CSRF at all; this rule doesn't yet distinguish that and
   will still flag them. Session/cookie auth is the assumed case.
+- **Fixture-authoring gotcha (learned the hard way):** a comment describing
+  *why* a route is vulnerable that happens to contain the word "CSRF"
+  silently suppresses this rule on that exact file — the heuristic can't
+  tell a real fix from a comment mentioning the bug by name. Both fixture
+  apps' `transfer` routes hit this originally; see the comment in
+  `examples/vulnerable-express-app/routes/transfer.js`.
 
 ## `ssrf` (high)
 
@@ -90,10 +101,18 @@ Defined once in `src/analyzers/sources.ts` so every rule stays in sync:
 
 ## `idor` (high) — heuristic, route-scoped
 
-- Flags `app`/`router` routes whose path has an id-like param (`:id`,
-  `:userId`, `:accountId`, `:orderId`, ...) when the handler has **no**
-  reference to `req.user`, `req.session`, `req.auth`, or `req.currentUser`
-  anywhere in it.
+- **Express:** flags `app`/`router` routes whose path has an id-like param
+  (`:id`, `:userId`, `:accountId`, `:orderId`, ...) when the handler has
+  **no** reference to `req.user`, `req.session`, `req.auth`, or
+  `req.currentUser` anywhere in it.
+- **Next.js App Router:** the id-like segment comes from the route's *file
+  path* instead of a string (`app/api/accounts/[accountId]/route.ts`), so
+  each exported `GET`/`POST`/`PUT`/`DELETE`/`PATCH` handler in the file is
+  checked independently. A catch-all segment (`[...slug]`) is never treated
+  as id-like — it's structurally a path, not a single record selector.
+  Ownership-check evidence is broader than Express here too: NextAuth's
+  `getServerSession`/`auth()`, Clerk's `currentUser()`, or any
+  `session.user`/`session?.user` access, on top of the Express patterns.
 - **Doesn't distinguish predictable vs. unpredictable (GUID) ids** — both
   get flagged identically, because the underlying bug (no per-object
   authorization check) is the same either way; an unguessable id only makes
@@ -104,14 +123,28 @@ Defined once in `src/analyzers/sources.ts` so every rule stays in sync:
 
 ## `broken-access-control` (critical) — heuristic, route-scoped
 
-- Flags `app`/`router` routes whose path looks privileged (`/admin`,
-  `/internal`, `/manage`, `/management`, `/dashboard`, `/debug`, `/superuser`,
-  `/root`) when the route registration has **no** reference to common
-  auth/role-check identifiers (`isAuthenticated`, `requireAuth`,
-  `requireAdmin`, `passport`, `req.user.role`, `jwt.verify`, ...).
+- **Express:** flags `app`/`router` routes whose path looks privileged
+  (`/admin`, `/internal`, `/manage`, `/management`, `/dashboard`, `/debug`,
+  `/superuser`, `/root`) when the route registration has **no** reference to
+  common auth/role-check identifiers (`isAuthenticated`, `requireAuth`,
+  `requireAdmin`, `passport`, `req.user.role`, `jwt.verify`,
+  `getServerSession`, `currentUser()`, `auth()`, ...).
+- **Next.js App Router:** the "path" is the route's folder structure,
+  including route groups like `(admin)` — invisible in the real URL, but
+  still checked, since a `(admin)` group folder is a deliberate signal even
+  though visitors never see it. Before flagging, this also walks up from the
+  route file looking for a project-root `middleware.ts`/`.js` that mentions
+  an auth-ish identifier, since Next.js commonly centralizes access control
+  there via `config.matcher` instead of per-route. **This can't evaluate
+  whether that middleware's matcher actually covers this specific route**
+  (that needs implementing Next.js's matcher-pattern semantics, out of scope
+  for v1) — so *any* auth-flavored middleware.ts in the project silences
+  this rule everywhere, which trades away some true positives (a route the
+  matcher doesn't actually cover) for far fewer false positives (the common
+  case of a real, working middleware guard).
 - **On purpose, a hidden/unguessable URL is flagged exactly the same as an
   obvious one** — the path being secret isn't access control.
-- **False positives:** a route whose auth check lives in a global
+- **False positives (Express):** a route whose auth check lives in a global
   `app.use(...)` middleware earlier in the file (rather than passed inline
   to this specific route, or named something this rule doesn't recognize)
   will still be flagged.

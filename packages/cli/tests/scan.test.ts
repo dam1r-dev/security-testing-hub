@@ -70,7 +70,7 @@ describe("runScan against the vulnerable-express-app fixture", () => {
 });
 
 describe("runScan against the vulnerable-nextjs-app fixture", () => {
-  it("finds all four vulnerability classes via Next.js App Router request patterns, none in the safe route", () => {
+  it("finds all seven vulnerability classes via Next.js App Router conventions, none in the safe routes", () => {
     const outFile = path.join(os.tmpdir(), `security-hub-test-nextjs-${Date.now()}.json`);
     const exitCode = runScan(NEXTJS_FIXTURE_APP, { format: "json", out: outFile });
     const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
@@ -79,10 +79,18 @@ describe("runScan against the vulnerable-nextjs-app fixture", () => {
     const ruleIds = new Set(
       summary.results.flatMap((r: { findings: { ruleId: string }[] }) => r.findings.map((f) => f.ruleId)),
     );
-    expect(ruleIds).toEqual(new Set(["sql-injection", "ssrf", "xss", "command-injection"]));
+    expect(ruleIds).toEqual(
+      new Set(["sql-injection", "ssrf", "xss", "command-injection", "csrf", "idor", "broken-access-control"]),
+    );
 
-    const safeRoute = summary.results.find((r: { file: string }) => /user-safe[/\\]route\.ts$/.test(r.file));
-    expect(safeRoute.findings).toHaveLength(0);
+    const safeUserRoute = summary.results.find((r: { file: string }) => /user-safe[/\\]route\.ts$/.test(r.file));
+    expect(safeUserRoute.findings).toHaveLength(0);
+
+    const safeAccountRoute = summary.results.find((r: { file: string }) =>
+      /accounts-safe[/\\]\[accountId\][/\\]route\.ts$/.test(r.file),
+    );
+    expect(safeAccountRoute.findings).toHaveLength(0);
+
     expect(exitCode).toBe(0);
   });
 });

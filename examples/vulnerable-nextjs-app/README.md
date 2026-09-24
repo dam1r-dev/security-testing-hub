@@ -12,6 +12,10 @@ but in Next.js App Router style (`route.ts` handlers, `NextRequest`/`Request`,
 | `GET /api/proxy` | SSRF via a client-controlled cookie |
 | `GET /api/greet?name=` | Reflected XSS via a raw `Response` body |
 | `POST /api/ping` | OS Command Injection via a JSON request body |
+| `POST /api/transfer` | CSRF (no anti-forgery token check anywhere in the file) |
+| `GET /api/accounts/[accountId]` | IDOR (id-like dynamic segment, no session/ownership check) |
+| `GET /api/accounts-safe/[accountId]` | Safe (checks `account.ownerId === session.user.id`) — should **not** be flagged as IDOR |
+| `GET /admin/users` | Broken Access Control (no auth check, no `middleware.ts` guarding it) |
 
 Run the scanner against it from the repo root:
 

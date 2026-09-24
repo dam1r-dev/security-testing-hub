@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 import { parseFile } from "./parsers/ast-parser";
-import { collectGarbageToAvoidTreeSitterCorruption } from "./parsers/gc-workaround";
 import { Analyzer } from "./analyzers/base-analyzer";
 import { SqlInjectionAnalyzer } from "./analyzers/sql-injection";
 import { XssAnalyzer } from "./analyzers/xss";
@@ -90,10 +89,6 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
   const stat = fs.statSync(targetPath);
   const files = stat.isDirectory() ? walkDirectory(targetPath) : [targetPath];
 
-  // See parsers/gc-workaround.ts: scanning multiple files back-to-back in one
-  // process can otherwise silently corrupt a later file's parse (a real
-  // node-tree-sitter bug, not our own logic) unless we force a full GC
-  // between files.
   const results: ScanResult[] = files.map((file) => {
     let sourceCode: string;
     try {
@@ -102,9 +97,7 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
       const message = err instanceof Error ? err.message : String(err);
       return { file, findings: [], parseError: `Failed to read file: ${message}` };
     }
-    const result = scanSource(sourceCode, file, analyzers);
-    collectGarbageToAvoidTreeSitterCorruption();
-    return result;
+    return scanSource(sourceCode, file, analyzers);
   });
 
   return {

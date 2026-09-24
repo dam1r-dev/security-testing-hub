@@ -1,3 +1,4 @@
+import { collectGarbageToAvoidTreeSitterCorruption } from "./gc-workaround";
 import Parser = require("tree-sitter");
 import JavaScript = require("tree-sitter-javascript");
 // tree-sitter-typescript exposes two grammars: typescript and tsx
@@ -66,6 +67,12 @@ export function parseSource(sourceCode: string, language: SupportedLanguage): Pa
   parser.setLanguage(grammarFor(language));
   const input = sourceCode.length > SAFE_STRING_LIMIT ? chunkedInput(sourceCode) : sourceCode;
   const tree = parser.parse(input);
+  // See gc-workaround.ts: without this, a later parse() call in the same
+  // process can silently return a corrupted tree. This applies to *every*
+  // call site (scanPath's multi-file loop, but just as much a single test
+  // file that calls scanSource() several times), so it belongs here, not
+  // bolted onto individual callers.
+  collectGarbageToAvoidTreeSitterCorruption();
   return { tree, language, sourceCode };
 }
 
