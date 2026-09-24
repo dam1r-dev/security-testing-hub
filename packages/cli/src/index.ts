@@ -2,7 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { runScan } from "./commands/scan";
 import { runLab } from "./commands/lab";
-import { Severity } from "@security-hub/scanner";
+import { Severity } from "security-hub-scanner";
 
 const VALID_SEVERITIES: Severity[] = ["low", "medium", "high", "critical"];
 

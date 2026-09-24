@@ -1,9 +1,14 @@
 {
-  "name": "@security-hub/scanner",
+  "name": "security-hub-scanner",
   "version": "0.1.0",
-  "description": "Core AST parsing, taint analysis and vulnerability detection engine",
+  "description": "Tree-sitter based SAST engine for Node.js/Express and Next.js apps: SQL injection, XSS, command injection, path traversal, SSRF, CSRF, IDOR, broken access control and more.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "jest"
@@ -13,5 +18,24 @@
     "tree-sitter-javascript": "^0.23.1",
     "tree-sitter-typescript": "^0.23.2"
   },
-  "license": "MIT"
+  "keywords": [
+    "sast",
+    "security",
+    "static-analysis",
+    "vulnerability-scanner",
+    "sql-injection",
+    "xss",
+    "nextjs",
+    "express",
+    "tree-sitter"
+  ],
+  "license": "MIT",
+  "author": "Damir Panzhazov",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dam1r-dev/security-testing-hub.git",
+    "directory": "packages/scanner"
+  },
+  "homepage": "https://github.com/dam1r-dev/security-testing-hub#readme",
+  "bugs": "https://github.com/dam1r-dev/security-testing-hub/issues"
 }

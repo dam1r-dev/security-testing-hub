@@ -10,7 +10,7 @@ import {
   ScanSummary,
   Severity,
   ScoreColor,
-} from "@security-hub/scanner";
+} from "security-hub-scanner";
 
 export interface ScanCommandOptions {
   format: "text" | "json" | "sarif" | "html";
