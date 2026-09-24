@@ -1,14 +1,29 @@
 import * as fs from "fs";
 import * as path from "path";
 import chalk from "chalk";
-import { scanPath, toSarifString, Finding, ScanSummary, Severity } from "@security-hub/scanner";
+import {
+  scanPath,
+  toSarifString,
+  toHtml,
+  computeScore,
+  Finding,
+  ScanSummary,
+  Severity,
+  ScoreColor,
+} from "@security-hub/scanner";
 
 export interface ScanCommandOptions {
-  format: "text" | "json" | "sarif";
+  format: "text" | "json" | "sarif" | "html";
   out?: string;
   severity?: Severity;
   failOn?: Severity;
 }
+
+const SCORE_COLOR_CHALK: Record<ScoreColor, (text: string) => string> = {
+  green: chalk.bgGreen.black.bold,
+  yellow: chalk.bgYellow.black.bold,
+  red: chalk.bgRed.white.bold,
+};
 
 const SEVERITY_RANK: Record<Severity, number> = { low: 0, medium: 1, high: 2, critical: 3 };
 
@@ -49,6 +64,14 @@ function renderText(summary: ScanSummary): string {
       `Scanned ${summary.filesScanned} file(s) in ${summary.durationMs}ms — ${summary.findingsCount} finding(s).`,
     ),
   );
+
+  const score = computeScore(summary);
+  const badge = SCORE_COLOR_CHALK[score.color](` ${score.value}/100 — ${score.label} `);
+  const breakdown =
+    `critical ${score.bySeverity.critical} · high ${score.bySeverity.high} · ` +
+    `medium ${score.bySeverity.medium} · low ${score.bySeverity.low}`;
+  lines.push(`${badge}  ${chalk.dim(breakdown)}`);
+
   return lines.join("\n");
 }
 
@@ -72,6 +95,8 @@ function writeOutput(content: string, outFile?: string): void {
   process.stderr.write(chalk.green(`Written to ${path.resolve(outFile)}\n`));
 }
 
+const DEFAULT_HTML_REPORT_FILE = "security-report.html";
+
 /** Runs a scan and prints/writes results. Returns the process exit code. */
 export function runScan(targetPath: string, options: ScanCommandOptions): number {
   if (!fs.existsSync(targetPath)) {
@@ -82,14 +107,20 @@ export function runScan(targetPath: string, options: ScanCommandOptions): number
   const rawSummary = scanPath(targetPath);
   const summary = filterBySeverity(rawSummary, options.severity);
 
-  const output =
-    options.format === "sarif"
-      ? toSarifString(summary.results)
-      : options.format === "json"
-        ? JSON.stringify(summary, null, 2)
-        : renderText(summary);
+  let output: string;
+  let outFile = options.out;
+  if (options.format === "sarif") {
+    output = toSarifString(summary.results);
+  } else if (options.format === "json") {
+    output = JSON.stringify({ ...summary, score: computeScore(summary) }, null, 2);
+  } else if (options.format === "html") {
+    output = toHtml(summary, targetPath);
+    outFile = outFile ?? DEFAULT_HTML_REPORT_FILE; // always a file — printing raw HTML to a terminal isn't useful
+  } else {
+    output = renderText(summary);
+  }
 
-  writeOutput(output, options.out);
+  writeOutput(output, outFile);
 
   if (options.failOn) {
     const threshold = SEVERITY_RANK[options.failOn];

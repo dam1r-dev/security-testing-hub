@@ -25,14 +25,14 @@ export function run(argv: string[]): void {
   program
     .command("scan <path>")
     .description("Scan a file or directory for vulnerabilities")
-    .option("-f, --format <format>", "output format: text | json | sarif", "text")
-    .option("-o, --out <file>", "write output to a file instead of stdout")
+    .option("-f, --format <format>", "output format: text | json | sarif | html", "text")
+    .option("-o, --out <file>", "write output to a file instead of stdout (html always writes to a file)")
     .option("-s, --severity <level>", "only report findings at or above this severity (low|medium|high|critical)")
     .option("--fail-on <level>", "exit with code 1 if any finding is at or above this severity (for CI)")
     .action((targetPath: string, opts) => {
       const format = opts.format;
-      if (!["text", "json", "sarif"].includes(format)) {
-        console.error(chalk.red(`Invalid format "${format}". Expected: text | json | sarif`));
+      if (!["text", "json", "sarif", "html"].includes(format)) {
+        console.error(chalk.red(`Invalid format "${format}". Expected: text | json | sarif | html`));
         process.exitCode = 2;
         return;
       }

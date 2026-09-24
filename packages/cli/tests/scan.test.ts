@@ -67,6 +67,25 @@ describe("runScan against the vulnerable-express-app fixture", () => {
     expect(sarif.version).toBe("2.1.0");
     expect(sarif.runs[0].results.length).toBeGreaterThan(0);
   });
+
+  it("produces an HTML report with a low score for this deliberately vulnerable app", () => {
+    const outFile = path.join(os.tmpdir(), `security-hub-test-${Date.now()}-4.html`);
+    const exitCode = runScan(FIXTURE_APP, { format: "html", out: outFile });
+    const html = fs.readFileSync(outFile, "utf8");
+    fs.unlinkSync(outFile);
+    expect(html).toMatch(/^<!DOCTYPE html>/);
+    expect(html).toContain("At risk");
+    expect(exitCode).toBe(0); // --fail-on wasn't set, so a low score alone doesn't fail the run
+  });
+
+  it("includes the score in JSON output", () => {
+    const outFile = path.join(os.tmpdir(), `security-hub-test-${Date.now()}-5.json`);
+    runScan(FIXTURE_APP, { format: "json", out: outFile });
+    const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
+    fs.unlinkSync(outFile);
+    expect(summary.score.value).toBeLessThan(50);
+    expect(summary.score.color).toBe("red");
+  });
 });
 
 describe("runScan against the vulnerable-nextjs-app fixture", () => {

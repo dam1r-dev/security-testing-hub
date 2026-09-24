@@ -17,6 +17,8 @@ import { ScanResult, ScanSummary } from "./types";
 
 export * from "./types";
 export { toSarif, toSarifString } from "./output/sarif";
+export { computeScore, SecurityScore, ScoreColor } from "./output/score";
+export { toHtml } from "./output/html";
 export { parseFile, parseSource, languageForExtension } from "./parsers/ast-parser";
 
 const DEFAULT_IGNORED_DIRS = new Set(["node_modules", ".git", "dist", "build", "coverage", ".next"]);
