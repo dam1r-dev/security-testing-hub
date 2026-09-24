@@ -86,6 +86,53 @@ describe("runScan against the vulnerable-express-app fixture", () => {
     expect(summary.score.value).toBeLessThan(50);
     expect(summary.score.color).toBe("red");
   });
+
+  it("prints colored text with a score line to stdout by default (no --out)", () => {
+    const writeSpy = jest.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const exitCode = runScan(FIXTURE_APP, { format: "text" });
+      const printed = writeSpy.mock.calls.map((c) => c[0]).join("");
+      expect(printed).toContain("sql-injection");
+      expect(printed).toContain("/100");
+      expect(exitCode).toBe(0);
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
+  it("only reports findings at or above --severity", () => {
+    const outFile = path.join(os.tmpdir(), `security-hub-test-${Date.now()}-6.json`);
+    runScan(FIXTURE_APP, { format: "json", out: outFile, severity: "critical" });
+    const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
+    fs.unlinkSync(outFile);
+    const severities = new Set(
+      summary.results.flatMap((r: { findings: { severity: string }[] }) => r.findings.map((f) => f.severity)),
+    );
+    expect(severities).toEqual(new Set(["critical"]));
+  });
+
+  it("returns exit code 2 and reports the path when the target doesn't exist", () => {
+    const errorSpy = jest.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      const exitCode = runScan("./this-path-does-not-exist", { format: "text" });
+      expect(exitCode).toBe(2);
+      expect(errorSpy.mock.calls.map((c) => c[0]).join("")).toContain("Path not found");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("defaults html output to security-report.html when --out is omitted", () => {
+    const defaultReportPath = path.resolve("security-report.html");
+    if (fs.existsSync(defaultReportPath)) fs.unlinkSync(defaultReportPath);
+    try {
+      runScan(FIXTURE_APP, { format: "html" });
+      expect(fs.existsSync(defaultReportPath)).toBe(true);
+      expect(fs.readFileSync(defaultReportPath, "utf8")).toMatch(/^<!DOCTYPE html>/);
+    } finally {
+      if (fs.existsSync(defaultReportPath)) fs.unlinkSync(defaultReportPath);
+    }
+  });
 });
 
 describe("runScan against the vulnerable-nextjs-app fixture", () => {
