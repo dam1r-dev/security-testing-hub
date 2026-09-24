@@ -153,7 +153,10 @@ function analyzeFunctionBody(funcNode, sourcePatterns, sinkPatterns) {
   доказывает эксплуатируемость И то, что фикс реально закрывает баг, CLI-команда `security-hub lab`,
   отдельная CI-джоба. Остальные лабы (XSS, CSRF) — после MVP.
 - 🟡 **Phase 7 (Documentation)** — README (EN+RU), `docs/rules.md`, `docs/attack-playbook.md` (EN/RU/KK) есть; полные гайды — в процессе
-- 🟡 **Phase 8 (Testing + CSRF Lab)** — Jest-тесты для всех анализаторов есть, coverage-таргет и Docker-лабы — не начато
+- ✅ **Phase 8 (Testing, частично)** — coverage измерен и превышает таргет плана (70%+):
+  scanner 88.5% statements / 92.2% lines, CLI 97.67% (после добавления тестов на
+  `index.ts`/`lab.ts`, которые раньше вообще не покрывались — 0%, даже не
+  попадали в отчёт). `npm run test:coverage`. CSRF Docker-лаба — не начато.
 - ✅ **Phase 9 (частично)** — CONTRIBUTING.md, CODE_OF_CONDUCT.md, PR/Issue шаблоны, CI на GitHub Actions
 
 ### Инцидент: CI падал на каждом коммите (найдено и исправлено)
