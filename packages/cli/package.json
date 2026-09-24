@@ -1,19 +1,47 @@
 {
-  "name": "@security-hub/cli",
+  "name": "security-hub",
   "version": "0.1.0",
-  "description": "Command-line interface for Security Testing Hub",
+  "description": "Open-source SAST scanner CLI for Node.js/Express and Next.js apps — catches SQL injection, XSS, command injection, SSRF, CSRF, IDOR and more, built for AI-assisted (\"vibe coded\") projects.",
   "main": "dist/index.js",
   "bin": {
     "security-hub": "bin/security-hub.js"
   },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "jest"
   },
   "dependencies": {
-    "@security-hub/scanner": "0.1.0",
+    "security-hub-scanner": "0.1.0",
     "commander": "^12.1.0",
     "chalk": "^4.1.2"
   },
-  "license": "MIT"
+  "keywords": [
+    "sast",
+    "security",
+    "cli",
+    "static-analysis",
+    "vulnerability-scanner",
+    "sql-injection",
+    "xss",
+    "nextjs",
+    "express"
+  ],
+  "license": "MIT",
+  "author": "Damir Panzhazov",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dam1r-dev/security-testing-hub.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/dam1r-dev/security-testing-hub#readme",
+  "bugs": "https://github.com/dam1r-dev/security-testing-hub/issues",
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }

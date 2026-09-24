@@ -64,6 +64,16 @@ that need manual testing — the scanner can't catch everything).
 ## Install
 
 ```bash
+# no install, one-off run:
+npx security-hub scan .
+
+# or install the CLI globally:
+npm install -g security-hub
+```
+
+Working on the scanner itself, or want to run it from source:
+
+```bash
 git clone https://github.com/dam1r-dev/security-testing-hub.git
 cd security-testing-hub
 npm install
@@ -71,6 +81,11 @@ npm run build
 ```
 
 ## Usage
+
+If you installed the CLI (`npm install -g security-hub` / `npx security-hub`),
+drop the `npm run scan --` prefix below and just run `security-hub scan ...`
+directly. Running from a source checkout uses the `npm run scan --` form
+instead (it's just `node packages/cli/bin/security-hub.js` under the hood):
 
 ```bash
 # Scan a directory, human-readable output

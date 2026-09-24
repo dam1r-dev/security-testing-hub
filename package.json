@@ -7,9 +7,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @security-hub/scanner && npm run build -w @security-hub/cli",
+    "build": "npm run build -w security-hub-scanner && npm run build -w security-hub",
     "pretest": "npm run build",
-    "test": "npm run test -w @security-hub/scanner && npm run test -w @security-hub/cli",
+    "test": "npm run test -w security-hub-scanner && npm run test -w security-hub",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"packages/**/*.ts\"",
     "scan": "node packages/cli/bin/security-hub.js",
