@@ -49,6 +49,10 @@ This project targets a 25-30% false-positive rate for v1 (see
 [README.md](README.md#scope--limitations) for why) — so not every FP report
 will be "fixed" immediately, but they're all useful data for tuning rules.
 
+## Releasing (maintainers)
+
+See [RELEASING.md](RELEASING.md) for the npm publish process.
+
 ## Reporting a real vulnerability in this tool itself
 
 Please don't open a public issue for a security bug in the scanner's own
