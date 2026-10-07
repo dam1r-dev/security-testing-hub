@@ -162,7 +162,7 @@ This is a v1 MVP, built to a **realistic** plan (see
   with its specific known false-positive shapes. CSRF, for example, assumes
   cookie/session-based auth; pure bearer-token APIs aren't CSRF-exploitable
   and should be filtered out manually for now.
-- **Skipped directories:** `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next`, and `generated` / `__generated__` (machine-written code such as Prisma's client — not where hand-written bugs live, and it uses newer TypeScript syntax like `export type * from` that the parser doesn't support yet).
+- **Skipped by default:** `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next`, `generated`/`__generated__`, `vendor`, test directories and `*.test.*` / `*.spec.*` / `*.min.js` files (see [docs/rules.md](docs/rules.md#what-gets-scanned)). Measured results on real open-source projects, including what the scanner misses: [docs/validation.md](docs/validation.md).
 - **Two attack classes have no rule at all**: 2FA bypass (needs modeling
   session/request-flow state) and detecting a password field leaked in an
   API response body (needs modeling response shapes). Both are documented
