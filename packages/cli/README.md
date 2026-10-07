@@ -18,6 +18,10 @@ npm install -g security-hub
 npx security-hub scan .
 ```
 
+Don't like terminals? `security-hub ui` opens a local web interface (pick a
+folder, click Scan, see the score and findings). It listens on `127.0.0.1` only —
+your code never leaves your computer.
+
 ## Usage
 
 ```bash

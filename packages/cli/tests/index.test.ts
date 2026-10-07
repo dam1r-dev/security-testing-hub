@@ -1,12 +1,15 @@
 jest.mock("../src/commands/scan", () => ({ runScan: jest.fn() }));
 jest.mock("../src/commands/lab", () => ({ runLab: jest.fn() }));
+jest.mock("../src/commands/ui", () => ({ runUi: jest.fn() }));
 
 import { run } from "../src/index";
 import { runScan } from "../src/commands/scan";
 import { runLab } from "../src/commands/lab";
+import { runUi } from "../src/commands/ui";
 
 const mockRunScan = runScan as jest.MockedFunction<typeof runScan>;
 const mockRunLab = runLab as jest.MockedFunction<typeof runLab>;
+const mockRunUi = runUi as jest.MockedFunction<typeof runUi>;
 
 describe("CLI argument parsing (run)", () => {
   let logSpy: jest.SpyInstance;
@@ -15,6 +18,7 @@ describe("CLI argument parsing (run)", () => {
   beforeEach(() => {
     mockRunScan.mockReset();
     mockRunLab.mockReset();
+    mockRunUi.mockReset();
     process.exitCode = undefined;
     logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
@@ -92,5 +96,20 @@ describe("CLI argument parsing (run)", () => {
   it("prints a placeholder message for 'docs'", () => {
     run(["node", "security-hub", "docs"]);
     expect(logSpy.mock.calls.flat().join(" ")).toContain("docs/rules.md");
+  });
+
+  it("dispatches 'ui' with defaults, a path, a port and --no-open", async () => {
+    mockRunUi.mockResolvedValue(0);
+    run(["node", "security-hub", "ui"]);
+    expect(mockRunUi).toHaveBeenLastCalledWith({ path: undefined, port: undefined, open: true });
+
+    run(["node", "security-hub", "ui", "./app", "--port", "5000", "--no-open"]);
+    expect(mockRunUi).toHaveBeenLastCalledWith({ path: "./app", port: 5000, open: false });
+  });
+
+  it("rejects an invalid --port for 'ui'", () => {
+    run(["node", "security-hub", "ui", "--port", "99999"]);
+    expect(mockRunUi).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(2);
   });
 });

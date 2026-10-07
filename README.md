@@ -69,8 +69,11 @@ that need manual testing — the scanner can't catch everything).
 ## Install
 
 ```bash
-# no install, one-off run:
+# no install, one-off run (command line):
 npx security-hub scan .
+
+# prefer clicking over typing? open the local web interface:
+npx security-hub ui
 
 # or install the CLI globally:
 npm install -g security-hub
@@ -84,6 +87,20 @@ cd security-testing-hub
 npm install
 npm run build
 ```
+
+## Web interface (no terminal needed)
+
+```bash
+npx security-hub ui            # opens http://127.0.0.1:4173 in your browser
+npx security-hub ui ./my-app   # same, with a folder pre-filled
+```
+
+Pick a project folder (or paste its path), click **Scan**, get the 0-100 score,
+filterable findings and a downloadable HTML report. The page is available in
+English, Russian and Kazakh. It runs entirely on your machine: the server listens
+on `127.0.0.1` only, requires a per-run token on every request, and your code is
+never uploaded anywhere. `--port <n>` changes the port, `--no-open` skips opening
+the browser.
 
 ## Usage
 
