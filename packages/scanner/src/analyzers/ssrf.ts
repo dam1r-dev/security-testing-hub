@@ -1,5 +1,5 @@
 import { SyntaxNode } from "../parsers/utils";
-import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
+import { AnalyzerConfig, BaseAnalyzer, firstArgument } from "./base-analyzer";
 import { isRequestSource } from "./sources";
 
 // fetch(url), request(url), got(url) — direct function calls.
@@ -42,6 +42,7 @@ export class SsrfAnalyzer extends BaseAnalyzer {
       confidence: "medium",
       isSource: isRequestSource,
       isSink,
+      sinkArgs: firstArgument,
       messageFor: (via) =>
         `User-controlled input ('${via}') is used to build a URL that the server fetches. ` +
         `An attacker can point this at internal services (localhost, 169.254.169.254, private IP ranges). ` +

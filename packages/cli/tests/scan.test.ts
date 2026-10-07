@@ -57,6 +57,25 @@ describe("runScan against the vulnerable-express-app fixture", () => {
     expect(exitCode).toBe(0);
   });
 
+  it("follows request data across files into the service layer, and not into the safe service call", () => {
+    const outFile = path.join(os.tmpdir(), `security-hub-test-${Date.now()}-xfile.json`);
+    runScan(FIXTURE_APP, { format: "json", out: outFile });
+    const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
+    fs.unlinkSync(outFile);
+
+    const reports = summary.results.find((r: { file: string }) => /routes[/\\]reports\.js$/.test(r.file));
+    const sqlLines = reports.findings
+      .filter((f: { ruleId: string }) => f.ruleId === "sql-injection")
+      .map((f: { location: { startLine: number } }) => f.location.startLine)
+      .sort((a: number, b: number) => a - b);
+    // /reports (findByOwner) and /reports/search (search -> runQuery); /reports/mine binds a parameter.
+    expect(sqlLines).toEqual([8, 12]);
+    expect(reports.findings[0].message).toContain("report-service.js");
+    // The service file itself has no request data in it, so nothing is reported there.
+    const service = summary.results.find((r: { file: string }) => /report-service\.js$/.test(r.file));
+    expect(service?.findings ?? []).toHaveLength(0);
+  });
+
   it("exits with code 1 when --fail-on threshold is crossed", () => {
     const outFile = path.join(os.tmpdir(), `security-hub-test-${Date.now()}-2.json`);
     const exitCode = runScan(FIXTURE_APP, { format: "json", out: outFile, failOn: "critical" });
@@ -163,6 +182,12 @@ describe("runScan against the vulnerable-nextjs-app fixture", () => {
         "open-redirect",
       ]),
     );
+
+    // Across files: the route forwards ?status= to lib/orders.ts, which interpolates it.
+    const orders = summary.results.find((r: { file: string }) => /orders[/\\]route\.ts$/.test(r.file));
+    expect(orders.findings.map((f: { ruleId: string }) => f.ruleId)).toEqual(["sql-injection"]);
+    const ordersSafe = summary.results.find((r: { file: string }) => /orders-safe[/\\]route\.ts$/.test(r.file));
+    expect(ordersSafe.findings).toHaveLength(0);
 
     const safeUserRoute = summary.results.find((r: { file: string }) => /user-safe[/\\]route\.ts$/.test(r.file));
     expect(safeUserRoute.findings).toHaveLength(0);

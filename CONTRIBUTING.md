@@ -20,9 +20,10 @@ npm test
   one is a small, self-contained class. `sql-injection.ts` is the clearest
   example to copy from.
 - **Reducing false positives:** the taint engine
-  (`packages/scanner/src/taint/simple-taint.ts`) is intentionally simple
-  (intra-procedural only, see [docs/rules.md](docs/rules.md) for known
-  gaps per rule) — precision improvements there benefit every rule at once.
+  (`packages/scanner/src/taint/`: `simple-taint.ts` for one function, `project.ts` for
+  resolving imports/classes across files, `interprocedural.ts` for function summaries) is intentionally simple
+  (tracks calls into other functions and files, but not return values — see
+  [docs/rules.md](docs/rules.md) for known gaps per rule) — precision improvements there benefit every rule at once.
 - **New sink patterns:** most rules are a `SOURCE_PATTERN`/`SINK_*_PATTERN`
   regex pair plus a predicate function — see any file in `src/analyzers/`.
 - **Test fixtures:** `examples/vulnerable-express-app/` is a deliberately

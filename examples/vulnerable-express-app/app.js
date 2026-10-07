@@ -20,6 +20,7 @@ require("./routes/admin")(app, db);
 require("./routes/dashboard")(app);
 require("./routes/stock")(app, axios);
 require("./routes/login")(app, db, bcrypt);
+require("./routes/reports")(app);
 require("./routes/advanced")(app, db, require("node-serialize"), require("libxmljs"));
 
 module.exports = app;

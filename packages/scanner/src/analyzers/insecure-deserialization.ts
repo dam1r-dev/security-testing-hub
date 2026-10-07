@@ -1,5 +1,5 @@
 import { SyntaxNode } from "../parsers/utils";
-import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
+import { AnalyzerConfig, BaseAnalyzer, firstArgument } from "./base-analyzer";
 import { isRequestSource } from "./sources";
 
 // node-serialize's unserialize() revives serialized *functions* and calls them
@@ -25,6 +25,7 @@ export class InsecureDeserializationAnalyzer extends BaseAnalyzer {
       confidence: "medium",
       isSource: isRequestSource,
       isSink,
+      sinkArgs: firstArgument,
       messageFor: (via) =>
         `User-controlled input ('${via}') is passed to a deserializer that can execute code. ` +
         `A crafted payload runs arbitrary code on your server. Use JSON.parse (data only) and ` +

@@ -1,5 +1,5 @@
 import { SyntaxNode } from "../parsers/utils";
-import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
+import { AnalyzerConfig, BaseAnalyzer, firstArgument } from "./base-analyzer";
 import { isRequestSource } from "./sources";
 
 const PARSE_CALLEE_PATTERN = /(^|\.)(parseXml|parseXmlString|parseXMLString)$/;
@@ -27,6 +27,7 @@ export class XxeAnalyzer extends BaseAnalyzer {
       confidence: "medium",
       isSource: isRequestSource,
       isSink,
+      sinkArgs: firstArgument,
       messageFor: (via) =>
         `User-controlled XML ('${via}') is parsed with external entity expansion enabled (noent: true). ` +
         `An attacker can read local files or make your server fetch internal URLs. Remove noent: true ` +

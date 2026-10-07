@@ -1,5 +1,5 @@
 import { SyntaxNode } from "../parsers/utils";
-import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
+import { AnalyzerConfig, BaseAnalyzer, firstArgument } from "./base-analyzer";
 import { isRequestSource } from "./sources";
 
 // db.query(...), pool.execute(...), knex.raw(...), sequelize.query(...),
@@ -31,6 +31,7 @@ export class SqlInjectionAnalyzer extends BaseAnalyzer {
       confidence: "medium",
       isSource: isRequestSource,
       isSink: (node) => isSink(node) && !usesParameterizedArgs(node),
+      sinkArgs: firstArgument, // only the query text; later arguments are bound values
       messageFor: (via) =>
         `User-controlled input ('${via}') flows into a SQL query without parameterization. ` +
         `Use parameterized queries (e.g. db.query('... WHERE id = ?', [${via}])) instead of string interpolation.`,

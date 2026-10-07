@@ -15,6 +15,8 @@ but in Next.js App Router style (`route.ts` handlers, `NextRequest`/`Request`,
 | `POST /api/transfer` | CSRF (no anti-forgery token check anywhere in the file) |
 | `GET /api/accounts/[accountId]` | IDOR (id-like dynamic segment, no session/ownership check) |
 | `GET /api/accounts-safe/[accountId]` | Safe (checks `account.ownerId === session.user.id`) — should **not** be flagged as IDOR |
+| `GET /api/orders?status=` | SQL Injection **across files**: the route forwards the value to `lib/orders.ts`, which interpolates it |
+| `GET /api/orders-safe?status=` | Safe: `lib/orders.ts` uses a bound parameter — should **not** be flagged |
 | `GET /admin/users` | Broken Access Control (no auth check, no `middleware.ts` guarding it) |
 
 Run the scanner against it from the repo root:

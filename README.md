@@ -58,10 +58,12 @@ that need manual testing — the scanner can't catch everything).
    `request.cookies.get(...)`, `request.json()` (see
    [docs/rules.md](docs/rules.md#sources-shared-by-all-five-data-flow-rules))
    — follows them through local variable assignments and template-literal
-   interpolation **within the same function** (intra-procedural — see
-   [Scope & limitations](#scope--limitations)), and checks whether a
-   "sink" call (`db.query`, `res.send`, `exec`, `fs.readFile`, ...) uses
-   the tainted value.
+   interpolation, and checks whether a "sink" call (`db.query`, `res.send`,
+   `exec`, `fs.readFile`, ...) uses the tainted value. When the value is
+   handed to **another function — in the same file or in another one** — the
+   scanner follows it there (`routes/users.js` -> `services/users.js` ->
+   `db.query`) and reports the call where the request data enters (see
+   [Scope & limitations](#scope--limitations)).
 3. **Report** — findings come out as colored terminal text, JSON, or
    [SARIF](https://sarifweb.azurewebsites.net/) (drop straight into GitHub
    code scanning).
@@ -169,11 +171,17 @@ This is a v1 MVP, built to a **realistic** plan (see
 
 - **JavaScript/TypeScript only.** Python and PHP support are a post-MVP
   goal (would need separate Tree-sitter grammars and per-language rules).
-- **Intra-procedural taint analysis.** Taint is tracked within a single
-  function body. If tainted input passes through a helper function
-  (`sanitize(req.params.id)` in another file, or even a few lines up in the
-  same file as a separate function), this version won't follow it there.
-  Inter-procedural tracking is a v2 goal.
+- **Taint follows calls, not return values.** Request data is tracked through
+  local variables, destructuring and template strings, and **into** the
+  project functions you pass it to — across files, through `require`/`import`
+  (including `@/` and tsconfig `paths` aliases), object literals, classes,
+  constructor functions and `this.method()`, up to six calls deep. What it does
+  *not* follow: data coming **back** from a function (`const q = buildQuery(x);
+  db.query(q)`), callbacks, values stored in object fields, dependency-injection
+  containers and dynamic `require`. A value wrapped in a call such as
+  `parseInt(x)` or `sanitize(x)` is treated as cleaned. Anything the resolver
+  cannot identify is skipped, so the failure mode is a missed finding, not an
+  invented one.
 - **Target false-positive rate: 25–30%**, false-negative rate: <10%. For
   comparison, Snyk sits around 15–20% FP and SonarQube around 20–30% FP —
   a v1 tool from a solo dev landing in that range is an honest result, not
