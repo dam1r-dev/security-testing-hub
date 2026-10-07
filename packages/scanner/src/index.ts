@@ -21,7 +21,20 @@ export { computeScore, SecurityScore, ScoreColor } from "./output/score";
 export { toHtml } from "./output/html";
 export { parseFile, parseSource, languageForExtension } from "./parsers/ast-parser";
 
-const DEFAULT_IGNORED_DIRS = new Set(["node_modules", ".git", "dist", "build", "coverage", ".next"]);
+// `generated` / `__generated__` hold machine-written code (Prisma client, GraphQL
+// codegen, ...): not where hand-written vulnerabilities live, and it often uses
+// newer syntax (e.g. `export type * from`) our parser doesn't know yet, which
+// would just produce noisy "syntax errors" warnings on every Prisma project.
+const DEFAULT_IGNORED_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  "coverage",
+  ".next",
+  "generated",
+  "__generated__",
+]);
 const SUPPORTED_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"]);
 
 export function defaultAnalyzers(): Analyzer[] {
