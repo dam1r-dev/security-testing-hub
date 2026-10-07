@@ -162,6 +162,7 @@ This is a v1 MVP, built to a **realistic** plan (see
   with its specific known false-positive shapes. CSRF, for example, assumes
   cookie/session-based auth; pure bearer-token APIs aren't CSRF-exploitable
   and should be filtered out manually for now.
+- **Skipped directories:** `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next`, and `generated` / `__generated__` (machine-written code such as Prisma's client — not where hand-written bugs live, and it uses newer TypeScript syntax like `export type * from` that the parser doesn't support yet).
 - **Two attack classes have no rule at all**: 2FA bypass (needs modeling
   session/request-flow state) and detecting a password field leaked in an
   API response body (needs modeling response shapes). Both are documented
