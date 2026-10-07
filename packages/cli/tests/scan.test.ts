@@ -7,7 +7,7 @@ const FIXTURE_APP = path.resolve(__dirname, "../../../examples/vulnerable-expres
 const NEXTJS_FIXTURE_APP = path.resolve(__dirname, "../../../examples/vulnerable-nextjs-app");
 
 describe("runScan against the vulnerable-express-app fixture", () => {
-  it("finds all eleven vulnerability classes, none in the safe routes", () => {
+  it("finds all sixteen vulnerability classes, none in the safe routes", () => {
     const outFile = path.join(os.tmpdir(), `security-hub-test-${Date.now()}.json`);
     const exitCode = runScan(FIXTURE_APP, { format: "json", out: outFile });
     const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
@@ -30,6 +30,11 @@ describe("runScan against the vulnerable-express-app fixture", () => {
         "insecure-role-assignment",
         "insecure-file-upload",
         "username-enumeration",
+        "code-injection",
+        "open-redirect",
+        "nosql-injection",
+        "insecure-deserialization",
+        "xxe",
       ]),
     );
     // Safe, parameterized query in users.js (the /user-safe/:id route) must not be
@@ -136,7 +141,7 @@ describe("runScan against the vulnerable-express-app fixture", () => {
 });
 
 describe("runScan against the vulnerable-nextjs-app fixture", () => {
-  it("finds all seven vulnerability classes via Next.js App Router conventions, none in the safe routes", () => {
+  it("finds all nine vulnerability classes via Next.js App Router conventions, none in the safe routes", () => {
     const outFile = path.join(os.tmpdir(), `security-hub-test-nextjs-${Date.now()}.json`);
     const exitCode = runScan(NEXTJS_FIXTURE_APP, { format: "json", out: outFile });
     const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
@@ -146,7 +151,17 @@ describe("runScan against the vulnerable-nextjs-app fixture", () => {
       summary.results.flatMap((r: { findings: { ruleId: string }[] }) => r.findings.map((f) => f.ruleId)),
     );
     expect(ruleIds).toEqual(
-      new Set(["sql-injection", "ssrf", "xss", "command-injection", "csrf", "idor", "broken-access-control"]),
+      new Set([
+        "sql-injection",
+        "ssrf",
+        "xss",
+        "command-injection",
+        "csrf",
+        "idor",
+        "broken-access-control",
+        "code-injection",
+        "open-redirect",
+      ]),
     );
 
     const safeUserRoute = summary.results.find((r: { file: string }) => /user-safe[/\\]route\.ts$/.test(r.file));

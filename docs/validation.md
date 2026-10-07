@@ -47,22 +47,38 @@ labelled true or false positive by hand.
 were tuned on exactly these findings, so it will not generalise perfectly.
 The next round on different projects is the real test.
 
-## What the scanner misses (false negatives)
+## Round 3: five new rules (code injection, open redirect, NoSQL injection, deserialization, XXE)
 
-On the two deliberately vulnerable apps the scanner found roughly a quarter to
-a third of the planted bugs. The misses are mostly vulnerability *classes it has
-no rule for yet*, not detection bugs inside the 11 rules it has:
+Written against the misses listed below, using the real code from the two
+vulnerable apps as the cases. Every planted bug of those five classes is now found:
 
-- **Code injection** — `eval(req.body.x)` (NodeGoat), `mathjs.eval(req.body.x)` (dvna)
-- **Open redirect** — `res.redirect(req.query.url)` (NodeGoat)
-- **NoSQL injection** — user input in MongoDB `$where` / query objects (NodeGoat)
-- **Insecure deserialization** — `node-serialize` `unserialize` (dvna)
-- **XXE** — `libxmljs.parseXml(..., {noent: true})` (dvna)
+| Project | Round 2 | Round 3 | Newly found |
+|---|---|---|---|
+| NodeGoat (score 93 -> 41) | 3 | 8 | `eval` x3 (contributions.js), open redirect (`/learn`), `$where` injection (allocations-dao.js) |
+| dvna (score 69 -> 31) | 4 | 8 | `mathjs.eval`, open redirect, `unserialize`, XXE (`noent:true`) |
+| the other four projects + JumaTime | 0 | 0 | — |
+
+Two false positives showed up on the way and were fixed before release, each
+with a regression test: MongoDB-operator checks fired on dvna's Sequelize
+`find({ where: ... })` (now skipped for SQL-only projects), and on
+hackathon-starter's `findOne({ email: { $eq: req.body.email } })`, which already
+is the recommended defence (now recognised).
+
+## What the scanner still misses (false negatives)
+
+After round 3, the remaining misses in the two deliberately vulnerable apps are
+classes with no rule yet, or ones that need cross-file data flow:
+
 - **XSS through templates** — only `res.send(...)`-style sinks are recognised
+  (NodeGoat/dvna render user input through EJS/Handlebars-style templates)
 - **Missing function-level access control** on a route that doesn't *look*
   privileged (NodeGoat's `/benefits`)
+- **IDOR when the id isn't a route param** (dvna reads `req.query.id` / `req.body.id`)
+- **Anything whose input crosses a file boundary** (route handler -> DAO): taint is
+  tracked inside one function only
+- **ReDoS, insecure cookie/session settings, weak crypto** — no rules
 
-The original plan's "false negatives < 10%" target is therefore **not met** for
+The original plan's "false negatives < 10%" target is still **not met** for
 real-world vulnerable code; it only holds within the classes covered.
 
 ## Known parser limitations (not fixable by switching grammar)
