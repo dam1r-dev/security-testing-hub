@@ -18,6 +18,7 @@ import { OpenRedirectAnalyzer } from "./analyzers/open-redirect";
 import { NoSqlInjectionAnalyzer } from "./analyzers/nosql-injection";
 import { InsecureDeserializationAnalyzer } from "./analyzers/insecure-deserialization";
 import { XxeAnalyzer } from "./analyzers/xxe";
+import { ProjectContext } from "./taint/project";
 import { ScanResult, ScanSummary } from "./types";
 
 export * from "./types";
@@ -25,6 +26,7 @@ export { toSarif, toSarifString } from "./output/sarif";
 export { computeScore, SecurityScore, ScoreColor } from "./output/score";
 export { toHtml } from "./output/html";
 export { parseFile, parseSource, languageForExtension } from "./parsers/ast-parser";
+export { ProjectContext } from "./taint/project";
 
 // Directories that aren't the project's own hand-written server code:
 //  - build output / dependencies / VCS metadata
@@ -54,6 +56,10 @@ const DEFAULT_IGNORED_DIRS = new Set([
 ]);
 // *.test.js / *.spec.ts (tests living next to the code) and minified bundles.
 const IGNORED_FILE_PATTERN = /(\.(test|spec)\.[cm]?[jt]sx?$)|(\.min\.[cm]?js$)/i;
+// Hand-written source is far below this. A multi-megabyte file is a bundle or generated
+// output: it can take minutes to analyse (a 9 MB typescript.js took 52 s) and holds no
+// code a person wrote. Skipped with a visible warning rather than silently.
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"]);
 
 export function defaultAnalyzers(): Analyzer[] {
@@ -78,10 +84,15 @@ export function defaultAnalyzers(): Analyzer[] {
 }
 
 /** Scans a single in-memory source string (no filesystem access) — handy for tests/library use. */
-export function scanSource(sourceCode: string, filePath: string, analyzers: Analyzer[] = defaultAnalyzers()): ScanResult {
+export function scanSource(
+  sourceCode: string,
+  filePath: string,
+  analyzers: Analyzer[] = defaultAnalyzers(),
+  context?: ProjectContext,
+): ScanResult {
   let parsed;
   try {
-    parsed = parseFile(filePath, sourceCode);
+    parsed = context?.cachedParse(filePath, sourceCode) ?? parseFile(filePath, sourceCode);
   } catch (err) {
     // A single malformed/unusual file must never take down a whole-project scan.
     const message = err instanceof Error ? err.message : String(err);
@@ -92,10 +103,10 @@ export function scanSource(sourceCode: string, filePath: string, analyzers: Anal
   }
   if (parsed.tree.rootNode.hasError) {
     // Still run analyzers on the best-effort tree, but surface that parsing wasn't clean.
-    const findings = analyzers.flatMap((a) => a.analyze(parsed, filePath));
+    const findings = analyzers.flatMap((a) => a.analyze(parsed, filePath, context));
     return { file: filePath, findings, parseError: "Source has syntax errors; results may be incomplete." };
   }
-  const findings = analyzers.flatMap((a) => a.analyze(parsed, filePath));
+  const findings = analyzers.flatMap((a) => a.analyze(parsed, filePath, context));
   return { file: filePath, findings };
 }
 
@@ -131,16 +142,26 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
   const start = Date.now();
   const stat = fs.statSync(targetPath);
   const files = stat.isDirectory() ? walkDirectory(targetPath) : [targetPath];
+  // Shared by every file of this scan so a call can be followed into another file.
+  const context = new ProjectContext(stat.isDirectory() ? targetPath : path.dirname(targetPath));
 
   const results: ScanResult[] = files.map((file) => {
     let sourceCode: string;
     try {
+      const size = fs.statSync(file).size;
+      if (size > MAX_FILE_BYTES) {
+        return {
+          file,
+          findings: [],
+          parseError: `Skipped: ${(size / 1024 / 1024).toFixed(1)} MB is over the ${MAX_FILE_BYTES / 1024 / 1024} MB limit (likely a bundle or generated file).`,
+        };
+      }
       sourceCode = fs.readFileSync(file, "utf8");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { file, findings: [], parseError: `Failed to read file: ${message}` };
     }
-    return scanSource(sourceCode, file, analyzers);
+    return scanSource(sourceCode, file, analyzers, context);
   });
 
   return {

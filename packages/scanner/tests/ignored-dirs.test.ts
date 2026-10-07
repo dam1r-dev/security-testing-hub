@@ -29,4 +29,13 @@ describe("scanPath ignored directories", () => {
     expect(summary.results.every((r) => !r.parseError)).toBe(true);
     expect(summary.results[0]?.file.endsWith("app.ts")).toBe(true);
   });
+
+  it("skips files over the size limit with a visible warning instead of hanging on a bundle", () => {
+    fs.writeFileSync(path.join(projectDir, "src", "bundle.js"), "var a = 1;\n".repeat(250_000)); // ~3 MB
+    const summary = scanPath(projectDir);
+    const bundle = summary.results.find((r) => r.file.endsWith("bundle.js"));
+    expect(bundle?.findings).toEqual([]);
+    expect(bundle?.parseError).toContain("Skipped");
+    expect(summary.results.find((r) => r.file.endsWith("app.ts"))?.parseError).toBeUndefined();
+  });
 });

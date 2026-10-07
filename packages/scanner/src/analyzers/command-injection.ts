@@ -1,5 +1,5 @@
 import { SyntaxNode } from "../parsers/utils";
-import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
+import { AnalyzerConfig, BaseAnalyzer, firstArgument } from "./base-analyzer";
 import { isRequestSource } from "./sources";
 
 // child_process.exec / execSync spawn a shell and interpret the whole string,
@@ -29,6 +29,7 @@ export class CommandInjectionAnalyzer extends BaseAnalyzer {
       confidence: "medium",
       isSource: isRequestSource,
       isSink,
+      sinkArgs: firstArgument,
       messageFor: (via) =>
         `User-controlled input ('${via}') flows into a shell command. ` +
         `Use child_process.execFile/spawn with an argument array instead of exec/execSync with a built string.`,

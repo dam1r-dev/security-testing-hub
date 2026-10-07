@@ -2,9 +2,45 @@
 
 `sql-injection`, `xss`, `command-injection`, `path-traversal`, `ssrf`,
 `code-injection`, `open-redirect`, `insecure-deserialization` and `xxe`
-share one engine: **source → alias propagation → sink**, scoped to a single
-function body (intra-procedural). See
-[README.md](../README.md#scope--limitations) for why that scope was chosen.
+share one engine: **source → alias propagation → sink**. Inside a function
+the engine follows local variables, destructuring and template strings; across
+functions it uses *summaries* (see below). See
+[README.md](../README.md#scope--limitations) for what is and isn't followed.
+
+## How data is followed across functions and files
+
+For every project function, per rule, the engine works out **which parameters
+reach a dangerous call** — directly, or by being passed on to another function
+that does (up to six calls deep; recursion is cut off). At each call site that
+passes request data into such a parameter, the finding is reported **at the call
+site**, where the user input is visible, and its message says where the dangerous
+call is:
+
+```text
+routes/users.js:8   User-controlled input ('req.query.owner') flows into a SQL query ...
+                    The value is passed to findByOwner() and reaches the vulnerable call at
+                    services/report-service.js:8.
+```
+
+How a call is resolved to a function (name-based, no type checker):
+
+| Form | Example |
+|---|---|
+| Same-file function | `find(req.query.q)` |
+| CommonJS | `const svc = require("./svc"); svc.find(x)`, `const { find } = require("./svc")`, `exports.f = ...`, `module.exports = { f }` / `= function` / `= Class` |
+| ES modules | `import { f }`, `import f`, `import * as ns`, `export default`, barrel files (`export * from`, `export { x } from`) |
+| Path aliases | `@/…`, `~/…`, and `compilerOptions.paths` / `baseUrl` from `tsconfig.json` / `jsconfig.json` |
+| Objects & classes | `const dao = { find() {} }`, `new Service().find(x)`, `this.helper(x)`, `extends`, constructor functions with `this.find = function`, `Ctor.prototype.find = ...` |
+
+Only the **dangerous argument** counts: for `query(sql, params)` only `sql` is a
+sink slot, so `query("... WHERE id = ?", [req.params.id])` stays clean. A value
+wrapped in a call (`parseInt(x)`, `escape(x)`) or used only as a table key
+(`CONFIG[req.query.name]`) is not treated as tainted.
+
+**Not followed** (reported as a limitation, never guessed): values returned from
+a function, callbacks, values stored in object fields, dependency-injection
+containers, dynamic `require(variable)`, factory functions that return objects,
+and calls on objects whose class can't be determined by name.
 
 The rest (`csrf`, `idor`, `broken-access-control`,
 `insecure-role-assignment`, `insecure-file-upload`, `username-enumeration`)

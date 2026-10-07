@@ -69,12 +69,16 @@ function isObjectCapableSource(node: SyntaxNode): boolean {
   return false;
 }
 
-function isMongoQueryCall(node: SyntaxNode): boolean {
-  if (node.type !== "call_expression") return false;
-  const callee = node.childForFieldName("function");
+function isMongoQueryCall(call: SyntaxNode): boolean {
+  if (call.type !== "call_expression") return false;
+  const callee = call.childForFieldName("function");
   if (!callee || callee.type !== "member_expression") return false;
   const property = callee.childForFieldName("property");
-  return !!property && MONGO_METHOD.test(property.text);
+  if (!property || !MONGO_METHOD.test(property.text)) return false;
+  // `users.find((u) => u.name === req.body.name)` is Array.prototype.find with a predicate,
+  // not a database query: MongoDB takes a filter object, never a function.
+  const first = call.childForFieldName("arguments")?.namedChild(0);
+  return !first || !/^(arrow_function|function_expression|function)$/.test(first.type);
 }
 
 class OperatorInjectionAnalyzer extends BaseAnalyzer {

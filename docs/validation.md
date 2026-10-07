@@ -64,6 +64,34 @@ with a regression test: MongoDB-operator checks fired on dvna's Sequelize
 hackathon-starter's `findOne({ email: { $eq: req.body.email } })`, which already
 is the recommended defence (now recognised).
 
+## Round 4: taint across functions and files
+
+The engine now follows request data into project functions and across files (see
+[rules.md](rules.md#how-data-is-followed-across-functions-and-files)). Re-running the
+six projects: **no new true findings and one new false positive, fixed before release.**
+That is the honest result of this corpus, not a flaw in the feature — none of the six
+projects keeps its SQL/command/path sinks in a separate layer from the route handlers
+(NodeGoat and dvna put the vulnerable calls next to the request handling; the Next.js
+and realworld apps use an ORM). The cross-file logic is therefore verified on purpose-built
+cases (`packages/scanner/tests/cross-file.test.ts`, 30 cases, and the `reports` / `orders`
+routes in the two example apps) and still needs a round on projects that do have a service
+layer.
+
+False positives the new analysis exposed, each fixed with a regression test:
+
+| Finding | Cause | Fix |
+|---|---|---|
+| `ssrf` in hackathon-starter (`revokeProviderTokens(provider, ...)`) | the tainted value was only a **key into a constant table** (`CONFIG[providerName]`); the URL came from the table | a value looked up by a user-chosen key (`table[key]`) is no longer tainted — also applies inside a single function |
+| `xss` on `res.send({ status, amount, to })` (example app) | an object/array response is JSON, not HTML | `res.send(object \| array)` is not an XSS sink |
+| `nosql-injection` on `users.find((u) => u.name === req.body.name)` (my own demo shop, present since 0.2.0) | `Array.prototype.find` with a predicate matched the MongoDB `find` name | a function as the first argument means "not a MongoDB query" |
+
+Two improvements to the single-function engine came with it, and they find more real bugs:
+`const { id } = req.params` now taints `id` (destructuring was silently dropped before) and a
+shorthand property in a query (`User.findOne({ username })`) counts as a use of the variable.
+
+Scan time did not regress: the same rules share one walk of each function now
+(hackathon-starter 2.6 s -> 2.2 s, nextjs-subscription-payments 2.0 s -> 1.2 s).
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are
@@ -74,8 +102,9 @@ classes with no rule yet, or ones that need cross-file data flow:
 - **Missing function-level access control** on a route that doesn't *look*
   privileged (NodeGoat's `/benefits`)
 - **IDOR when the id isn't a route param** (dvna reads `req.query.id` / `req.body.id`)
-- **Anything whose input crosses a file boundary** (route handler -> DAO): taint is
-  tracked inside one function only
+- **Data returned from a function** (`const q = buildQuery(x); db.query(q)`), callbacks,
+  values stored in object fields, DI containers: the cross-file analysis follows data
+  *into* functions, not back out of them
 - **ReDoS, insecure cookie/session settings, weak crypto** — no rules
 
 The original plan's "false negatives < 10%" target is still **not met** for

@@ -19,6 +19,9 @@ is intentionally vulnerable.
 | `GET /dashboard` | Insecure Role Assignment (`req.cookies.Admin` trusted) |
 | `POST /check-stock` | SSRF (`req.body.stockApi` fetched directly) |
 | `POST /login` | Username Enumeration (distinct "invalid username" vs. "invalid password") |
+| `GET /reports?owner=` | SQL Injection **across files**: `routes/reports.js` passes `req.query.owner` to `services/report-service.js`, which builds the query |
+| `GET /reports/search?q=` | Same, through two functions (`search` -> `runQuery`) |
+| `GET /reports/mine?owner=` | Safe: the service uses a bound parameter — should **not** be flagged |
 | `upload.js` (`multer` config, no route) | Insecure File Upload (filter checks `file.mimetype` only) |
 
 Run the scanner against it from the repo root:

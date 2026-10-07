@@ -1,5 +1,5 @@
 import { SyntaxNode } from "../parsers/utils";
-import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
+import { AnalyzerConfig, BaseAnalyzer, firstArgument } from "./base-analyzer";
 import { isRequestSource } from "./sources";
 
 // eval(x), Function(x), vm.runInNewContext(x), mathjs/math.eval(x) — all
@@ -33,6 +33,7 @@ export class CodeInjectionAnalyzer extends BaseAnalyzer {
       confidence: "medium",
       isSource: isRequestSource,
       isSink,
+      sinkArgs: firstArgument,
       messageFor: (via) =>
         `User-controlled input ('${via}') is executed as code (eval / Function / vm / math.eval). ` +
         `An attacker can run arbitrary JavaScript on your server. Parse the input as data instead ` +

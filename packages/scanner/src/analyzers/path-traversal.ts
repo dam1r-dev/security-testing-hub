@@ -1,5 +1,5 @@
 import { SyntaxNode } from "../parsers/utils";
-import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
+import { AnalyzerConfig, BaseAnalyzer, firstArgument } from "./base-analyzer";
 import { isRequestSource } from "./sources";
 
 const FS_METHOD_PATTERN =
@@ -29,6 +29,7 @@ export class PathTraversalAnalyzer extends BaseAnalyzer {
       confidence: "low",
       isSource: isRequestSource,
       isSink,
+      sinkArgs: firstArgument,
       messageFor: (via) =>
         `User-controlled input ('${via}') is used to build a filesystem path. ` +
         `An attacker could supply '../' segments to escape the intended directory. ` +

@@ -152,6 +152,10 @@ function analyzeFunctionBody(funcNode, sourcePatterns, sinkPatterns) {
   в одном образе (переключение `SAFE_MODE` env), E2E-скрипт (`labs/sql-injection/e2e.js`)
   доказывает эксплуатируемость И то, что фикс реально закрывает баг, CLI-команда `security-hub lab`,
   отдельная CI-джоба. Остальные лабы (XSS, CSRF) — после MVP.
+- ✅ **Межфайловый taint (после MVP)** — сводки функций по правилам + разрешение импортов/классов
+  (`taint/project.ts`, `taint/interprocedural.ts`): данные запроса отслеживаются в функции проекта и в
+  другие файлы (ESM/CommonJS, алиасы `@/` и tsconfig `paths`, классы, функции-конструкторы), до 6 вызовов
+  в глубину; возвращаемые значения и колбэки не отслеживаются (см. `docs/rules.md`).
 - 🟡 **Phase 7 (Documentation)** — README (EN+RU), `docs/rules.md`, `docs/attack-playbook.md` (EN/RU/KK) есть; полные гайды — в процессе
 - ✅ **Phase 8 (Testing, частично)** — coverage измерен и превышает таргет плана (70%+):
   scanner 88.5% statements / 92.2% lines, CLI 97.67% (после добавления тестов на

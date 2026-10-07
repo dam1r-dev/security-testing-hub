@@ -1,5 +1,5 @@
 import { SyntaxNode } from "../parsers/utils";
-import { AnalyzerConfig, BaseAnalyzer } from "./base-analyzer";
+import { AnalyzerConfig, BaseAnalyzer, firstArgument } from "./base-analyzer";
 import { isRequestSource } from "./sources";
 
 const RESPONSE_OBJECT_PATTERN = /^(res|response)$/;
@@ -12,7 +12,11 @@ function isExpressSink(node: SyntaxNode): boolean {
   const object = callee.childForFieldName("object");
   const property = callee.childForFieldName("property");
   if (!object || !property) return false;
-  return RESPONSE_OBJECT_PATTERN.test(object.text) && RESPONSE_METHOD_PATTERN.test(property.text);
+  if (!RESPONSE_OBJECT_PATTERN.test(object.text) || !RESPONSE_METHOD_PATTERN.test(property.text)) return false;
+  // res.send({ ... }) / res.send([...]) is serialised as JSON (Content-Type: application/json),
+  // which a browser never renders as HTML — echoing request data there is not reflected XSS.
+  const first = node.childForFieldName("arguments")?.namedChild(0);
+  return first?.type !== "object" && first?.type !== "array";
 }
 
 // Next.js / Web API: `new Response(html, ...)` / `new NextResponse(html, ...)` with a
@@ -43,6 +47,7 @@ export class XssAnalyzer extends BaseAnalyzer {
       confidence: "medium",
       isSource: isRequestSource,
       isSink,
+      sinkArgs: firstArgument,
       messageFor: (via) =>
         `User-controlled input ('${via}') is written directly into the HTTP response without escaping. ` +
         `Escape output (e.g. a templating engine's auto-escaping, or a library like 'escape-html') before sending it.`,

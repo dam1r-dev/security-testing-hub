@@ -125,6 +125,15 @@ describe("nosql-injection", () => {
       expect(scan(`app.post("/l", (req, res) => { User.findOne({ email: req.body.email.toLowerCase() }); });`, a)).toHaveLength(0);
     });
 
+    it("does not flag Array.prototype.find with a predicate over an in-memory list", () => {
+      expect(
+        scan(`app.post("/login", (req, res) => { const user = users.find((u) => u.username === req.body.username); });`, a),
+      ).toHaveLength(0);
+      expect(
+        scan(`app.post("/login", (req, res) => { const user = users.find(function (u) { return u.id === req.body.id; }); });`, a),
+      ).toHaveLength(0);
+    });
+
     it("does not flag req.params or searchParams (always strings)", () => {
       expect(scan(`app.get("/u/:id", (req, res) => { User.findOne({ _id: req.params.id }); });`, a)).toHaveLength(0);
       expect(

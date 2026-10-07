@@ -44,12 +44,16 @@ function isRedirectCall(node: SyntaxNode): boolean {
   return WEB_RESPONSE_PATTERN.test(object.text) && property.text === "redirect";
 }
 
-function isSink(node: SyntaxNode): boolean {
-  if (!isRedirectCall(node)) return false;
+function redirectTarget(node: SyntaxNode): SyntaxNode | null | undefined {
   const args = node.childForFieldName("arguments");
   // res.redirect(302, url) takes the target second; otherwise it's the first.
   const first = args?.namedChild(0);
-  const target = first?.type === "number" ? args?.namedChild(1) : first;
+  return first?.type === "number" ? args?.namedChild(1) : first;
+}
+
+function isSink(node: SyntaxNode): boolean {
+  if (!isRedirectCall(node)) return false;
+  const target = redirectTarget(node);
   if (!target) return false;
   return !hasFixedSameSitePrefix(target);
 }
@@ -69,6 +73,10 @@ export class OpenRedirectAnalyzer extends BaseAnalyzer {
       confidence: "medium",
       isSource: isRequestSource,
       isSink,
+      sinkArgs: (sink) => {
+        const target = redirectTarget(sink);
+        return target ? [target] : [];
+      },
       messageFor: (via) =>
         `User-controlled input ('${via}') decides where the server redirects. An attacker can send a link ` +
         `on your domain that bounces victims to a phishing site. Only redirect to relative paths you build ` +
