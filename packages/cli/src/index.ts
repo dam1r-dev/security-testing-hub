@@ -4,6 +4,11 @@ import { runScan } from "./commands/scan";
 import { runLab } from "./commands/lab";
 import { Severity } from "security-hub-scanner";
 
+// Read at runtime so `--version` can never drift from the published package.json
+// (dist/index.js sits one level below the package root).
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+const PACKAGE_VERSION: string = require("../package.json").version;
+
 const VALID_SEVERITIES: Severity[] = ["low", "medium", "high", "critical"];
 
 function parseSeverity(value: string): Severity {
@@ -20,7 +25,7 @@ export function run(argv: string[]): void {
   program
     .name("security-hub")
     .description("Open-source SAST scanner for Node.js/Express apps (SQLi, XSS, command injection, path traversal, CSRF)")
-    .version("0.1.0");
+    .version(PACKAGE_VERSION);
 
   program
     .command("scan <path>")

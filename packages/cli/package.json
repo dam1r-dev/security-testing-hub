@@ -1,6 +1,6 @@
 {
   "name": "security-hub",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Open-source SAST scanner CLI for Node.js/Express and Next.js apps — catches SQL injection, XSS, command injection, SSRF, CSRF, IDOR and more, built for AI-assisted (\"vibe coded\") projects.",
   "main": "dist/index.js",
   "bin": {
@@ -17,7 +17,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "security-hub-scanner": "0.1.0",
+    "security-hub-scanner": "0.1.1",
     "commander": "^12.1.0",
     "chalk": "^4.1.2"
   },
