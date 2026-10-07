@@ -1,8 +1,9 @@
 import { SyntaxNode } from "../parsers/utils";
 
-// Express: req.params / req.query / req.body / req.cookies / req.headers,
+// Express: req.params / req.query / req.body / req.cookies / req.headers / req.files
+// (uploaded file contents are attacker-controlled too),
 // with or without a trailing property/index access.
-const EXPRESS_MEMBER_PATTERN = /^req\.(params|query|body|cookies|headers)(\.\w+|\[[^\]]*\])?$/;
+const EXPRESS_MEMBER_PATTERN = /^req\.(params|query|body|cookies|headers|files|file)(\.\w+|\[[^\]]*\])?$/;
 
 // Next.js App Router / Web Request API body readers: request.json(), req.text(), ...
 const NEXT_BODY_READ_PATTERN = /^(req|request)\.(json|text|formData)$/;

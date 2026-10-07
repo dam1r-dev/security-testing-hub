@@ -21,7 +21,7 @@ response bodies, `exec()` with interpolated input) because that's what's
 common in training data. This tool is a fast, local pre-commit/CI check
 tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 
-## What it detects (v1 / MVP)
+## What it detects (16 rules)
 
 | Vulnerability | CWE | Analyzer |
 |---|---|---|
@@ -36,6 +36,11 @@ tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 | Insecure Role Assignment | [CWE-639](https://cwe.mitre.org/data/definitions/639.html) | pattern match (role/admin field read from client input) |
 | Insecure File Upload | [CWE-434](https://cwe.mitre.org/data/definitions/434.html) | pattern match (upload filter trusts Content-Type only) |
 | Username Enumeration | [CWE-203](https://cwe.mitre.org/data/definitions/203.html) | pattern match (distinct login error messages) |
+| Code Injection | [CWE-94](https://cwe.mitre.org/data/definitions/94.html) | `eval` / `new Function` / `vm.run*` / `math.eval` taint tracking |
+| Open Redirect | [CWE-601](https://cwe.mitre.org/data/definitions/601.html) | `res.redirect` / Next.js `redirect()` taint tracking (fixed same-site prefixes are fine) |
+| NoSQL Injection | [CWE-943](https://cwe.mitre.org/data/definitions/943.html) | request objects reaching Mongo queries, and dynamic `$where` strings |
+| Insecure Deserialization | [CWE-502](https://cwe.mitre.org/data/definitions/502.html) | `unserialize` (node-serialize) taint tracking |
+| XXE | [CWE-611](https://cwe.mitre.org/data/definitions/611.html) | XML parsed with `noent: true` taint tracking |
 
 See [docs/rules.md](docs/rules.md) for how each rule works and its known
 false-positive/false-negative tradeoffs, and

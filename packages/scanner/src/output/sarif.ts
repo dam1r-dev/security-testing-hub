@@ -61,6 +61,31 @@ const RULE_DESCRIPTIONS: Record<VulnerabilityType, { name: string; description: 
     description: "Login handler returns distinguishable errors for unknown users vs. wrong passwords.",
     helpUri: "https://cwe.mitre.org/data/definitions/203.html",
   },
+  "code-injection": {
+    name: "Code Injection",
+    description: "User-controlled input is executed as code (eval, Function, vm, ...).",
+    helpUri: "https://cwe.mitre.org/data/definitions/94.html",
+  },
+  "open-redirect": {
+    name: "Open Redirect",
+    description: "User-controlled input decides where the server redirects the browser.",
+    helpUri: "https://cwe.mitre.org/data/definitions/601.html",
+  },
+  "nosql-injection": {
+    name: "NoSQL Injection",
+    description: "User-controlled input reaches a NoSQL query as an operator object or server-side JavaScript ($where).",
+    helpUri: "https://cwe.mitre.org/data/definitions/943.html",
+  },
+  "insecure-deserialization": {
+    name: "Insecure Deserialization",
+    description: "User-controlled input is deserialized with a library that can execute code.",
+    helpUri: "https://cwe.mitre.org/data/definitions/502.html",
+  },
+  xxe: {
+    name: "XML External Entity",
+    description: "User-controlled XML is parsed with external entity expansion enabled.",
+    helpUri: "https://cwe.mitre.org/data/definitions/611.html",
+  },
 };
 
 function levelFor(severity: Severity): "error" | "warning" | "note" {

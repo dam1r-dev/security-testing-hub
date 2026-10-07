@@ -9,7 +9,12 @@ export type VulnerabilityType =
   | "broken-access-control"
   | "insecure-role-assignment"
   | "insecure-file-upload"
-  | "username-enumeration";
+  | "username-enumeration"
+  | "code-injection"
+  | "open-redirect"
+  | "nosql-injection"
+  | "insecure-deserialization"
+  | "xxe";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 

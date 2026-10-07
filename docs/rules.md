@@ -1,6 +1,7 @@
 # Rule reference
 
-`sql-injection`, `xss`, `command-injection`, `path-traversal`, and `ssrf`
+`sql-injection`, `xss`, `command-injection`, `path-traversal`, `ssrf`,
+`code-injection`, `open-redirect`, `insecure-deserialization` and `xxe`
 share one engine: **source → alias propagation → sink**, scoped to a single
 function body (intra-procedural). See
 [README.md](../README.md#scope--limitations) for why that scope was chosen.
@@ -189,6 +190,64 @@ Defined once in `src/analyzers/sources.ts` so every rule stays in sync:
   differences in HTTP status code or response timing, which are just as
   exploitable for enumeration — those need manual/dynamic testing (see
   [docs/attack-playbook.md](attack-playbook.md)).
+
+## `code-injection` (critical)
+
+- **Sources:** same shared sources (see above).
+- **Sinks:** `eval(...)`, `Function(...)` / `new Function(...)`,
+  `vm.runInNewContext/runInThisContext/runInContext(...)`, `new vm.Script(...)`,
+  and any `.eval(...)` method (`mathjs.eval`, `math.eval`, ...).
+- **Not flagged:** `eval` of a constant, `JSON.parse(...)` of request data.
+- Found in NodeGoat (`eval(req.body.preTax)`) and dvna (`mathjs.eval`).
+
+## `open-redirect` (medium)
+
+- **Sinks:** `res.redirect(...)` / `res.location(...)` (also `response`,
+  `reply`, `ctx`), `NextResponse.redirect(...)`, `Response.redirect(...)`, and
+  next/navigation's `redirect(...)` / `permanentRedirect(...)`; the target may
+  be the second argument (`res.redirect(301, url)`).
+- **Not flagged:** a target that starts with a fixed same-site path
+  (`"/items/" + id`, `` `/items/${id}` ``): the host can't change. `"//" + x`
+  and bare user input are flagged.
+- **Known gap:** an allowlist/`startsWith("/")` check earlier in the function
+  isn't recognised, so a correctly validated redirect is still reported.
+
+## `nosql-injection` (high)
+
+Two independent checks:
+
+1. **Operator injection.** A MongoDB query method (`find`, `findOne`,
+   `updateOne`, `deleteMany`, `aggregate`, ...) receiving `req.body` /
+   `req.query` / `await request.json()` data that wasn't forced to a string.
+   A JSON body `{"password": {"$ne": null}}` turns a value into a query
+   operator. Not flagged: `req.params`/cookies/`searchParams.get()` (always
+   strings), `String(x)`/`x.toString()`/template literals, and
+   `{ field: { $eq: x } }` (the recommended defence — measured on
+   hackathon-starter, where flagging it was a false positive). Skipped
+   entirely when `package.json` shows a SQL driver/ORM and no MongoDB library
+   (e.g. Sequelize: `db.User.find({ where: ... })` is not a Mongo query).
+2. **`$where`.** A `$where` whose value is built from a dynamic value (template
+   substitution / concatenation) runs attacker-influenced text as JavaScript
+   inside the database. No source is needed: the input usually arrives through
+   another file (NodeGoat), which per-function taint can't follow. Values
+   coerced with `parseInt`/`Number`/`Math.*`/unary `+` (directly, or via a local
+   variable initialised that way) are not flagged — that is the fixed NodeGoat
+   version.
+
+## `insecure-deserialization` (critical)
+
+- **Sinks:** `unserialize(...)` / `.unserialize(...)` (node-serialize) and
+  `deepDeserialize(...)` (funcster) — both revive functions and run them.
+- `JSON.parse` is deliberately not flagged (it only builds data).
+- Found in dvna (`serialize.unserialize(req.files.products.data...)`).
+  `req.files` / `req.file` (uploads) are now part of the shared sources.
+
+## `xxe` (high)
+
+- **Sinks:** `parseXml` / `parseXmlString` / `parseXMLString` (libxmljs) **with
+  `noent: true`** in the options, fed with request data. Entities stay off by
+  default, so the same call without `noent` isn't flagged.
+- Found in dvna (`parseXmlString(req.files.products.data..., {noent:true})`).
 
 ## Not covered by static analysis (see the manual testing guide instead)
 

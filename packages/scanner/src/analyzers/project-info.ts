@@ -43,3 +43,39 @@ export function isBearerOnlyProject(filePath: string): boolean {
   }
   return false;
 }
+
+const MONGO_DEPS = /^(mongodb|mongoose|monk|mongojs|mongoskin|nedb|@typegoose\/typegoose|typegoose|@mikro-orm\/mongodb|mongodb-memory-server)$/;
+const SQL_DEPS =
+  /^(sequelize|sequelize-typescript|knex|pg|mysql|mysql2|sqlite3|better-sqlite3|mssql|oracledb|typeorm|@prisma\/client|prisma|drizzle-orm|objection|bookshelf|kysely|slonik|postgres)$/;
+
+export type DatabaseKind = "mongo" | "sql" | "unknown";
+const databaseKindCache = new Map<string, DatabaseKind>();
+
+/**
+ * Which kind of database the nearest package.json points at. "sql" means a
+ * SQL driver/ORM and no MongoDB library — MongoDB-specific findings (operator
+ * objects like {"$ne": null}) don't apply there. "unknown" (no package.json,
+ * or no recognisable database library) keeps MongoDB checks on.
+ */
+export function databaseKind(filePath: string): DatabaseKind {
+  let dir = path.dirname(path.resolve(filePath));
+  for (let depth = 0; depth < 10; depth++) {
+    const candidate = path.join(dir, "package.json");
+    if (fs.existsSync(candidate)) {
+      const cached = databaseKindCache.get(candidate);
+      if (cached !== undefined) return cached;
+      const deps = readDependencyNames(candidate) ?? [];
+      const kind: DatabaseKind = deps.some((d) => MONGO_DEPS.test(d))
+        ? "mongo"
+        : deps.some((d) => SQL_DEPS.test(d))
+          ? "sql"
+          : "unknown";
+      databaseKindCache.set(candidate, kind);
+      return kind;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return "unknown";
+}

@@ -13,6 +13,11 @@ import { BrokenAccessControlAnalyzer } from "./analyzers/broken-access-control";
 import { InsecureRoleAssignmentAnalyzer } from "./analyzers/insecure-role-assignment";
 import { InsecureFileUploadAnalyzer } from "./analyzers/insecure-file-upload";
 import { UsernameEnumerationAnalyzer } from "./analyzers/username-enumeration";
+import { CodeInjectionAnalyzer } from "./analyzers/code-injection";
+import { OpenRedirectAnalyzer } from "./analyzers/open-redirect";
+import { NoSqlInjectionAnalyzer } from "./analyzers/nosql-injection";
+import { InsecureDeserializationAnalyzer } from "./analyzers/insecure-deserialization";
+import { XxeAnalyzer } from "./analyzers/xxe";
 import { ScanResult, ScanSummary } from "./types";
 
 export * from "./types";
@@ -64,6 +69,11 @@ export function defaultAnalyzers(): Analyzer[] {
     new InsecureRoleAssignmentAnalyzer(),
     new InsecureFileUploadAnalyzer(),
     new UsernameEnumerationAnalyzer(),
+    new CodeInjectionAnalyzer(),
+    new OpenRedirectAnalyzer(),
+    new NoSqlInjectionAnalyzer(),
+    new InsecureDeserializationAnalyzer(),
+    new XxeAnalyzer(),
   ];
 }
 
