@@ -1,6 +1,6 @@
 {
   "name": "security-hub-scanner",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Tree-sitter based SAST engine for Node.js/Express and Next.js apps: SQL injection, XSS, command injection, path traversal, SSRF, CSRF, IDOR, broken access control and more.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
