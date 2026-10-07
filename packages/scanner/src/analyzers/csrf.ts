@@ -3,6 +3,7 @@ import { findNodes, snippet, toLocation, SyntaxNode } from "../parsers/utils";
 import { Finding } from "../types";
 import { Analyzer } from "./base-analyzer";
 import { findNextHandlers, isNextRouteFile, STATE_CHANGING_METHOD_NAMES } from "./nextjs-routes";
+import { isBearerOnlyProject } from "./project-info";
 
 const STATE_CHANGING_METHODS = new Set(["post", "put", "delete", "patch"]);
 const ROUTER_OBJECT_PATTERN = /^(app|router)$/i;
@@ -10,6 +11,10 @@ const ROUTER_SUFFIX_PATTERN = /router$/i;
 // Any of these appearing anywhere in the file is treated as evidence that CSRF
 // protection is wired up somewhere (global middleware, csurf, custom token check, ...).
 const CSRF_PROTECTION_HINT = /csrf/i;
+// Webhooks (Stripe, GitHub, ...) are authenticated by a signature over the
+// body, not by a browser cookie, so a forged cross-site request can't pass —
+// CSRF doesn't apply, and flagging them is pure noise.
+const WEBHOOK_HINT = /webhook|stripe-signature|x-hub-signature|x-slack-signature|svix-signature/i;
 
 function isStateChangingRouteRegistration(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;
@@ -41,25 +46,35 @@ function isStateChangingRouteRegistration(node: SyntaxNode): boolean {
 export class CsrfAnalyzer implements Analyzer {
   analyze(parsed: ParsedFile, filePath: string): Finding[] {
     if (CSRF_PROTECTION_HINT.test(parsed.sourceCode)) return [];
+    // Pure bearer-token API (JWT in a header, no cookie/session library): the
+    // browser never attaches the credential on its own, so CSRF can't happen.
+    if (isBearerOnlyProject(filePath)) return [];
 
-    if (isNextRouteFile(filePath)) {
-      return findNextHandlers(parsed.tree.rootNode)
-        .filter((h) => STATE_CHANGING_METHOD_NAMES.has(h.method))
-        .map((h) => this.toFinding(h.node, filePath, parsed.sourceCode));
-    }
+    const nodes = isNextRouteFile(filePath)
+      ? findNextHandlers(parsed.tree.rootNode)
+          .filter((h) => STATE_CHANGING_METHOD_NAMES.has(h.method))
+          .map((h) => h.node)
+      : findNodes(parsed.tree.rootNode, isStateChangingRouteRegistration);
 
-    const routes = findNodes(parsed.tree.rootNode, isStateChangingRouteRegistration);
-    return routes.map((route) => this.toFinding(route, filePath, parsed.sourceCode));
+    const exposed = nodes.filter((n) => !WEBHOOK_HINT.test(n.text) && !WEBHOOK_HINT.test(filePath));
+    const first = exposed[0];
+    if (!first) return [];
+
+    // One finding per file, not per route: they all share a single root cause
+    // (no anti-forgery protection wired up), and a 12-route controller
+    // shouldn't read as 12 separate bugs or drag the score 12x.
+    return [this.toFinding(first, exposed.length, filePath, parsed.sourceCode)];
   }
 
-  private toFinding(node: SyntaxNode, filePath: string, sourceCode: string): Finding {
+  private toFinding(node: SyntaxNode, routeCount: number, filePath: string, sourceCode: string): Finding {
+    const scope = routeCount > 1 ? `${routeCount} state-changing routes (POST/PUT/DELETE/PATCH, first one shown)` : "State-changing route (POST/PUT/DELETE/PATCH)";
     return {
       ruleId: "csrf",
       severity: "medium",
       confidence: "low",
       message:
-        "State-changing route (POST/PUT/DELETE/PATCH) found with no CSRF protection detected in this file " +
-        "(no csurf middleware, req.csrfToken(), or similar). If this route relies on session cookies for " +
+        `${scope} found with no CSRF protection detected in this file ` +
+        "(no csurf middleware, req.csrfToken(), or similar). If these routes rely on session cookies for " +
         "auth, add CSRF token verification; SameSite=strict cookies or a pure bearer-token API make this a non-issue.",
       location: toLocation(node, filePath),
       sourceSnippet: "(no CSRF token check found in file)",

@@ -7,9 +7,10 @@ import { findNextHandlers, idLikeDynamicSegments, isNextRouteFile, routeSegments
 const ROUTER_OBJECT_PATTERN = /^(app|router)$/i;
 const ROUTER_SUFFIX_PATTERN = /router$/i;
 const HTTP_METHODS = new Set(["get", "post", "put", "delete", "patch"]);
-// :id, :userId, :accountId, :orderId, ... — a route param whose name suggests
-// it selects a specific record.
-const ID_PARAM_PATTERN = /:([A-Za-z0-9_]*[Ii]d[A-Za-z0-9_]*)\b/;
+// :id, :userId, :user_id, :accountID, ... — a route param whose NAME IS an id.
+// (A plain "contains id" test also matched :provider, :video, :guide, ... —
+// seen in practice on a real project, so the name has to END in Id/ID/_id.)
+const ID_PARAM_PATTERN = /:((?:[A-Za-z0-9_]*(?:Id|ID|_id))|id)(?![A-Za-z0-9_])/;
 // Any reference to the authenticated user/session in the handler is treated as
 // evidence of an ownership check — Express's req.user/req.session, and common
 // Next.js session helpers (NextAuth's getServerSession/auth(), Clerk's currentUser(), ...).

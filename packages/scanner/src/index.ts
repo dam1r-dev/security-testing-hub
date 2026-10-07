@@ -21,10 +21,14 @@ export { computeScore, SecurityScore, ScoreColor } from "./output/score";
 export { toHtml } from "./output/html";
 export { parseFile, parseSource, languageForExtension } from "./parsers/ast-parser";
 
-// `generated` / `__generated__` hold machine-written code (Prisma client, GraphQL
-// codegen, ...): not where hand-written vulnerabilities live, and it often uses
-// newer syntax (e.g. `export type * from`) our parser doesn't know yet, which
-// would just produce noisy "syntax errors" warnings on every Prisma project.
+// Directories that aren't the project's own hand-written server code:
+//  - build output / dependencies / VCS metadata
+//  - `generated` / `__generated__`: machine-written code (Prisma client, GraphQL
+//    codegen, ...) that often uses syntax our parser doesn't know yet
+//  - `vendor` / `vendors`: bundled third-party libraries (jquery.min.js, ...)
+//  - test directories: tests deliberately contain "wrong password" strings,
+//    fake requests and mocks — measured on real projects, this was the single
+//    biggest source of false positives (username-enumeration on test files).
 const DEFAULT_IGNORED_DIRS = new Set([
   "node_modules",
   ".git",
@@ -34,7 +38,17 @@ const DEFAULT_IGNORED_DIRS = new Set([
   ".next",
   "generated",
   "__generated__",
+  "vendor",
+  "vendors",
+  "test",
+  "tests",
+  "__tests__",
+  "__mocks__",
+  "e2e",
+  "cypress",
 ]);
+// *.test.js / *.spec.ts (tests living next to the code) and minified bundles.
+const IGNORED_FILE_PATTERN = /(\.(test|spec)\.[cm]?[jt]sx?$)|(\.min\.[cm]?js$)/i;
 const SUPPORTED_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"]);
 
 export function defaultAnalyzers(): Analyzer[] {
@@ -85,7 +99,11 @@ function walkDirectory(rootDir: string): string[] {
       const fullPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
         if (!DEFAULT_IGNORED_DIRS.has(entry.name)) stack.push(fullPath);
-      } else if (entry.isFile() && SUPPORTED_EXTENSIONS.has(path.extname(entry.name))) {
+      } else if (
+        entry.isFile() &&
+        SUPPORTED_EXTENSIONS.has(path.extname(entry.name)) &&
+        !IGNORED_FILE_PATTERN.test(entry.name)
+      ) {
         files.push(fullPath);
       }
     }

@@ -14,6 +14,16 @@ bug is structural (a missing check, a trusted client value) rather than
 by hand, and for the two attack classes (2FA bypass, response-field
 disclosure) that have no rule at all.
 
+## What gets scanned
+
+`scanPath` skips: `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next`,
+`generated` / `__generated__` (machine-written code), `vendor` / `vendors`
+(bundled libraries), test directories (`test`, `tests`, `__tests__`,
+`__mocks__`, `e2e`, `cypress`), and `*.test.*`, `*.spec.*`, `*.min.js` files.
+Test code was the biggest false-positive source on real projects — see
+[validation.md](validation.md). Pass a single test file path explicitly to
+scan it anyway.
+
 ## Sources (shared by all five data-flow rules)
 
 Defined once in `src/analyzers/sources.ts` so every rule stays in sync:

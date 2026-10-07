@@ -58,7 +58,8 @@ function bareSegmentName(segment: string): string {
   return segment.replace(/^[[(]+/, "").replace(/[\])]+$/, "").replace(/^\.\.\./, "");
 }
 
-const ID_LIKE_PATTERN = /id$/i;
+// Name must BE an id or end in Id/ID/_id (a bare /id$/i also matched "paid", "valid", ...).
+const ID_LIKE_PATTERN = /^(id|.*(Id|ID|_id))$/;
 
 /** Dynamic (non-catch-all) segments whose name looks like a record id, e.g. `[accountId]`. */
 export function idLikeDynamicSegments(segments: string[]): string[] {
@@ -68,7 +69,7 @@ export function idLikeDynamicSegments(segments: string[]): string[] {
     .filter((name) => ID_LIKE_PATTERN.test(name));
 }
 
-const SENSITIVE_SEGMENT_PATTERN = /^(admin|internal|manage|management|dashboard|debug|superuser|root)$/i;
+const SENSITIVE_SEGMENT_PATTERN = /^(admin|internal|manage|management|debug|superuser|root)$/i;
 
 /** True if any path segment (including route groups like `(admin)`) looks privileged. */
 export function hasSensitiveSegment(segments: string[]): boolean {
