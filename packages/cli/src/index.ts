@@ -2,6 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { runScan } from "./commands/scan";
 import { runLab } from "./commands/lab";
+import { runUi } from "./commands/ui";
 import { Severity } from "security-hub-scanner";
 
 // Read at runtime so `--version` can never drift from the published package.json
@@ -48,6 +49,21 @@ export function run(argv: string[]): void {
         failOn: opts.failOn ? parseSeverity(opts.failOn) : undefined,
       });
       process.exitCode = exitCode;
+    });
+
+  program
+    .command("ui [path]")
+    .description("Open the local web interface: pick a folder, click Scan, see the score (no terminal needed)")
+    .option("-p, --port <port>", "port to listen on (default 4173; the next free one is used if taken)")
+    .option("--no-open", "do not open the browser automatically")
+    .action(async (targetPath: string | undefined, opts) => {
+      const port = opts.port === undefined ? undefined : Number(opts.port);
+      if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535)) {
+        console.error(chalk.red(`Invalid port "${opts.port}". Expected a number between 0 and 65535.`));
+        process.exitCode = 2;
+        return;
+      }
+      process.exitCode = await runUi({ path: targetPath, port, open: opts.open });
     });
 
   program
