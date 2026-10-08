@@ -29,6 +29,6 @@ jobs:
 
       - uses: ./
         with:
-          path: packages
+          path: .
           version: local
           fail-on: high
