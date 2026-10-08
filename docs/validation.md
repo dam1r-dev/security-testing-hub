@@ -183,6 +183,35 @@ regression tests: `Response.json({ secret: "..." })` was read as a hard-coded si
 about sessions / tokens / auth), and `broken-access-control` did not know `supabase.auth.getUser()` is an access
 check (it flagged every admin route of a Supabase app).
 
+## Round 8: Firebase rules on six official projects
+
+Six shallow, read-only clones of Firebase's own sample repositories — `friendlyeats-web`, `quickstart-js`,
+`codelab-friendlychat-web`, `emulators-codelab`, `functions-samples`, `snippets-web` — 49 rules files (Firestore,
+Storage, Realtime Database). These are tutorials, so many rules are *deliberately* loose to keep the lesson short;
+the question is whether the scanner reads them correctly and ranks them sensibly.
+
+**First pass: 33 findings, none wrong, and two misses.** 8 real (test-mode / `if true` / open Realtime Database
+writes, several literally marked `TODO: Change these! Anyone can read or write`), 14 reasonable (anyone can write
+the FCM-token collection; any signed-in user can edit or delete anyone's comment; a public `/users` node), 11 debatable
+(an open read of a chat, or of all public images, that the sample documents as intentional). The two misses were
+`allow write: if request.auth.uid != null;` on every Storage file (the same "any signed-in user" check, spelled
+differently), so a rule that lets any user overwrite every file was not reported.
+
+What changed, with tests:
+
+| Change | Why |
+|---|---|
+| `request.auth.uid != null` counts as signed-in-only, like `request.auth != null` | the two misses above (now reported as critical) |
+| open read of **all** Storage files is medium, not critical | public images are a normal setup; the same rule on Firestore stays critical |
+| open reads of messages / chats are medium; of users, orders, payments, ... high | whether a chat is public is a design choice, personal data is not |
+| Realtime Database root with `.read: true` and `.write: false` is high, not critical | public data with writes closed is exposure, not takeover (`.write: true` stays critical) |
+
+**Second pass: 35 findings — 10 real, 14 reasonable, 11 debatable, 0 false**, with the two misses now found. The honest
+reading: on well-written official samples the rules produce no wrong claims, and the debatable group is exactly where
+a human has to decide "is this public on purpose?" — that is why those are medium and say so. These are tutorials; the
+real test is vibe-coded Firebase apps, where open rules are far more often a mistake than a teaching shortcut, and
+none was in the corpus.
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are

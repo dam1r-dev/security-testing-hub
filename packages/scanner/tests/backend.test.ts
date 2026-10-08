@@ -197,6 +197,27 @@ describe("Firestore / Storage rules", () => {
     expect(check(`    // allow read, write: if true;\n    /* allow write: if true; */\n    match /a/{id} { allow read, write: if request.auth.uid == id; }`)).toHaveLength(0);
   });
 
+  it("`request.auth.uid != null` is the same signed-in-only check as `request.auth != null`", () => {
+    const rules = `rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read;
+      allow write: if request.auth.uid != null;
+    }
+  }
+}`;
+    const found = analyzeFirebaseRules(rules, "storage.rules", "storage", now);
+    // anonymous read of every file is a normal "public images" setup (medium); a signed-in-only WRITE of every file is not
+    expect(found.map((f) => f.severity).sort()).toEqual(["critical", "medium"]);
+    expect(check(`    match /posts/{id} { allow update, delete: if request.auth.uid != null; }`)[0]?.severity).toBe("high");
+  });
+
+  it("an open read of a chat is a design choice (medium); of users or orders it is a leak (high)", () => {
+    expect(check(`    match /messages/{id} { allow read; }`)[0]?.severity).toBe("medium");
+    expect(check(`    match /users/{id} { allow read; }`)[0]?.severity).toBe("high");
+  });
+
   it("reads Cloud Storage rules the same way", () => {
     const rules = `rules_version = '2';\nservice firebase.storage {\n  match /b/{bucket}/o {\n    match /{allPaths=**} {\n      allow read, write: if true;\n    }\n  }\n}`;
     const found = analyzeFirebaseRules(rules, "storage.rules", "storage", now);
@@ -210,13 +231,16 @@ describe("Realtime Database rules", () => {
   const check = (rules: unknown) => analyzeRealtimeDatabaseRules(JSON.stringify({ rules }, null, 2), "database.rules.json");
 
   it("flags public read/write at the root, and signed-in-only access to the whole database", () => {
-    expect(check({ ".read": true, ".write": true }).map((f) => f.severity)).toEqual(["critical", "critical"]);
+    // open writes are takeover (critical); an open read with writes closed is exposure (high)
+    expect(check({ ".read": true, ".write": true }).map((f) => f.severity)).toEqual(["high", "critical"]);
+    expect(check({ ".read": true, ".write": false }).map((f) => f.severity)).toEqual(["high"]);
     expect(check({ ".read": "auth != null", ".write": "auth != null" }).map((f) => f.severity)).toEqual(["high", "high"]);
   });
 
   it("flags open writes under a path and open reads of private-looking paths", () => {
     const found = check({ users: { $uid: { ".write": true, ".read": true } }, posts: { ".read": true } });
     expect(found.map((f) => `${f.severity}`)).toEqual(["critical", "high"]);
+    expect(check({ messages: { ".read": true, ".write": false } }).map((f) => f.severity)).toEqual(["medium"]);
   });
 
   it("owner-scoped rules are fine", () => {

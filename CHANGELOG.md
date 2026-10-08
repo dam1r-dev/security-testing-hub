@@ -15,6 +15,9 @@ version was never published). `security-hub-scanner` and `security-hub` are both
   `user_metadata`; `firebase-rules` checks `firestore.rules`, `storage.rules` and `database.rules.json`
   (`if true`, test-mode rules, signed-in-only writes, open private paths). A Firebase service-account key or OAuth
   client secret committed to git is reported by `hardcoded-secret`. See [docs/rules.md](docs/rules.md).
+- `firebase-rules` was checked against six official Firebase sample repositories (49 rules files): `request.auth.uid != null`
+  now counts as signed-in-only, and open reads of all Storage files / of chats rank lower than open reads of users or
+  orders. See [docs/validation.md](docs/validation.md#round-8-firebase-rules-on-six-official-projects).
 - Project facts read from `package.json` are now cached per file *modification*, so a long-running
   `security-hub ui` follows edits instead of using the first scan's answer forever.
 - `broken-access-control` recognises `supabase.auth.getUser()` / `getSession()` and Firebase `verifyIdToken` as
