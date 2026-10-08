@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Mascot: alarmed, serious findings">
+  <circle cx="100" cy="100" r="94" fill="#FCEBEB" stroke="#E24B4A" stroke-width="3"/>
+  <path d="M100 26 L164 46 V100 C164 140 136 166 100 180 C64 166 36 140 36 100 V46Z" fill="#E24B4A" stroke="#791F1F" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M112 30 L100 66 L116 80 L104 112" fill="none" stroke="#2C2C2A" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="76" cy="86" r="17" fill="#fff" stroke="#2C2C2A" stroke-width="2.6"/><circle cx="76" cy="86" r="4.5" fill="#2C2C2A"/>
+  <circle cx="124" cy="86" r="17" fill="#fff" stroke="#2C2C2A" stroke-width="2.6"/><circle cx="124" cy="86" r="4.5" fill="#2C2C2A"/>
+  <path d="M56 64 L94 50 M106 50 L144 64" stroke="#2C2C2A" stroke-width="5" stroke-linecap="round"/>
+  <path d="M78 124 Q100 160 122 124Z" fill="#2C2C2A" stroke="#2C2C2A" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M88 144 Q100 136 112 144" fill="#F09595"/>
+  <text x="168" y="56" font-size="34" font-weight="500" fill="#A32D2D" font-family="sans-serif">!</text>
+  <text x="20" y="70" font-size="28" font-weight="500" fill="#A32D2D" font-family="sans-serif">!</text>
+</svg>

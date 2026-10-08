@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Security Testing Hub — find the security holes in your AI-written app</title>
+<meta name="description" content="Open-source security scanner for vibe-coded Node.js, Next.js, Supabase and Firebase projects. Free, runs on your machine, shows a 0-100 score and a ready-to-paste fix prompt for your AI assistant." />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'" />
+<style>
+  :root {
+    --bg: #f8fafc; --panel: #ffffff; --text: #0f172a; --muted: #64748b; --line: #e2e8f0; --accent: #0f172a;
+    --code-bg: #0f172a; --code-text: #e2e8f0;
+    --green: #16a34a; --yellow: #ca8a04; --red: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b1220; --panel: #111a2e; --text: #e5e7eb; --muted: #94a3b8; --line: #23304a; --accent: #e5e7eb; --code-bg: #060b16; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; }
+  a { color: inherit; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+  header.top { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; font-size: 14px; }
+  header.top a { text-decoration: none; margin-left: 18px; color: var(--muted); }
+  header.top b { font-size: 16px; }
+  .hero { display: grid; grid-template-columns: 1fr 240px; gap: 32px; align-items: center; padding: 28px 0 20px; }
+  .hero h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.12; margin: 0 0 14px; }
+  .hero p.lead { font-size: 18px; color: var(--muted); margin: 0 0 22px; max-width: 560px; }
+  .hero img { width: 100%; max-width: 240px; justify-self: center; }
+  .cta { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 11px 18px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); text-decoration: none; font-weight: 600; font-size: 15px; cursor: pointer; color: var(--text); }
+  .btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  section { padding: 28px 0; }
+  h2 { font-size: 26px; margin: 0 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 18px; }
+  pre.code { background: var(--code-bg); color: var(--code-text); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 14px; margin: 0 0 12px; position: relative; }
+  pre.code button { position: absolute; top: 8px; right: 8px; font-size: 12px; padding: 4px 9px; border-radius: 7px; border: 1px solid #334155; background: #1e293b; color: #cbd5e1; cursor: pointer; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  .rules { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rules span { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+  .privacy { font-size: 13px; color: var(--muted); }
+
+  /* viewer */
+  .viewer { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .drop { border: 2px dashed var(--line); border-radius: 14px; padding: 26px; text-align: center; color: var(--muted); }
+  .drop.over { border-color: var(--accent); color: var(--text); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 12px; }
+  .hidden { display: none !important; }
+  .err { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; font-size: 14px; }
+  .result { margin-top: 18px; }
+  .scorecard { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; border: 1px solid; border-radius: 16px; padding: 18px; }
+  .scorecard img { width: 120px; height: 120px; }
+  .ring { --v: 0; --c: #16a34a; width: 120px; height: 120px; border-radius: 50%; background: conic-gradient(var(--c) calc(var(--v) * 1%), var(--line) 0); display: grid; place-items: center; flex: none; }
+  .ring i { width: 92px; height: 92px; border-radius: 50%; background: var(--panel); display: flex; flex-direction: column; align-items: center; justify-content: center; font-style: normal; }
+  .ring b { font-size: 30px; line-height: 1; } .ring small { font-size: 11px; color: var(--muted); }
+  .meta { flex: 1; min-width: 200px; }
+  .meta .label { font-size: 22px; font-weight: 700; margin: 0 0 2px; }
+  .meta .say { margin: 0 0 10px; color: var(--muted); }
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; min-width: 76px; }
+  .stat b { display: block; font-size: 18px; } .stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 10px; }
+  .chip { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
+  .chip.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .finding { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+  .finding .head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .badge { color: #fff; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; }
+  .finding .rule { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; }
+  .finding .where { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted); word-break: break-all; margin-top: 6px; }
+  .finding p { margin: 0; font-size: 14px; }
+  footer { padding: 30px 0 50px; color: var(--muted); font-size: 13px; text-align: center; }
+  @media (max-width: 720px) { .hero { grid-template-columns: 1fr; } .hero img { max-width: 170px; order: -1; } .grid3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <b>Security Testing Hub</b>
+    <nav><a href="#start">Quick start</a><a href="#rules">What it finds</a><a href="#viewer">Report viewer</a><a href="https://github.com/dam1r-dev/security-testing-hub">GitHub</a></nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1>Find the security holes in your AI-written app, before someone else does.</h1>
+      <p class="lead">A free, open-source scanner for vibe-coded Node.js, Next.js, Supabase and Firebase projects. It runs on your machine, gives your project a 0-100 score, and hands your AI assistant a ready-to-paste prompt for every fix.</p>
+      <div class="cta">
+        <a class="btn primary" href="#start">Scan my project</a>
+        <a class="btn" href="#viewer">See a sample report</a>
+      </div>
+    </div>
+    <img id="heroMascot" src="assets/mascot-safe.svg" alt="Mascot" />
+  </div>
+
+  <section id="start">
+    <h2>Quick start</h2>
+    <p class="sub">Needs Node.js 18 or newer. Nothing is uploaded: the scan happens on your computer.</p>
+    <pre class="code" data-copy="npx security-hub ui"><button type="button">Copy</button><code>npx security-hub ui           # opens a local page: pick a folder, click Scan</code></pre>
+    <pre class="code" data-copy="npx security-hub scan ."><button type="button">Copy</button><code>npx security-hub scan .        # or scan from the terminal</code></pre>
+    <pre class="code" data-copy="npx security-hub scan . --format prompt"><button type="button">Copy</button><code>npx security-hub scan . --format prompt   # one prompt to paste into Cursor / Claude / Copilot</code></pre>
+    <div class="grid3" style="margin-top:16px">
+      <div class="card"><h3>Local web page</h3><p><code>security-hub ui</code> — choose a folder, see the score, copy a fix prompt per finding. English, Russian, Kazakh.</p></div>
+      <div class="card"><h3>GitHub Action</h3><p>Scans every pull request, comments on the lines your change touches, and can fail the check. See the repository README.</p></div>
+      <div class="card"><h3>Your AI fixes it</h3><p>Each finding comes with a prompt: file, line, what is wrong, how to fix it. Secrets are never included.</p></div>
+    </div>
+  </section>
+
+  <section id="rules">
+    <h2>What it finds</h2>
+    <p class="sub">20 rules, built around what actually goes wrong in AI-generated projects.</p>
+    <div class="rules" id="ruleList"></div>
+  </section>
+
+  <section id="viewer">
+    <h2>Report viewer</h2>
+    <p class="sub">Drop a <code>security-report.json</code> (from <code>security-hub scan . --format json --out security-report.json</code>) or load the sample. It is read in your browser and goes nowhere.</p>
+    <div class="viewer">
+      <div class="drop" id="drop">
+        Drop your JSON report here, or
+        <div class="row">
+          <label class="btn" for="file">Choose a file</label>
+          <input id="file" type="file" accept="application/json,.json" class="hidden" />
+          <button class="btn" id="sample" type="button">Load a sample report</button>
+        </div>
+        <div class="privacy" style="margin-top:10px">Local only. This page makes no network requests.</div>
+      </div>
+      <div class="err hidden" id="err"></div>
+      <div class="result hidden" id="result">
+        <div class="scorecard" id="scorecard">
+          <img id="moodImg" src="assets/mascot-safe.svg" alt="" />
+          <div class="ring" id="ring"><i><b id="ringValue">0</b><small>/ 100</small></i></div>
+          <div class="meta">
+            <p class="label" id="label"></p>
+            <p class="say" id="say"></p>
+            <div class="stats" id="stats"></div>
+          </div>
+        </div>
+        <div class="chips" id="chips"></div>
+        <div id="findings"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Heuristic static analysis: a helper, not a replacement for a security review. ·
+    <a href="https://github.com/dam1r-dev/security-testing-hub">GitHub</a> · MIT licence
+  </footer>
+</div>
+
+<script>
+(function () {
+  var RULES = ['SQL injection', 'XSS', 'Command injection', 'Path traversal', 'SSRF', 'CSRF', 'IDOR', 'Broken access control',
+    'Insecure role assignment', 'Insecure file upload', 'Username enumeration', 'Code injection', 'Open redirect', 'NoSQL injection',
+    'Insecure deserialization', 'XXE', 'Hard-coded secrets (keys, .env, service accounts)', 'Supabase Row Level Security', 'Supabase auth misuse', 'Firebase rules'];
+  var SEVERITIES = ['critical', 'high', 'medium', 'low'];
+  var SEV_COLOR = { critical: '#7f1d1d', high: '#dc2626', medium: '#ca8a04', low: '#6b7280' };
+  var MOODS = {
+    green: { img: 'assets/mascot-safe.svg', color: '#16a34a', bg: 'rgba(22,163,74,.08)', say: 'Looks calm in here. Keep it that way.' },
+    yellow: { img: 'assets/mascot-warn.svg', color: '#ca8a04', bg: 'rgba(202,138,4,.10)', say: 'I do not like some of this. Have a look.' },
+    red: { img: 'assets/mascot-danger.svg', color: '#dc2626', bg: 'rgba(220,38,38,.09)', say: 'Alarm! Fix the critical ones first.' }
+  };
+  var SAMPLE = { score: { value: 42, color: 'red', label: 'At risk', totalFindings: 5, bySeverity: { critical: 2, high: 2, medium: 1, low: 0 } },
+    results: [
+      { file: 'supabase/migrations/001_init.sql', findings: [{ ruleId: 'supabase-rls', severity: 'critical', location: { startLine: 5 }, message: 'Table public.todos is served by the API but Row Level Security is never enabled. Anyone with your anon key can read and change every row.' }] },
+      { file: 'app/api/search/route.ts', findings: [{ ruleId: 'sql-injection', severity: 'critical', location: { startLine: 12 }, message: 'User-controlled input flows into a SQL query without parameterization. The value is passed to findProducts() and reaches the vulnerable call at lib/products.ts:8.' }] },
+      { file: 'firestore.rules', findings: [{ ruleId: 'firebase-rules', severity: 'high', location: { startLine: 7 }, message: 'Any signed-in user, anonymous sign-ins included, can update or delete documents under /users/{userId}, not just their own.' }] },
+      { file: 'lib/auth.ts', findings: [{ ruleId: 'hardcoded-secret', severity: 'high', location: { startLine: 3 }, message: 'JWT_SECRET is a string written in the code (supe…[16 chars redacted]) and signs sessions. Anyone who reads the code can forge logins.' }] },
+      { file: 'app/api/upload/route.ts', findings: [{ ruleId: 'csrf', severity: 'medium', location: { startLine: 4 }, message: 'State-changing route found with no CSRF protection detected in this file.' }] }
+    ] };
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; }
+
+  // rule chips + copy buttons on the quick-start commands
+  RULES.forEach(function (r) { $('ruleList').appendChild(el('span', '', r)); });
+  document.querySelectorAll('pre.code[data-copy]').forEach(function (pre) {
+    var btn = pre.querySelector('button');
+    btn.addEventListener('click', function () {
+      var text = pre.getAttribute('data-copy');
+      var done = function () { btn.textContent = 'Copied!'; setTimeout(function () { btn.textContent = 'Copy'; }, 1400); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () {});
+    });
+  });
+
+  var report = null, filter = 'all';
+
+  function showError(message) { $('err').textContent = message || ''; $('err').classList.toggle('hidden', !message); }
+
+  function validate(data) {
+    if (!data || typeof data !== 'object' || !Array.isArray(data.results)) throw new Error('This does not look like a Security Testing Hub JSON report (no "results" list).');
+    return data;
+  }
+
+  function scoreOf(data) {
+    if (data.score && typeof data.score.value === 'number') return data.score;
+    // reports from older versions have no score block: count findings ourselves
+    var by = { critical: 0, high: 0, medium: 0, low: 0 }, total = 0;
+    data.results.forEach(function (r) { (r.findings || []).forEach(function (f) { if (by[f.severity] !== undefined) { by[f.severity]++; total++; } }); });
+    var value = Math.max(0, 100 - by.critical * 20 - by.high * 10 - by.medium * 4 - by.low);
+    return { value: value, color: value >= 80 ? 'green' : value >= 50 ? 'yellow' : 'red', label: value >= 80 ? 'Good' : value >= 50 ? 'Needs attention' : 'At risk', totalFindings: total, bySeverity: by };
+  }
+
+  function render() {
+    var data = report, score = scoreOf(data), mood = MOODS[score.color] || MOODS.red;
+    $('result').classList.remove('hidden');
+    var card = $('scorecard');
+    card.style.background = mood.bg; card.style.borderColor = mood.color + '66';
+    $('moodImg').src = mood.img; $('heroMascot').src = mood.img;
+    $('ring').style.setProperty('--v', String(score.value)); $('ring').style.setProperty('--c', mood.color);
+    $('ringValue').textContent = String(score.value); $('ringValue').style.color = mood.color;
+    $('label').textContent = score.label; $('label').style.color = mood.color;
+    $('say').textContent = mood.say;
+    var stats = $('stats'); stats.textContent = '';
+    SEVERITIES.forEach(function (s) {
+      var box = el('div', 'stat'); var n = el('b', '', String(score.bySeverity[s] || 0)); n.style.color = SEV_COLOR[s];
+      box.appendChild(n); box.appendChild(el('span', '', s)); stats.appendChild(box);
+    });
+
+    var chips = $('chips'); chips.textContent = '';
+    ['all'].concat(SEVERITIES).forEach(function (f) {
+      var count = f === 'all' ? score.totalFindings : (score.bySeverity[f] || 0);
+      var chip = el('button', 'chip' + (f === filter ? ' active' : ''), f + ' (' + count + ')');
+      chip.type = 'button';
+      chip.addEventListener('click', function () { filter = f; render(); });
+      chips.appendChild(chip);
+    });
+
+    var list = $('findings'); list.textContent = '';
+    var all = [];
+    data.results.forEach(function (r) { (r.findings || []).forEach(function (f) { all.push({ file: r.file, f: f }); }); });
+    all.sort(function (a, b) { return SEVERITIES.indexOf(a.f.severity) - SEVERITIES.indexOf(b.f.severity); });
+    var shown = 0;
+    all.forEach(function (item) {
+      if (filter !== 'all' && item.f.severity !== filter) return;
+      shown++;
+      var card2 = el('article', 'finding'), head = el('div', 'head');
+      var badge = el('span', 'badge', item.f.severity); badge.style.background = SEV_COLOR[item.f.severity] || '#6b7280';
+      head.appendChild(badge); head.appendChild(el('span', 'rule', String(item.f.ruleId)));
+      card2.appendChild(head); card2.appendChild(el('p', '', String(item.f.message)));
+      var line = item.f.location && item.f.location.startLine ? ':' + item.f.location.startLine : '';
+      card2.appendChild(el('div', 'where', String(item.file) + line));
+      list.appendChild(card2);
+    });
+    if (shown === 0) list.appendChild(el('p', '', 'No findings in this view.'));
+  }
+
+  function load(text) {
+    try { report = validate(JSON.parse(text)); filter = 'all'; showError(''); render(); }
+    catch (e) { showError(e.message || 'Could not read that file.'); }
+  }
+
+  $('sample').addEventListener('click', function () { report = SAMPLE; filter = 'all'; showError(''); render(); $('result').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  $('file').addEventListener('change', function (e) { var f = e.target.files[0]; if (f) f.text().then(load); });
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) { var f = e.dataTransfer.files[0]; if (f) f.text().then(load); });
+})();
+</script>
+</body>
+</html>
