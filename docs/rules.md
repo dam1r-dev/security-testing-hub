@@ -7,6 +7,13 @@ the engine follows local variables, destructuring and template strings; across
 functions it uses *summaries* (see below). See
 [README.md](../README.md#scope--limitations) for what is and isn't followed.
 
+## Hiding findings
+
+`// security-hub-ignore [rule-id, ...] [-- reason]` on the flagged line or the line directly above hides
+it (all rules if none are named); a `.security-hub-ignore` file or `--ignore <pattern>` skips whole paths;
+`--include-tests` scans test folders. Hidden findings are counted in the report (`suppressedCount` in the
+JSON output), never dropped silently. See the README for the pattern syntax.
+
 ## How data is followed across functions and files
 
 For every project function, per rule, the engine works out **which parameters

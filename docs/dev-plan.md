@@ -156,6 +156,8 @@ function analyzeFunctionBody(funcNode, sourcePatterns, sinkPatterns) {
   (`taint/project.ts`, `taint/interprocedural.ts`): данные запроса отслеживаются в функции проекта и в
   другие файлы (ESM/CommonJS, алиасы `@/` и tsconfig `paths`, классы, функции-конструкторы), до 6 вызовов
   в глубину; возвращаемые значения и колбэки не отслеживаются (см. `docs/rules.md`).
+- ✅ **Подавление находок** — `// security-hub-ignore [правило] -- причина`, файл `.security-hub-ignore`,
+  `--ignore`, `--include-tests`; число скрытых находок видно в отчёте.
 - 🟡 **Phase 7 (Documentation)** — README (EN+RU), `docs/rules.md`, `docs/attack-playbook.md` (EN/RU/KK) есть; полные гайды — в процессе
 - ✅ **Phase 8 (Testing, частично)** — coverage измерен и превышает таргет плана (70%+):
   scanner 88.5% statements / 92.2% lines, CLI 97.67% (после добавления тестов на

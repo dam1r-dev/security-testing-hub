@@ -18,6 +18,7 @@ import { OpenRedirectAnalyzer } from "./analyzers/open-redirect";
 import { NoSqlInjectionAnalyzer } from "./analyzers/nosql-injection";
 import { InsecureDeserializationAnalyzer } from "./analyzers/insecure-deserialization";
 import { XxeAnalyzer } from "./analyzers/xxe";
+import { applyInlineSuppressions, compileIgnorePatterns, parseIgnoreFile } from "./suppress";
 import { ProjectContext } from "./taint/project";
 import { ScanResult, ScanSummary } from "./types";
 
@@ -27,6 +28,7 @@ export { computeScore, SecurityScore, ScoreColor } from "./output/score";
 export { toHtml } from "./output/html";
 export { parseFile, parseSource, languageForExtension } from "./parsers/ast-parser";
 export { ProjectContext } from "./taint/project";
+export { RULE_IDS } from "./suppress";
 
 // Directories that aren't the project's own hand-written server code:
 //  - build output / dependencies / VCS metadata
@@ -47,15 +49,14 @@ const DEFAULT_IGNORED_DIRS = new Set([
   "__generated__",
   "vendor",
   "vendors",
-  "test",
-  "tests",
-  "__tests__",
-  "__mocks__",
-  "e2e",
-  "cypress",
 ]);
+// Skipped unless `includeTests` is set (see ScanOptions).
+const TEST_DIRS = new Set(["test", "tests", "__tests__", "__mocks__", "e2e", "cypress"]);
 // *.test.js / *.spec.ts (tests living next to the code) and minified bundles.
-const IGNORED_FILE_PATTERN = /(\.(test|spec)\.[cm]?[jt]sx?$)|(\.min\.[cm]?js$)/i;
+const MINIFIED_FILE_PATTERN = /\.min\.[cm]?js$/i;
+const TEST_FILE_PATTERN = /\.(test|spec)\.[cm]?[jt]sx?$/i;
+/** Optional project-level ignore list, one path pattern per line (see docs/rules.md). */
+export const IGNORE_FILE_NAME = ".security-hub-ignore";
 // Hand-written source is far below this. A multi-megabyte file is a bundle or generated
 // output: it can take minutes to analyse (a 9 MB typescript.js took 52 s) and holds no
 // code a person wrote. Skipped with a visible warning rather than silently.
@@ -101,16 +102,25 @@ export function scanSource(
   if (!parsed) {
     return { file: filePath, findings: [], parseError: `Unsupported file extension: ${filePath}` };
   }
+  const { kept, suppressed } = applyInlineSuppressions(
+    analyzers.flatMap((a) => a.analyze(parsed, filePath, context)),
+    sourceCode,
+  );
+  const result: ScanResult = { file: filePath, findings: kept };
+  if (suppressed > 0) result.suppressed = suppressed;
   if (parsed.tree.rootNode.hasError) {
-    // Still run analyzers on the best-effort tree, but surface that parsing wasn't clean.
-    const findings = analyzers.flatMap((a) => a.analyze(parsed, filePath, context));
-    return { file: filePath, findings, parseError: "Source has syntax errors; results may be incomplete." };
+    // The analyzers still ran on the best-effort tree, but surface that parsing wasn't clean.
+    result.parseError = "Source has syntax errors; results may be incomplete.";
   }
-  const findings = analyzers.flatMap((a) => a.analyze(parsed, filePath, context));
-  return { file: filePath, findings };
+  return result;
 }
 
-function walkDirectory(rootDir: string): string[] {
+interface WalkOptions {
+  includeTests: boolean;
+  isIgnored: (relativePath: string) => boolean;
+}
+
+function walkDirectory(rootDir: string, options: WalkOptions): string[] {
   const files: string[] = [];
   const stack = [rootDir];
   while (stack.length > 0) {
@@ -118,12 +128,16 @@ function walkDirectory(rootDir: string): string[] {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       if (entry.name.startsWith(".") && entry.name !== ".") continue;
       const fullPath = path.join(current, entry.name);
+      if (options.isIgnored(path.relative(rootDir, fullPath).split(path.sep).join("/"))) continue;
       if (entry.isDirectory()) {
-        if (!DEFAULT_IGNORED_DIRS.has(entry.name)) stack.push(fullPath);
+        if (DEFAULT_IGNORED_DIRS.has(entry.name)) continue;
+        if (!options.includeTests && TEST_DIRS.has(entry.name)) continue;
+        stack.push(fullPath);
       } else if (
         entry.isFile() &&
         SUPPORTED_EXTENSIONS.has(path.extname(entry.name)) &&
-        !IGNORED_FILE_PATTERN.test(entry.name)
+        !MINIFIED_FILE_PATTERN.test(entry.name) &&
+        (options.includeTests || !TEST_FILE_PATTERN.test(entry.name))
       ) {
         files.push(fullPath);
       }
@@ -134,6 +148,21 @@ function walkDirectory(rootDir: string): string[] {
 
 export interface ScanOptions {
   analyzers?: Analyzer[];
+  /** Also scan test folders (`test`, `__tests__`, `e2e`, ...) and `*.test.*` / `*.spec.*` files. Default: false. */
+  includeTests?: boolean;
+  /**
+   * Extra path patterns to skip, relative to the scanned folder (gitignore-style subset:
+   * `*`, `**`, `?`, leading `/`, trailing `/`). Added to the patterns in `.security-hub-ignore`.
+   */
+  ignore?: string[];
+}
+
+function readIgnoreFile(rootDir: string): string[] {
+  try {
+    return parseIgnoreFile(fs.readFileSync(path.join(rootDir, IGNORE_FILE_NAME), "utf8"));
+  } catch {
+    return []; // no ignore file: nothing extra to skip
+  }
 }
 
 /** Recursively scans every supported JS/TS file under `targetPath` (a file or a directory). */
@@ -141,7 +170,12 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
   const analyzers = options.analyzers ?? defaultAnalyzers();
   const start = Date.now();
   const stat = fs.statSync(targetPath);
-  const files = stat.isDirectory() ? walkDirectory(targetPath) : [targetPath];
+  const files = stat.isDirectory()
+    ? walkDirectory(targetPath, {
+        includeTests: options.includeTests ?? false,
+        isIgnored: compileIgnorePatterns([...readIgnoreFile(targetPath), ...(options.ignore ?? [])]),
+      })
+    : [targetPath];
   // Shared by every file of this scan so a call can be followed into another file.
   const context = new ProjectContext(stat.isDirectory() ? targetPath : path.dirname(targetPath));
 
@@ -169,5 +203,6 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
     findingsCount: results.reduce((sum, r) => sum + r.findings.length, 0),
     results,
     durationMs: Date.now() - start,
+    suppressedCount: results.reduce((sum, r) => sum + (r.suppressed ?? 0), 0),
   };
 }

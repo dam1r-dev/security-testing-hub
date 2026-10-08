@@ -40,6 +40,8 @@ export interface ScanResult {
   file: string;
   findings: Finding[];
   parseError?: string;
+  /** Findings hidden by `// security-hub-ignore` comments in this file. */
+  suppressed?: number;
 }
 
 export interface ScanSummary {
@@ -47,4 +49,6 @@ export interface ScanSummary {
   findingsCount: number;
   results: ScanResult[];
   durationMs: number;
+  /** Total findings hidden by `// security-hub-ignore` comments (reported, never silent). */
+  suppressedCount?: number;
 }

@@ -98,6 +98,15 @@ describe("CLI argument parsing (run)", () => {
     expect(logSpy.mock.calls.flat().join(" ")).toContain("docs/rules.md");
   });
 
+  it("passes repeatable --ignore patterns and --include-tests to the scan", () => {
+    mockRunScan.mockReturnValue(0);
+    run(["node", "security-hub", "scan", "./app", "--ignore", "legacy/", "--ignore", "*.mock.js", "--include-tests"]);
+    expect(mockRunScan).toHaveBeenCalledWith(
+      "./app",
+      expect.objectContaining({ ignore: ["legacy/", "*.mock.js"], includeTests: true }),
+    );
+  });
+
   it("dispatches 'ui' with defaults, a path, a port and --no-open", async () => {
     mockRunUi.mockResolvedValue(0);
     run(["node", "security-hub", "ui"]);

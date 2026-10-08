@@ -17,6 +17,10 @@ export interface ScanCommandOptions {
   out?: string;
   severity?: Severity;
   failOn?: Severity;
+  /** Extra path patterns to skip (on top of `.security-hub-ignore`). */
+  ignore?: string[];
+  /** Also scan test folders and *.test.* / *.spec.* files. */
+  includeTests?: boolean;
 }
 
 const SCORE_COLOR_CHALK: Record<ScoreColor, (text: string) => string> = {
@@ -59,9 +63,10 @@ function renderText(summary: ScanSummary): string {
     }
   }
   lines.push("");
+  const hidden = summary.suppressedCount ? ` (${summary.suppressedCount} hidden by security-hub-ignore comments)` : "";
   lines.push(
     chalk.bold(
-      `Scanned ${summary.filesScanned} file(s) in ${summary.durationMs}ms — ${summary.findingsCount} finding(s).`,
+      `Scanned ${summary.filesScanned} file(s) in ${summary.durationMs}ms — ${summary.findingsCount} finding(s)${hidden}.`,
     ),
   );
 
@@ -104,7 +109,7 @@ export function runScan(targetPath: string, options: ScanCommandOptions): number
     return 2;
   }
 
-  const rawSummary = scanPath(targetPath);
+  const rawSummary = scanPath(targetPath, { ignore: options.ignore, includeTests: options.includeTests });
   const summary = filterBySeverity(rawSummary, options.severity);
 
   let output: string;

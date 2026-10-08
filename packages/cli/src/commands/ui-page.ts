@@ -185,6 +185,7 @@ export function renderUiPage(options: UiPageOptions): string {
 
   var I18N = {
     en: {
+      suppressed: 'Hidden by security-hub-ignore comments: {n}.',
       subtitle: 'Find security holes in your code before someone else does',
       pathLabel: 'Project folder', browse: 'Choose folder\\u2026', scan: 'Scan', scanning: 'Scanning\\u2026',
       privacy: 'Everything runs on your computer. Your code is never uploaded anywhere.',
@@ -199,6 +200,7 @@ export function renderUiPage(options: UiPageOptions): string {
       disclaimer: 'Heuristic static analysis \\u2014 a helper, not a replacement for security review.'
     },
     ru: {
+      suppressed: '\\u0421\\u043a\\u0440\\u044b\\u0442\\u043e \\u043a\\u043e\\u043c\\u043c\\u0435\\u043d\\u0442\\u0430\\u0440\\u0438\\u044f\\u043c\\u0438 security-hub-ignore: {n}.',
       subtitle: '\\u041d\\u0430\\u0439\\u0434\\u0438\\u0442\\u0435 \\u0443\\u044f\\u0437\\u0432\\u0438\\u043c\\u043e\\u0441\\u0442\\u0438 \\u0432 \\u0441\\u0432\\u043e\\u0451\\u043c \\u043a\\u043e\\u0434\\u0435 \\u0440\\u0430\\u043d\\u044c\\u0448\\u0435, \\u0447\\u0435\\u043c \\u044d\\u0442\\u043e \\u0441\\u0434\\u0435\\u043b\\u0430\\u0435\\u0442 \\u043a\\u0442\\u043e-\\u0442\\u043e \\u0434\\u0440\\u0443\\u0433\\u043e\\u0439',
       pathLabel: '\\u041f\\u0430\\u043f\\u043a\\u0430 \\u043f\\u0440\\u043e\\u0435\\u043a\\u0442\\u0430', browse: '\\u0412\\u044b\\u0431\\u0440\\u0430\\u0442\\u044c \\u043f\\u0430\\u043f\\u043a\\u0443\\u2026', scan: '\\u0421\\u043a\\u0430\\u043d\\u0438\\u0440\\u043e\\u0432\\u0430\\u0442\\u044c', scanning: '\\u0421\\u043a\\u0430\\u043d\\u0438\\u0440\\u0443\\u044e\\u2026',
       privacy: '\\u0412\\u0441\\u0451 \\u0440\\u0430\\u0431\\u043e\\u0442\\u0430\\u0435\\u0442 \\u043d\\u0430 \\u0432\\u0430\\u0448\\u0435\\u043c \\u043a\\u043e\\u043c\\u043f\\u044c\\u044e\\u0442\\u0435\\u0440\\u0435. \\u041a\\u043e\\u0434 \\u043d\\u0438\\u043a\\u0443\\u0434\\u0430 \\u043d\\u0435 \\u043e\\u0442\\u043f\\u0440\\u0430\\u0432\\u043b\\u044f\\u0435\\u0442\\u0441\\u044f.',
@@ -213,6 +215,7 @@ export function renderUiPage(options: UiPageOptions): string {
       disclaimer: '\\u042d\\u0432\\u0440\\u0438\\u0441\\u0442\\u0438\\u0447\\u0435\\u0441\\u043a\\u0438\\u0439 \\u0441\\u0442\\u0430\\u0442\\u0438\\u0447\\u0435\\u0441\\u043a\\u0438\\u0439 \\u0430\\u043d\\u0430\\u043b\\u0438\\u0437 \\u2014 \\u043f\\u043e\\u043c\\u043e\\u0449\\u043d\\u0438\\u043a, \\u0430 \\u043d\\u0435 \\u0437\\u0430\\u043c\\u0435\\u043d\\u0430 \\u0430\\u0443\\u0434\\u0438\\u0442\\u0443 \\u0431\\u0435\\u0437\\u043e\\u043f\\u0430\\u0441\\u043d\\u043e\\u0441\\u0442\\u0438.'
     },
     kk: {
+      suppressed: 'security-hub-ignore \\u0442\\u04af\\u0441\\u0456\\u043d\\u0456\\u043a\\u0442\\u0435\\u043c\\u0435\\u043b\\u0435\\u0440\\u0456\\u043c\\u0435\\u043d \\u0436\\u0430\\u0441\\u044b\\u0440\\u044b\\u043b\\u0493\\u0430\\u043d: {n}.',
       subtitle: '\\u041a\\u043e\\u0434\\u044b\\u04a3\\u044b\\u0437\\u0434\\u0430\\u0493\\u044b \\u043e\\u0441\\u0430\\u043b\\u0434\\u044b\\u049b\\u0442\\u0430\\u0440\\u0434\\u044b \\u0431\\u0430\\u0441\\u049b\\u0430\\u043b\\u0430\\u0440 \\u0442\\u0430\\u0431\\u0443\\u0434\\u0430\\u043d \\u0431\\u04b1\\u0440\\u044b\\u043d \\u0442\\u0430\\u0431\\u044b\\u04a3\\u044b\\u0437',
       pathLabel: '\\u0416\\u043e\\u0431\\u0430 \\u049b\\u0430\\u043b\\u0442\\u0430\\u0441\\u044b', browse: '\\u049a\\u0430\\u043b\\u0442\\u0430\\u043d\\u044b \\u0442\\u0430\\u04a3\\u0434\\u0430\\u0443\\u2026', scan: '\\u0421\\u043a\\u0430\\u043d\\u0435\\u0440\\u043b\\u0435\\u0443', scanning: '\\u0421\\u043a\\u0430\\u043d\\u0435\\u0440\\u043b\\u0435\\u0443\\u0434\\u0435\\u2026',
       privacy: '\\u0411\\u0430\\u0440\\u043b\\u044b\\u0493\\u044b \\u0441\\u0456\\u0437\\u0434\\u0456\\u04a3 \\u043a\\u043e\\u043c\\u043f\\u044c\\u044e\\u0442\\u0435\\u0440\\u0456\\u04a3\\u0456\\u0437\\u0434\\u0435 \\u0436\\u04b1\\u043c\\u044b\\u0441 \\u0456\\u0441\\u0442\\u0435\\u0439\\u0434\\u0456. \\u041a\\u043e\\u0434 \\u0438\\u043d\\u0442\\u0435\\u0440\\u043d\\u0435\\u0442\\u043a\\u0435 \\u0436\\u0456\\u0431\\u0435\\u0440\\u0456\\u043b\\u043c\\u0435\\u0439\\u0434\\u0456.',
@@ -309,7 +312,9 @@ export function renderUiPage(options: UiPageOptions): string {
     var label = $('score-label');
     label.textContent = t(score.label);
     label.style.color = colors.main;
-    $('score-sub').textContent = fmt('summary', { n: score.totalFindings, f: data.summary.filesScanned, ms: data.summary.durationMs });
+    var sub = fmt('summary', { n: score.totalFindings, f: data.summary.filesScanned, ms: data.summary.durationMs });
+    if (data.summary.suppressedCount) sub += ' ' + fmt('suppressed', { n: data.summary.suppressedCount });
+    $('score-sub').textContent = sub;
 
     var stats = $('stats');
     stats.textContent = '';

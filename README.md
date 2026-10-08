@@ -164,6 +164,36 @@ the parameterized-query fix actually closes it — the same check CI runs on
 every push. Currently just SQL Injection; more labs (XSS, CSRF, ...) are a
 post-MVP goal (see [docs/dev-plan.md](docs/dev-plan.md)).
 
+## Silencing a finding that is wrong (or accepted)
+
+Every scanner is sometimes wrong, and some findings are real but accepted. You can hide them
+without turning the rule off — and the report always says how many were hidden:
+
+```js
+// security-hub-ignore -- internal admin tool, input comes from a signed job
+db.query("SELECT * FROM jobs WHERE id = " + jobId);
+
+db.query(sql); // security-hub-ignore sql-injection
+```
+
+- The comment goes **on the flagged line or on the line directly above it** (`//` or `/* */`).
+- Without rule names it hides every finding on that line; `security-hub-ignore xss, sql-injection`
+  limits it to those rules (ids as in the table above). Text after `--` is a free-form reason.
+- Whole files and folders: put patterns in a **`.security-hub-ignore`** file in the scanned folder
+  (one per line, `#` for comments), or pass `--ignore <pattern>` (repeatable):
+
+  ```text
+  # generated and legacy code
+  scripts/legacy/
+  *.mock.js
+  src/**/fixtures
+  ```
+
+  Patterns work like a small subset of `.gitignore`: no slash = any depth, a slash = relative to the
+  scanned folder, `**` crosses folders, a trailing `/` means a folder.
+- Test folders (`test`, `tests`, `__tests__`, `e2e`, ...) and `*.test.*` / `*.spec.*` files are skipped
+  by default because they are full of fake credentials and requests; `--include-tests` scans them.
+
 ## Scope & limitations
 
 This is a v1 MVP, built to a **realistic** plan (see
