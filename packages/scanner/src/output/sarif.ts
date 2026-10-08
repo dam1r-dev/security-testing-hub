@@ -3,7 +3,10 @@ import { Finding, ScanResult, Severity, VulnerabilityType } from "../types";
 
 const SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json";
 const TOOL_NAME = "SecurityTestingHub";
-const TOOL_VERSION = "0.1.0";
+// Read at runtime so the SARIF `version` can never drift from the published package.json
+// (dist/output/ and src/output/ both sit two levels below the package root).
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+const TOOL_VERSION: string = require("../../package.json").version;
 const TOOL_INFO_URI = "https://github.com/dam1r-dev/security-testing-hub";
 
 const RULE_DESCRIPTIONS: Record<VulnerabilityType, { name: string; description: string; helpUri: string }> = {
