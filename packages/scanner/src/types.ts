@@ -15,7 +15,10 @@ export type VulnerabilityType =
   | "nosql-injection"
   | "insecure-deserialization"
   | "xxe"
-  | "hardcoded-secret";
+  | "hardcoded-secret"
+  | "supabase-rls"
+  | "supabase-auth"
+  | "firebase-rules";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 

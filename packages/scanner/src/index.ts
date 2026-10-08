@@ -19,6 +19,8 @@ import { NoSqlInjectionAnalyzer } from "./analyzers/nosql-injection";
 import { InsecureDeserializationAnalyzer } from "./analyzers/insecure-deserialization";
 import { XxeAnalyzer } from "./analyzers/xxe";
 import { HardcodedSecretAnalyzer } from "./analyzers/hardcoded-secret";
+import { SupabaseAuthAnalyzer } from "./analyzers/supabase-auth";
+import { scanBackendConfigs } from "./backend/discover";
 import { scanEnvFiles } from "./secrets/env-files";
 import { applyInlineSuppressions, compileIgnorePatterns, parseIgnoreFile } from "./suppress";
 import { ProjectContext } from "./taint/project";
@@ -89,6 +91,7 @@ export function defaultAnalyzers(): Analyzer[] {
     new InsecureDeserializationAnalyzer(),
     new XxeAnalyzer(),
     new HardcodedSecretAnalyzer(),
+    new SupabaseAuthAnalyzer(),
   ];
 }
 
@@ -209,8 +212,13 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
     : [];
   results.push(...envResults);
 
+  // Files that are not source code but decide who can read the data: Supabase migrations, Firebase rules.
+  const skipDirs = new Set([...DEFAULT_IGNORED_DIRS, ...(includeTests ? [] : TEST_DIRS)]);
+  const backendResults = stat.isDirectory() ? scanBackendConfigs(targetPath, skipDirs, isIgnored) : [];
+  results.push(...backendResults);
+
   return {
-    filesScanned: files.length + envResults.length,
+    filesScanned: files.length + envResults.length + backendResults.length,
     findingsCount: results.reduce((sum, r) => sum + r.findings.length, 0),
     results,
     durationMs: Date.now() - start,

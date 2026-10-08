@@ -1,0 +1,5 @@
+project_id = "vulnerable-supabase-app"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]

@@ -93,7 +93,10 @@ function literalValue(node: SyntaxNode): string | undefined {
 /** Is this literal an object property of an object passed straight to a call, e.g. session({ secret: "..." })? */
 function isCallOptionsProperty(literal: SyntaxNode): boolean {
   const pair = literal.parent;
-  return pair?.type === "pair" && pair.parent?.type === "object" && pair.parent.parent?.type === "arguments";
+  if (pair?.type !== "pair" || pair.parent?.type !== "object" || pair.parent.parent?.type !== "arguments") return false;
+  // Only calls that configure sessions / tokens / auth: `Response.json({ secret: "x" })` is just data.
+  const callee = pair.parent.parent.parent?.childForFieldName("function")?.text ?? "";
+  return /session|jwt|nextauth|auth|cookie|csrf|passport|token|sign/i.test(callee);
 }
 
 const PUBLIC_ENV_USE = /(?:process\.env|import\.meta\.env)\.([A-Z][A-Z0-9_]*)/g;

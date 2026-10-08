@@ -18,7 +18,7 @@ const SENSITIVE_PATH_PATTERN = /\/(admin|internal|manage|management|debug|superu
 // Any of these appearing in the route registration is treated as evidence of
 // an access-control check, whether it's real middleware or an inline check.
 const AUTH_CHECK_HINT =
-  /(isAuthenticated|isLoggedIn|loggedIn|ensureAuthenticated|requireLogin|requireUser|isAuth\b|withAuth|requireAuth|requireAdmin|requireRole|ensureAuth|ensureLoggedIn|authMiddleware|checkRole|checkAuth|isAdmin|hasRole|hasPermission|passport|authorize|authorization|verifyToken|jwt\.verify|req\.user\.role|req\.session\.role|getServerSession|currentUser\s*\(|auth\s*\(\))/i;
+  /(isAuthenticated|isLoggedIn|loggedIn|ensureAuthenticated|requireLogin|requireUser|isAuth\b|withAuth|requireAuth|requireAdmin|requireRole|ensureAuth|ensureLoggedIn|authMiddleware|checkRole|checkAuth|isAdmin|hasRole|hasPermission|passport|authorize|authorization|verifyToken|jwt\.verify|req\.user\.role|req\.session\.role|getServerSession|currentUser\s*\(|auth\s*\(\)|\.auth\.getUser\s*\(|\.auth\.getSession\s*\(|verifyIdToken|getAuth\s*\(|getUser\s*\(\))/i;
 
 function isRouteRegistration(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;

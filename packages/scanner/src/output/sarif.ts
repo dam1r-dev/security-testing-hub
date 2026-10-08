@@ -95,6 +95,21 @@ const RULE_DESCRIPTIONS: Record<VulnerabilityType, { name: string; description: 
     description: "A password, API key, token or signing secret is written into the source code or a committed .env file.",
     helpUri: "https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_password",
   },
+  "supabase-rls": {
+    name: "Supabase Row Level Security",
+    description: "A Supabase table is exposed through the API without Row Level Security, or a policy lets anyone in.",
+    helpUri: "https://supabase.com/docs/guides/database/postgres/row-level-security",
+  },
+  "supabase-auth": {
+    name: "Supabase Auth Misuse",
+    description: "Server code trusts an unverified Supabase session, or decides access from user-editable user_metadata.",
+    helpUri: "https://supabase.com/docs/guides/auth/server-side/nextjs",
+  },
+  "firebase-rules": {
+    name: "Firebase Security Rules",
+    description: "Firestore, Cloud Storage or Realtime Database rules let anyone (or any signed-in user) read or write other people's data.",
+    helpUri: "https://firebase.google.com/docs/rules/insecure-rules",
+  },
 };
 
 function levelFor(severity: Severity): "error" | "warning" | "note" {

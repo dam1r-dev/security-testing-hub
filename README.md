@@ -21,7 +21,7 @@ response bodies, `exec()` with interpolated input) because that's what's
 common in training data. This tool is a fast, local pre-commit/CI check
 tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 
-## What it detects (17 rules)
+## What it detects (20 rules)
 
 | Vulnerability | CWE | Analyzer |
 |---|---|---|
@@ -41,6 +41,9 @@ tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 | NoSQL Injection | [CWE-943](https://cwe.mitre.org/data/definitions/943.html) | request objects reaching Mongo queries, and dynamic `$where` strings |
 | Insecure Deserialization | [CWE-502](https://cwe.mitre.org/data/definitions/502.html) | `unserialize` (node-serialize) taint tracking |
 | XXE | [CWE-611](https://cwe.mitre.org/data/definitions/611.html) | XML parsed with `noent: true` taint tracking |
+| Supabase Row Level Security | [CWE-862](https://cwe.mitre.org/data/definitions/862.html) | SQL migrations: tables served by the API without RLS, `USING (true)` policies, "signed in" as ownership, `user_metadata` in policies, views without `security_invoker`, `SECURITY DEFINER` functions, open storage buckets |
+| Supabase auth misuse | [CWE-863](https://cwe.mitre.org/data/definitions/863.html) | `getSession()` trusted on the server, roles read from `user_metadata` |
+| Firebase security rules | [CWE-284](https://cwe.mitre.org/data/definitions/284.html) | `firestore.rules`, `storage.rules`, `database.rules.json`: `if true`, test-mode rules, signed-in-only writes, open private paths |
 | Hard-coded secrets | [CWE-798](https://cwe.mitre.org/data/definitions/798.html) | provider token formats (AWS, GitHub, Stripe, OpenAI/Anthropic, Slack, Supabase `service_role`, private keys, DB URLs), guessable `jwt.sign` / `session` secrets, credentials by name, secrets behind `NEXT_PUBLIC_`-style prefixes, committed `.env` files |
 
 See [docs/rules.md](docs/rules.md) for how each rule works and its known

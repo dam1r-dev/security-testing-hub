@@ -234,3 +234,22 @@ describe("request data that arrives as handler parameters or in other frameworks
     expect(n(source, "a.ts", [new SqlInjectionAnalyzer()])).toBe(1);
   });
 });
+
+describe("found while dogfooding the Supabase fixture", () => {
+  it("a `secret` property is a signing secret only in calls about sessions / tokens / auth", () => {
+    const a = [new HardcodedSecretAnalyzer()];
+    expect(n(`return Response.json({ secret: "admin data" });`, "route.ts", a)).toBe(0);
+    expect(n(`app.use(session({ secret: "keyboard cat" }));`, "app.js", a)).toBe(1);
+    expect(n(`export default NextAuth({ secret: "hunter22" });`, "auth.ts", a)).toBe(1);
+    expect(n(`app.use(expressjwt({ secret: "abc12345", algorithms: ["HS256"] }));`, "app.js", a)).toBe(1);
+  });
+
+  it("supabase.auth.getUser() / getSession() and Firebase verifyIdToken count as an access check", async () => {
+    const { scanSource } = await import("../src/index");
+    const { BrokenAccessControlAnalyzer } = await import("../src/analyzers/broken-access-control");
+    const flagged = (source: string, file: string) => scanSource(source, file, [new BrokenAccessControlAnalyzer()]).findings.length;
+    expect(flagged(`export async function GET() { const { data } = await supabase.auth.getUser(); if (!data.user) return new Response(null, { status: 401 }); return Response.json({}); }`, "app/api/admin/route.ts")).toBe(0);
+    expect(flagged(`export async function GET() { return Response.json({ all: "users" }); }`, "app/api/admin/route.ts")).toBe(1);
+    expect(flagged(`app.get("/admin/users", async (req, res) => { const decoded = await admin.auth().verifyIdToken(req.headers.authorization); res.json({}); });`, "server.js")).toBe(0);
+  });
+});

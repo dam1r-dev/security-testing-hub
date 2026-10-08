@@ -241,3 +241,42 @@ describe("runScan against the vulnerable-nextjs-app fixture", () => {
     expect(exitCode).toBe(0);
   });
 });
+
+describe("runScan against the Supabase and Firebase fixtures", () => {
+  const SUPABASE_APP = path.resolve(__dirname, "../../../examples/vulnerable-supabase-app");
+  const FIREBASE_APP = path.resolve(__dirname, "../../../examples/vulnerable-firebase-app");
+
+  const scanJson = (dir: string) => {
+    const outFile = path.join(os.tmpdir(), `security-hub-test-backend-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+    runScan(dir, { format: "json", out: outFile });
+    const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
+    fs.unlinkSync(outFile);
+    return summary as { results: Array<{ file: string; findings: Array<{ ruleId: string; severity: string; location: { startLine: number }; message: string }> }> };
+  };
+  const findingsIn = (summary: ReturnType<typeof scanJson>, fileSuffix: RegExp) =>
+    summary.results.filter((r) => fileSuffix.test(r.file)).flatMap((r) => r.findings);
+
+  it("finds every planted Supabase mistake and leaves the owner-scoped table alone", () => {
+    const summary = scanJson(SUPABASE_APP);
+    const sql = findingsIn(summary, /init\.sql$/);
+    const lines = sql.map((f) => f.location.startLine).sort((a, b) => a - b);
+    // todos (no RLS), profiles (USING true), notes (FOR ALL true), invoices (signed in only, user_metadata),
+    // invoice_totals (view), make_admin (SECURITY DEFINER)
+    expect(lines).toEqual([5, 19, 28, 37, 40, 44, 48]);
+    expect(sql.every((f) => f.ruleId === "supabase-rls")).toBe(true);
+    expect(sql.filter((f) => f.severity === "critical")).toHaveLength(2);
+    expect(sql.some((f) => /projects/.test(f.message))).toBe(false); // the safe table
+
+    const code = findingsIn(summary, /route\.ts$/);
+    expect(code.map((f) => f.ruleId).sort()).toEqual(["supabase-auth", "supabase-auth"]);
+  });
+
+  it("finds every planted Firebase mistake and leaves the owner-scoped rule alone", () => {
+    const summary = scanJson(FIREBASE_APP);
+    const firestore = findingsIn(summary, /firestore\.rules$/);
+    expect(firestore.map((f) => f.location.startLine)).toEqual([7, 12, 17]); // test mode, users, orders; notes is safe
+    expect(findingsIn(summary, /storage\.rules$/)).toHaveLength(1);
+    expect(findingsIn(summary, /database\.rules\.json$/).map((f) => f.location.startLine)).toEqual([3, 4]);
+    expect(summary.results.flatMap((r) => r.findings).every((f) => f.ruleId === "firebase-rules")).toBe(true);
+  });
+});

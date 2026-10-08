@@ -164,6 +164,25 @@ mostly stored/second-order flows.
 code injection); unsafe `yaml.load` of an upload; JWT algorithm confusion; DOM-based and template XSS; weak
 cryptography; and every flow that goes through a return value or a callback.
 
+## Round 7: Supabase and Firebase rules
+
+Two real Supabase projects were available in the corpus, both built with Row Level Security from the start
+(Vercel's `nextjs-subscription-payments`, one init migration plus a `schema.sql`; `chatbot-ui`, 25 migrations).
+That makes them a good test for false positives:
+
+| Project | `supabase-rls` / `supabase-auth` findings | Verdict |
+|---|---|---|
+| nextjs-subscription-payments | 0 | correct: every table has RLS and owner policies |
+| chatbot-ui | 8: 5 `SECURITY DEFINER` functions without `search_path`, 3 server-side `getSession()` calls (middleware, layout, login page) | all genuine and all things Supabase's own advisor / docs flag; none is a data-exposure hole |
+| the other 13 projects | 0 | no Supabase / Firebase files |
+
+No Firebase project was in the corpus, so `firebase-rules` is validated only against the unit tests and the
+purpose-built fixtures (`examples/vulnerable-firebase-app`); expect a round on real Firebase repositories to teach
+it things. Two false positives of *other* rules surfaced while building the Supabase fixture and were fixed with
+regression tests: `Response.json({ secret: "..." })` was read as a hard-coded signing secret (now only inside calls
+about sessions / tokens / auth), and `broken-access-control` did not know `supabase.auth.getUser()` is an access
+check (it flagged every admin route of a Supabase app).
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are

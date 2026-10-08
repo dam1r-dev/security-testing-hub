@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { FileCache } from "../file-cache";
 
 // Token-in-header auth: the browser doesn't attach it automatically, so a
 // forged cross-site request can't carry it (that's why CSRF doesn't apply).
@@ -8,7 +9,7 @@ const BEARER_AUTH_DEPS = /^(jsonwebtoken|express-jwt|passport-jwt|jose|@fastify\
 const COOKIE_AUTH_DEPS =
   /^(express-session|cookie-session|cookie-parser|next-auth|@auth\/.+|iron-session|lucia|passport-local|connect-mongo|connect-redis|@supabase\/ssr|@supabase\/auth-helpers-nextjs|@clerk\/.+|better-auth|koa-session|@fastify\/session|@fastify\/cookie)$/;
 
-const cache = new Map<string, boolean>();
+const cache = new FileCache<boolean>();
 
 function readDependencyNames(packageJsonPath: string): string[] | undefined {
   try {
@@ -49,7 +50,7 @@ const SQL_DEPS =
   /^(sequelize|sequelize-typescript|knex|pg|mysql|mysql2|sqlite3|better-sqlite3|mssql|oracledb|typeorm|@prisma\/client|prisma|drizzle-orm|objection|bookshelf|kysely|slonik|postgres)$/;
 
 export type DatabaseKind = "mongo" | "sql" | "unknown";
-const databaseKindCache = new Map<string, DatabaseKind>();
+const databaseKindCache = new FileCache<DatabaseKind>();
 
 /**
  * Which kind of database the nearest package.json points at. "sql" means a
@@ -97,7 +98,7 @@ const OTHER_AUTH_DEPS =
  * - `unknown`: no package.json, or some other auth setup we can't classify: keep every check on
  */
 export type AuthKind = "cookies" | "lax-cookies" | "bearer" | "none" | "unknown";
-const authKindCache = new Map<string, AuthKind>();
+const authKindCache = new FileCache<AuthKind>();
 
 export function authKind(filePath: string): AuthKind {
   let dir = path.dirname(path.resolve(filePath));

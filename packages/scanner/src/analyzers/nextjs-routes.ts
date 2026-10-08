@@ -78,7 +78,7 @@ export function hasSensitiveSegment(segments: string[]): boolean {
 
 const MIDDLEWARE_FILENAMES = ["middleware.ts", "middleware.js", "middleware.mts", "middleware.mjs"];
 const AUTH_HINT_IN_MIDDLEWARE =
-  /(isAuthenticated|requireAuth|requireAdmin|requireRole|ensureAuth|ensureLoggedIn|authMiddleware|checkRole|checkAuth|isAdmin|hasRole|hasPermission|getServerSession|getToken|auth\(\)|withAuth|jwt\.verify|verifyToken)/i;
+  /(isAuthenticated|requireAuth|requireAdmin|requireRole|ensureAuth|ensureLoggedIn|authMiddleware|checkRole|checkAuth|isAdmin|hasRole|hasPermission|getServerSession|getToken|auth\(\)|withAuth|jwt\.verify|verifyToken|\.auth\.getUser\s*\(|\.auth\.getSession\s*\(|verifyIdToken|getUser\s*\(\))/i;
 
 /**
  * Next.js commonly enforces auth centrally in a single project-root
