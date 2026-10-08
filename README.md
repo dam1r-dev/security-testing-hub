@@ -104,6 +104,28 @@ on `127.0.0.1` only, requires a per-run token on every request, and your code is
 never uploaded anywhere. `--port <n>` changes the port, `--no-open` skips opening
 the browser.
 
+## GitHub Action (scan every pull request)
+
+```yaml
+# .github/workflows/security.yml
+on: pull_request
+permissions: { contents: read, pull-requests: write }
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: dam1r-dev/security-testing-hub@v0
+        with: { fail-on: high }
+```
+
+On a pull request it reports **only what the change touches** — inline annotations in the diff, one
+summary comment with the 0–100 score (updated on each push), and the job summary — while still analysing the
+whole project, so a changed handler that feeds an unchanged query helper is caught. Optional SARIF upload to
+the Security tab. Full reference: [docs/github-action.md](docs/github-action.md). The same filtering is
+available on the command line: `security-hub scan . --changed-since origin/main`.
+
 ## Usage
 
 If you installed the CLI (`npm install -g security-hub` / `npx security-hub`),
@@ -127,6 +149,8 @@ npm run scan -- scan ./my-express-app --format html
 
 # CI gate: exit 1 if anything critical/high is found
 npm run scan -- scan ./my-express-app --fail-on high
+npm run scan -- scan ./my-express-app --changed-since origin/main   # report only files changed vs. a branch
+npm run scan -- scan ./my-express-app --format markdown             # PR-comment style report (also: github = annotations)
 ```
 
 Every format includes a **0-100 score** (also shown as a colored line at the

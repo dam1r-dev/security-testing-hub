@@ -23,9 +23,13 @@ import { ProjectContext } from "./taint/project";
 import { ScanResult, ScanSummary } from "./types";
 
 export * from "./types";
-export { toSarif, toSarifString } from "./output/sarif";
+export { toSarif, toSarifString, SarifOptions } from "./output/sarif";
 export { computeScore, SecurityScore, ScoreColor } from "./output/score";
 export { toHtml } from "./output/html";
+export { toMarkdown, MARKDOWN_MARKER, MarkdownOptions } from "./output/markdown";
+export { toGithubAnnotations, annotationFor } from "./output/github";
+export { filterSummary, FilterOptions, SEVERITY_RANK } from "./filter";
+export { changedFiles } from "./changed";
 export { parseFile, parseSource, languageForExtension } from "./parsers/ast-parser";
 export { ProjectContext } from "./taint/project";
 export { RULE_IDS } from "./suppress";

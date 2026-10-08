@@ -52,6 +52,7 @@ export class UsernameEnumerationAnalyzer implements Analyzer {
         confidence: "low",
         message:
           `Found two distinct error messages for "unknown user" (${snippet(unknownUserLiteral, parsed.sourceCode)}) ` +
+          // security-hub-ignore -- these are this rule's own message texts, not a login handler
           `and "wrong password" (${snippet(wrongPasswordLiteral, parsed.sourceCode)}) in the same login handler. ` +
           "An attacker can tell these apart to enumerate valid usernames before brute-forcing passwords. " +
           "Use one identical message (e.g. \"Invalid username or password\") for both cases, and keep response " +

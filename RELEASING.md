@@ -52,7 +52,9 @@ just declares `permissions: id-token: write` and npm handles the rest.
 3. Create a GitHub Release targeting that commit (via the UI, or `gh release
    create v<version>`) — publishing a Release is what triggers
    `.github/workflows/publish.yml`.
-4. Watch the *Publish to npm* workflow run. It builds, lints, tests, then
+4. After the release, move the action's major tag so `uses: dam1r-dev/security-testing-hub@v0` picks it up:
+   `git tag -f v0 <release commit> && git push -f origin v0` (only while the major version is 0).
+5. Watch the *Publish to npm* workflow run. It builds, lints, tests, then
    publishes `security-hub-scanner` before `security-hub`.
 
 If the workflow fails partway (e.g. scanner published but cli's tests then

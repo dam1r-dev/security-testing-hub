@@ -1,3 +1,4 @@
+import * as path from "path";
 import { Finding, ScanResult, Severity, VulnerabilityType } from "../types";
 
 const SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json";
@@ -94,11 +95,14 @@ function levelFor(severity: Severity): "error" | "warning" | "note" {
   return "note";
 }
 
-function toRelativeUri(filePath: string): string {
-  return filePath.replace(/\\/g, "/").replace(/^\.?\//, "");
+function toRelativeUri(filePath: string, relativeTo?: string): string {
+  // GitHub code scanning matches `uri` against repository-relative paths, so an absolute
+  // path (what a scan of an absolute folder produces) has to be made relative to the repo root.
+  const normalized = relativeTo && path.isAbsolute(filePath) ? path.relative(relativeTo, filePath) : filePath;
+  return normalized.replace(/\\/g, "/").replace(/^\.?\//, "");
 }
 
-function findingToResult(finding: Finding) {
+function findingToResult(finding: Finding, relativeTo?: string) {
   return {
     ruleId: finding.ruleId,
     level: levelFor(finding.severity),
@@ -107,7 +111,7 @@ function findingToResult(finding: Finding) {
     locations: [
       {
         physicalLocation: {
-          artifactLocation: { uri: toRelativeUri(finding.location.file) },
+          artifactLocation: { uri: toRelativeUri(finding.location.file, relativeTo) },
           region: {
             startLine: finding.location.startLine,
             startColumn: finding.location.startColumn,
@@ -120,12 +124,17 @@ function findingToResult(finding: Finding) {
   };
 }
 
-export function toSarif(results: ScanResult[]) {
+export interface SarifOptions {
+  /** Make absolute file paths relative to this folder (normally the repository root). */
+  relativeTo?: string;
+}
+
+export function toSarif(results: ScanResult[], options: SarifOptions = {}) {
   const usedRuleIds = new Set<VulnerabilityType>();
   const sarifResults = results.flatMap((r) =>
     r.findings.map((f) => {
       usedRuleIds.add(f.ruleId);
-      return findingToResult(f);
+      return findingToResult(f, options.relativeTo);
     }),
   );
 
@@ -159,6 +168,6 @@ export function toSarif(results: ScanResult[]) {
   };
 }
 
-export function toSarifString(results: ScanResult[]): string {
-  return JSON.stringify(toSarif(results), null, 2);
+export function toSarifString(results: ScanResult[], options: SarifOptions = {}): string {
+  return JSON.stringify(toSarif(results, options), null, 2);
 }

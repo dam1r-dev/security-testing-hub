@@ -76,6 +76,33 @@ describe("runScan against the vulnerable-express-app fixture", () => {
     expect(service?.findings ?? []).toHaveLength(0);
   });
 
+  it("prints a markdown report and GitHub annotations to stdout", () => {
+    const writeSpy = jest.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      runScan(FIXTURE_APP, { format: "markdown" });
+      runScan(FIXTURE_APP, { format: "github" });
+      const printed = writeSpy.mock.calls.map((c) => c[0]).join("");
+      expect(printed).toContain("<!-- security-testing-hub-report -->");
+      expect(printed).toContain("| Rule | Where | What |");
+      expect(printed).toMatch(/::error file=.*title=sql-injection \(critical\)::/);
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
+  it("explains itself and exits 2 when --changed-since is used outside a git repository", () => {
+    const plain = fs.mkdtempSync(path.join(os.tmpdir(), "security-hub-nogit-"));
+    fs.writeFileSync(path.join(plain, "a.js"), "const a = 1;\n");
+    const errorSpy = jest.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      expect(runScan(plain, { format: "text", changedSince: "main" })).toBe(2);
+      expect(errorSpy.mock.calls.map((c) => c[0]).join("")).toMatch(/not inside a git repository|Could not diff/);
+    } finally {
+      errorSpy.mockRestore();
+      fs.rmSync(plain, { recursive: true, force: true });
+    }
+  });
+
   it("exits with code 1 when --fail-on threshold is crossed", () => {
     const outFile = path.join(os.tmpdir(), `security-hub-test-${Date.now()}-2.json`);
     const exitCode = runScan(FIXTURE_APP, { format: "json", out: outFile, failOn: "critical" });

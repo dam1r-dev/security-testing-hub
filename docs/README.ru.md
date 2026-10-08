@@ -63,6 +63,28 @@ npx security-hub ui ./my-app   # то же, сразу с нужной папк�
 компьютере: сервер слушает только `127.0.0.1`, каждый запрос защищён токеном, код
 никуда не отправляется.
 
+## GitHub Action (проверка каждого pull request)
+
+```yaml
+# .github/workflows/security.yml
+on: pull_request
+permissions: { contents: read, pull-requests: write }
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: dam1r-dev/security-testing-hub@v0
+        with: { fail-on: high }
+```
+
+В pull request показываются **только находки в изменённых файлах**: аннотации прямо в диффе, один комментарий
+с оценкой 0–100 (обновляется при каждом push) и сводка задачи. Проект при этом анализируется целиком, поэтому
+изменённый обработчик, передающий данные в нетронутую функцию запроса, всё равно будет найден. Подробности —
+[docs/github-action.md](github-action.md). В командной строке то же самое:
+`security-hub scan . --changed-since origin/main`.
+
 ## Как скрыть неверную (или принятую) находку
 
 ```js
