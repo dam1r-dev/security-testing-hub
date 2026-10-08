@@ -196,6 +196,23 @@ describe("changedFiles (git)", () => {
     expect(narrowed.filteredOutCount).toBe(1);
   });
 
+  it("matches files even when the folder is reached through a symlink / junction (macOS /var, Windows short names)", () => {
+    const link = `${dir}-link`;
+    fs.symlinkSync(dir, link, "junction"); // a plain symlink on POSIX
+    try {
+      const changed = changedFiles(link, "main");
+      // reported in the caller's spelling, so a scan of `link` and the changed list agree
+      expect(changed.every((f) => f.startsWith(link))).toBe(true);
+      const narrowed = filterSummary(scanPath(link), { files: changed });
+      expect(narrowed.results.flatMap((r) => r.findings).map((f) => path.basename(f.location.file))).toEqual(["new.js"]);
+      // ...and also when the two sides are spelled differently
+      const viaRealPath = filterSummary(scanPath(link), { files: changedFiles(dir, "main") });
+      expect(viaRealPath.findingsCount).toBe(1);
+    } finally {
+      fs.rmSync(link, { recursive: true, force: true });
+    }
+  });
+
   it("explains itself when the ref doesn't exist, and rejects option-like refs", () => {
     expect(() => changedFiles(dir, "no-such-branch")).toThrow(/Could not diff against "no-such-branch"/);
     expect(() => changedFiles(dir, "--output=x")).toThrow(/Invalid git ref/);
