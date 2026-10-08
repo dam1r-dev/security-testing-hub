@@ -68,6 +68,20 @@ function nameFor(literal: SyntaxNode): string | undefined {
   }
 }
 
+// `const PLACEHOLDER_SECRETS = { AUTH_JWT_SECRET: "secret" }` is a list of values the program REJECTS
+// (checks the environment against them at start-up), not credentials it uses.
+const NON_SECRET_CONTAINER = /placeholder|example|sample|dummy|fake|mock|fixture|forbidden|blocklist|denylist|weak|insecure/i;
+
+function insideNonSecretContainer(literal: SyntaxNode): boolean {
+  for (let p = literal.parent; p; p = p.parent) {
+    if (p.type === "variable_declarator" || p.type === "public_field_definition" || p.type === "field_definition") {
+      const name = (p.childForFieldName("name") ?? p.childForFieldName("property"))?.text ?? "";
+      if (NON_SECRET_CONTAINER.test(name)) return true;
+    }
+  }
+  return false;
+}
+
 function literalValue(node: SyntaxNode): string | undefined {
   if (node.type === "string") return node.text.slice(1, -1);
   if (node.type === "template_string" && !node.namedChildren.some((c) => c.type === "template_substitution")) {
@@ -190,6 +204,7 @@ export class HardcodedSecretAnalyzer implements Analyzer {
         }
       }
 
+      if (insideNonSecretContainer(node)) continue;
       const rawName = nameFor(node);
       if (!rawName) continue;
       const name = normalizeName(rawName);
@@ -205,7 +220,7 @@ export class HardcodedSecretAnalyzer implements Analyzer {
             `${isPlaceholder(value) ? " (it looks like a placeholder that was never replaced)" : ""}. Anyone who reads the ` +
             `code can forge logins. Use a long random value from an environment variable (process.env.${name.toUpperCase()}).`,
         );
-      } else if (isSensitiveName(name) && looksLikeSecret(value)) {
+      } else if (isSensitiveName(name) && looksLikeSecret(value, name)) {
         add(
           node.startIndex,
           node.endIndex,

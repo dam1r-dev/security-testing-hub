@@ -88,6 +88,7 @@ class OperatorInjectionAnalyzer extends BaseAnalyzer {
       severity: "high",
       confidence: "medium",
       isSource: isObjectCapableSource,
+      paramKeys: ["body", "query"], // params / cookies / headers are always strings
       isSink: isMongoQueryCall,
       messageFor: (via) =>
         `Request data ('${via}') goes into a MongoDB query without being forced to a string. A JSON body like ` +

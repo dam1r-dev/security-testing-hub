@@ -17,6 +17,22 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
   interface and HTML report, a collapsed block in the pull request comment, and `--format prompt` on the command
   line. Prompts never contain secrets.
 
+### Changed (precision and coverage, from the second validation round)
+- **Far fewer false positives on real projects** (194 → 54 findings on nine unseen repositories, with 128 → 0 false
+  ones; see [docs/validation.md](docs/validation.md#round-6-nine-more-projects-first-pass-vs-second-pass)).
+  `csrf` is skipped where the browser attaches no credential by itself (no auth library; Auth.js / Clerk /
+  Supabase SSR and other `SameSite=Lax` cookie frameworks; webhooks; `denyAll()` routes). `idor` recognises
+  ownership helpers by name, `denyAll()`/`appendUserId()` middleware, skips projects with no authentication library
+  and Next.js handlers that take no argument. `hardcoded-secret` ignores error codes, password hashes and
+  placeholder deny-lists. `username-enumeration` requires a login flow.
+- **Taint sinks only look at the dangerous argument** (`db.query(sql, values)`: the text; `fs.writeFile(path, data)`:
+  the path; `redirect(url, { headers })`: the URL), and values that went through `parseInt`, hashing, escaping /
+  sanitising, an allowlist check or a table lookup by key are no longer tainted.
+- **More sources:** destructured handler parameters (`({ body, file }: Request, res)`, Remix `({ request, params })`,
+  Next.js `GET(request, { params })`), Fastify `request.*`, Koa `ctx.*`, Hono `c.req.*`.
+- **More sinks:** `res.sendFile()` / `res.download()` and more `fs` calls (`readdir`, `stat`, `rm`, `rename`, ...)
+  for path traversal.
+
 ## 0.4.0
 
 ### Added

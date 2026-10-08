@@ -3,6 +3,7 @@ import { findNodes, snippet, toLocation, SyntaxNode } from "../parsers/utils";
 import { Finding } from "../types";
 import { Analyzer } from "./base-analyzer";
 import { findNextHandlers, idLikeDynamicSegments, isNextRouteFile, routeSegments } from "./nextjs-routes";
+import { authKind } from "./project-info";
 
 const ROUTER_OBJECT_PATTERN = /^(app|router)$/i;
 const ROUTER_SUFFIX_PATTERN = /router$/i;
@@ -14,8 +15,25 @@ const ID_PARAM_PATTERN = /:((?:[A-Za-z0-9_]*(?:Id|ID|_id))|id)(?![A-Za-z0-9_])/;
 // Any reference to the authenticated user/session in the handler is treated as
 // evidence of an ownership check — Express's req.user/req.session, and common
 // Next.js session helpers (NextAuth's getServerSession/auth(), Clerk's currentUser(), ...).
-const OWNERSHIP_CHECK_HINT =
-  /req\.(user|session|auth|currentUser)\b|getServerSession|currentUser\s*\(|auth\s*\(\)|session\??\.\w*user/;
+//
+// Also by NAME: projects wrap the check in a helper (`verifyCurrentUserHasAccessToPost(id)`,
+// `security.appendUserId()`, `checkOwnership(...)`), and a route that a "deny" middleware switches
+// off (`security.denyAll()`) has no object to reach at all.
+const OWNERSHIP_CHECK_HINT = new RegExp(
+  [
+    String.raw`req\.(user|session|auth|currentUser)\b`,
+    "getServerSession",
+    String.raw`currentUser\s*\(`,
+    String.raw`auth\s*\(\)`,
+    String.raw`session\??\.\w*user`,
+    // a call (`verifyAccess(id)`) or a middleware reference (`app.get("/x/:id", checkOwnership, handler)`)
+    String.raw`\b\w*(verify|check|assert|ensure|require|authori[sz]e|validate)\w*(Access|Owner|Ownership|Permission|Permissions|Allowed|Authori[sz]ation)\w*\b`,
+    String.raw`\b(isOwner|belongsTo|userOwns|ownsResource)\s*\(`,
+    String.raw`\bappend\w*(UserId|Owner)\w*\s*\(`,
+    String.raw`\b(deny\w*|forbid\w*|reject\w*|disable\w*|notAllowed|blockAll)\s*\(`,
+  ].join("|"),
+  "i",
+);
 
 interface RouteRegistration {
   call: SyntaxNode;
@@ -59,6 +77,9 @@ function findIdParamRoutes(root: SyntaxNode): RouteRegistration[] {
  */
 export class IdorAnalyzer implements Analyzer {
   analyze(parsed: ParsedFile, filePath: string): Finding[] {
+    // No authentication library anywhere in the project: there is no per-user data to be reached through
+    // someone else's id (a demo or public API). Admin-looking routes are still covered by broken-access-control.
+    if (authKind(filePath) === "none") return [];
     if (isNextRouteFile(filePath)) return this.analyzeNextRoute(parsed, filePath);
 
     const routes = findIdParamRoutes(parsed.tree.rootNode);
@@ -93,6 +114,8 @@ export class IdorAnalyzer implements Analyzer {
     const handlers = findNextHandlers(parsed.tree.rootNode);
     return handlers
       .filter((h) => !OWNERSHIP_CHECK_HINT.test(h.node.text))
+      // A handler that takes no arguments cannot read the id from the URL at all.
+      .filter((h) => (h.node.childForFieldName("parameters")?.namedChildCount ?? 1) > 0)
       .map((h) => ({
         ruleId: "idor" as const,
         severity: "high" as const,

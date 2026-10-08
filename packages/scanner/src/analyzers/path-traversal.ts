@@ -3,7 +3,10 @@ import { AnalyzerConfig, BaseAnalyzer, firstArgument } from "./base-analyzer";
 import { isRequestSource } from "./sources";
 
 const FS_METHOD_PATTERN =
-  /^(readFile|readFileSync|writeFile|writeFileSync|appendFile|appendFileSync|unlink|unlinkSync|createReadStream|createWriteStream|open|openSync)$/;
+  /^(readFile|readFileSync|writeFile|writeFileSync|appendFile|appendFileSync|unlink|unlinkSync|createReadStream|createWriteStream|open|openSync|readdir|readdirSync|stat|statSync|rm|rmSync|rmdir|rmdirSync|rename|renameSync|copyFile|copyFileSync|mkdir|mkdirSync|opendir|opendirSync)$/;
+// res.sendFile(path) / res.download(path) serve whatever file the path names.
+const RESPONSE_FILE_OBJECT_PATTERN = /^(res|response|reply)$/;
+const RESPONSE_FILE_METHOD_PATTERN = /^(sendFile|download|sendfile)$/;
 const FS_OBJECT_PATTERN = /^(fs|fsPromises|promises)$/;
 
 function isSink(node: SyntaxNode): boolean {
@@ -13,7 +16,10 @@ function isSink(node: SyntaxNode): boolean {
   const object = callee.childForFieldName("object");
   const property = callee.childForFieldName("property");
   if (!object || !property) return false;
-  return FS_OBJECT_PATTERN.test(object.text) && FS_METHOD_PATTERN.test(property.text);
+  return (
+    (FS_OBJECT_PATTERN.test(object.text) && FS_METHOD_PATTERN.test(property.text)) ||
+    (RESPONSE_FILE_OBJECT_PATTERN.test(object.text) && RESPONSE_FILE_METHOD_PATTERN.test(property.text))
+  );
 }
 
 /**

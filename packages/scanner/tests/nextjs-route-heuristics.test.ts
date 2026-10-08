@@ -1,3 +1,4 @@
+import { cookieProjectFile } from "./helpers/cookie-project";
 import { scanSource } from "../src/index";
 import { IdorAnalyzer } from "../src/analyzers/idor";
 import { BrokenAccessControlAnalyzer } from "../src/analyzers/broken-access-control";
@@ -13,7 +14,7 @@ describe("IdorAnalyzer on Next.js App Router routes", () => {
         return Response.json(account);
       }
     `;
-    const result = scanSource(source, "app/api/accounts/[accountId]/route.ts", analyzers);
+    const result = scanSource(source, cookieProjectFile("app/api/accounts/[accountId]/route.ts"), analyzers);
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]?.ruleId).toBe("idor");
   });
@@ -27,7 +28,7 @@ describe("IdorAnalyzer on Next.js App Router routes", () => {
         return Response.json(account);
       }
     `;
-    const result = scanSource(source, "app/api/accounts/[accountId]/route.ts", analyzers);
+    const result = scanSource(source, cookieProjectFile("app/api/accounts/[accountId]/route.ts"), analyzers);
     expect(result.findings).toHaveLength(0);
   });
 
@@ -37,7 +38,7 @@ describe("IdorAnalyzer on Next.js App Router routes", () => {
         return Response.json(await db.account.findMany());
       }
     `;
-    const result = scanSource(source, "app/api/accounts/route.ts", analyzers);
+    const result = scanSource(source, cookieProjectFile("app/api/accounts/route.ts"), analyzers);
     expect(result.findings).toHaveLength(0);
   });
 
@@ -47,7 +48,7 @@ describe("IdorAnalyzer on Next.js App Router routes", () => {
         return Response.json(await getFile(params.slug));
       }
     `;
-    const result = scanSource(source, "app/files/[...slug]/route.ts", analyzers);
+    const result = scanSource(source, cookieProjectFile("app/files/[...slug]/route.ts"), analyzers);
     expect(result.findings).toHaveLength(0);
   });
 });
@@ -61,7 +62,7 @@ describe("BrokenAccessControlAnalyzer on Next.js App Router routes", () => {
         return Response.json(await db.user.findMany());
       }
     `;
-    const result = scanSource(source, "app/admin/users/route.ts", analyzers);
+    const result = scanSource(source, cookieProjectFile("app/admin/users/route.ts"), analyzers);
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]?.ruleId).toBe("broken-access-control");
   });
@@ -72,7 +73,7 @@ describe("BrokenAccessControlAnalyzer on Next.js App Router routes", () => {
         return Response.json(await db.user.findMany());
       }
     `;
-    const result = scanSource(source, "app/(admin)/users/route.ts", analyzers);
+    const result = scanSource(source, cookieProjectFile("app/(admin)/users/route.ts"), analyzers);
     expect(result.findings).toHaveLength(1);
   });
 
@@ -84,7 +85,7 @@ describe("BrokenAccessControlAnalyzer on Next.js App Router routes", () => {
         return Response.json(await db.user.findMany());
       }
     `;
-    const result = scanSource(source, "app/admin/users/route.ts", analyzers);
+    const result = scanSource(source, cookieProjectFile("app/admin/users/route.ts"), analyzers);
     expect(result.findings).toHaveLength(0);
   });
 
@@ -94,7 +95,7 @@ describe("BrokenAccessControlAnalyzer on Next.js App Router routes", () => {
         return Response.json(await db.product.findMany());
       }
     `;
-    const result = scanSource(source, "app/api/products/route.ts", analyzers);
+    const result = scanSource(source, cookieProjectFile("app/api/products/route.ts"), analyzers);
     expect(result.findings).toHaveLength(0);
   });
 });
@@ -110,7 +111,7 @@ describe("CsrfAnalyzer on Next.js App Router routes", () => {
         return Response.json({ ok: true });
       }
     `;
-    const result = scanSource(source, "app/api/transfer/route.ts", analyzers);
+    const result = scanSource(source, cookieProjectFile("app/api/transfer/route.ts"), analyzers);
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]?.ruleId).toBe("csrf");
   });
@@ -121,7 +122,7 @@ describe("CsrfAnalyzer on Next.js App Router routes", () => {
         return Response.json(await db.transfer.findMany());
       }
     `;
-    const result = scanSource(source, "app/api/transfer/route.ts", analyzers);
+    const result = scanSource(source, cookieProjectFile("app/api/transfer/route.ts"), analyzers);
     expect(result.findings).toHaveLength(0);
   });
 });

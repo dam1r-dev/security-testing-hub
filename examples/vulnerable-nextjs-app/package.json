@@ -4,6 +4,7 @@
   "private": true,
   "description": "Deliberately vulnerable Next.js App Router app used as a scanner test fixture. DO NOT deploy this.",
   "dependencies": {
-    "next": "^15.0.0"
+    "next": "^15.0.0",
+    "cookie": "^0.7.2"
   }
 }

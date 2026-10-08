@@ -85,10 +85,6 @@ function isIdentifierUse(node: SyntaxNode): boolean {
   return node.type === "identifier" || node.type === "shorthand_property_identifier";
 }
 
-function subtreeContainsIdentifier(root: SyntaxNode, name: string): boolean {
-  return findNodes(root, (n) => isIdentifierUse(n) && n.text === name).length > 0;
-}
-
 function subtreeContainsNode(root: SyntaxNode, target: SyntaxNode): boolean {
   return root.startIndex <= target.startIndex && root.endIndex >= target.endIndex;
 }
@@ -132,7 +128,7 @@ function propagateTaint(tainted: Set<string>, assignmentLikeNodes: SyntaxNode[])
     for (const node of assignmentLikeNodes) {
       const names = declaredNames(node);
       const rhs = valueNode(node);
-      if (names.length === 0 || !rhs || names.every((name) => tainted.has(name))) continue;
+      if (names.length === 0 || !rhs || isAllowlistGuarded(rhs) || names.every((name) => tainted.has(name))) continue;
       for (const taintedName of tainted) {
         const references = findNodes(rhs, (n) => isIdentifierUse(n) && n.text === taintedName);
         if (references.some((ref) => isDirectlyWithin(ref, rhs))) {
@@ -143,6 +139,15 @@ function propagateTaint(tainted: Set<string>, assignmentLikeNodes: SyntaxNode[])
       }
     }
   }
+}
+
+/**
+ * `const ext = ALLOWED.includes(x) ? x : "jpg"`: the value that comes out has been checked against a list,
+ * so it is not attacker-controlled any more.
+ */
+function isAllowlistGuarded(rhs: SyntaxNode): boolean {
+  if (rhs.type !== "ternary_expression") return false;
+  return /\.(includes|has)\(/.test(rhs.childForFieldName("condition")?.text ?? "");
 }
 
 /** Every declaration / assignment inside `functionBody` (the carriers of aliasing). */
@@ -165,7 +170,7 @@ export function getAliases(
   // (not merely passed as an argument to some other function call).
   for (const node of nodes) {
     const rhs = valueNode(node);
-    if (!rhs) continue;
+    if (!rhs || isAllowlistGuarded(rhs)) continue;
     if (subtreeContainsNode(rhs, sourceNode) && isDirectlyWithin(sourceNode, rhs)) {
       for (const name of declaredNames(node)) tainted.add(name);
     }
@@ -199,14 +204,32 @@ export function containsSourceDirectly(expression: SyntaxNode, source: SyntaxNod
   return subtreeContainsNode(expression, source) && isDirectlyWithin(source, expression);
 }
 
-function sinkUsesTaint(sinkCall: SyntaxNode, sourceNode: SyntaxNode, taintedNames: Set<string>): boolean {
-  const args = sinkCall.childForFieldName("arguments");
-  const scope = args ?? sinkCall;
-  if (subtreeContainsNode(scope, sourceNode)) return true;
-  for (const name of taintedNames) {
-    if (subtreeContainsIdentifier(scope, name)) return true;
+// Calls whose result is no longer attacker-shaped for injection purposes: numeric coercion, hashing,
+// escaping/sanitising. (`String(x)` and `x.toString()` are deliberately NOT here: they change nothing.)
+const CLEANING_CALLEE =
+  /(?:^|\.)(?:parseInt|parseFloat|Number|BigInt|Boolean|hash\w*|\w*Hash|md5|sha\d*|digest|escape\w*|sanitize\w*|encodeURI|encodeURIComponent|quote\w*|isNaN|isFinite)$/i;
+
+/** Does `node` carry the tainted value outside of any cleaning call? */
+function carriesTaint(node: SyntaxNode, source: SyntaxNode, names: Set<string>): boolean {
+  if (node.startIndex === source.startIndex && node.endIndex === source.endIndex) return true;
+  if (isIdentifierUse(node) && names.has(node.text)) return true;
+  if (node.type === "call_expression") {
+    const callee = node.childForFieldName("function");
+    if (callee && CLEANING_CALLEE.test(callee.text)) return false;
   }
-  return false;
+  return node.namedChildren.some((child) => carriesTaint(child, source, names));
+}
+
+function sinkUsesTaint(
+  sinkCall: SyntaxNode,
+  sourceNode: SyntaxNode,
+  taintedNames: Set<string>,
+  sinkArgs?: (sink: SyntaxNode) => SyntaxNode[],
+): boolean {
+  // Only the arguments that matter for this kind of sink: `db.query(sql, [values])` is dangerous through
+  // `sql`, `fs.writeFile(path, data)` through `path`, `redirect(url, { headers })` through `url`.
+  const scopes = sinkArgs ? sinkArgs(sinkCall) : [sinkCall.childForFieldName("arguments") ?? sinkCall];
+  return scopes.some((scope) => carriesTaint(scope, sourceNode, taintedNames));
 }
 
 export interface TaintHints {
@@ -214,6 +237,10 @@ export interface TaintHints {
   sources?: SyntaxNode[];
   /** Declarations/assignments already collected for this body. */
   assignments?: SyntaxNode[];
+  /** Which arguments of a sink call are dangerous (default: all of them). */
+  sinkArgs?: (sink: SyntaxNode) => SyntaxNode[];
+  /** Request data that arrives as destructured handler parameters (`({ body }: Request, res) => ...`). */
+  origins?: Array<{ node: SyntaxNode; names: string[] }>;
 }
 
 /**
@@ -226,7 +253,8 @@ export function analyzeFunctionBody(
   hints: TaintHints = {},
 ): TaintPair[] {
   const sources = hints.sources ?? findNodes(functionBody, isSource);
-  if (sources.length === 0) return []; // most functions touch no request data: skip the sink walk
+  const origins = hints.origins ?? [];
+  if (sources.length === 0 && origins.length === 0) return []; // most functions touch no request data: skip the sink walk
   const sinks = findNodes(functionBody, isSink);
   if (sinks.length === 0) return [];
   const assignments = hints.assignments ?? assignmentLike(functionBody);
@@ -236,9 +264,18 @@ export function analyzeFunctionBody(
   for (const source of sources) {
     const taintedVars = getAliases(source, functionBody, assignments);
     for (const sink of sinks) {
-      if (sinkUsesTaint(sink, source, taintedVars)) {
+      if (sinkUsesTaint(sink, source, taintedVars, hints.sinkArgs)) {
         const via = [...taintedVars][0] ?? source.text.slice(0, 40);
         findings.push({ source, sink, taintedVia: via });
+      }
+    }
+  }
+
+  for (const origin of origins) {
+    const taintedVars = aliasesOfNames(origin.names, functionBody);
+    for (const sink of sinks) {
+      if (sinkUsesTaint(sink, origin.node, taintedVars, hints.sinkArgs)) {
+        findings.push({ source: origin.node, sink, taintedVia: origin.names[0] ?? "request" });
       }
     }
   }

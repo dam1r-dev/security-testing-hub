@@ -7,7 +7,11 @@ import { Analyzer } from "./base-analyzer";
 // two different messages let an attacker enumerate valid usernames.
 const UNKNOWN_USER_HINT = /invalid.{0,15}user|unknown.{0,15}user|user.{0,15}not.{0,15}found|no.{0,15}such.{0,15}user/i;
 const WRONG_PASSWORD_HINT = /invalid.{0,15}password|incorrect.{0,15}password|wrong.{0,15}password/i;
-const LOGIN_CONTEXT_HINT = /login|signin|sign-in|authenticate|password/i;
+// A login handler, not any function that merely mentions "password" (change-password and
+// reset flows contain "incorrect old password" messages too and are not login).
+const LOGIN_CONTEXT_HINT =
+  /login|signin|sign-in|sign_in|authenticate|\/auth\b|bcrypt|argon2|compare(Password)?\s*\(|(check|verify|valid\w*)Password/i;
+const PASSWORD_CHANGE_HINT = /\b(old|current|previous|new)[_\s-]?password|(old|current|previous|new)Password/i;
 
 function isStringLiteral(node: SyntaxNode): boolean {
   return node.type === "string" || node.type === "template_string";
@@ -33,12 +37,18 @@ export class UsernameEnumerationAnalyzer implements Analyzer {
     const seen = new Set<string>();
 
     for (const scope of scopes) {
-      if (!LOGIN_CONTEXT_HINT.test(scope.text)) continue;
+      // The route path usually sits OUTSIDE the handler: `app.post("/login", async (req, res) => {...})`.
+      const registration = scope.parent?.type === "arguments" ? scope.parent.parent : undefined;
+      const context = `${registration?.childForFieldName("arguments")?.namedChild(0)?.text ?? ""} ${scope.text}`;
+      if (!LOGIN_CONTEXT_HINT.test(context)) continue;
 
       const literals = findNodes(scope, isStringLiteral);
       const unknownUserLiteral = literals.find((n) => UNKNOWN_USER_HINT.test(n.text));
       const wrongPasswordLiteral = literals.find(
-        (n) => WRONG_PASSWORD_HINT.test(n.text) && n.startIndex !== unknownUserLiteral?.startIndex,
+        (n) =>
+          WRONG_PASSWORD_HINT.test(n.text) &&
+          !PASSWORD_CHANGE_HINT.test(n.text) &&
+          n.startIndex !== unknownUserLiteral?.startIndex,
       );
       if (!unknownUserLiteral || !wrongPasswordLiteral) continue;
 
