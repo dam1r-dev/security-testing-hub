@@ -90,6 +90,7 @@ export function renderUiPage(options: UiPageOptions): string {
   .message { margin: 0 0 8px; font-size: 14px; line-height: 1.5; }
   .location { font-size: 12px; color: #64748b; font-family: ui-monospace, monospace; margin-bottom: 8px; word-break: break-all; }
   .snippet { background: #0f172a; color: #e2e8f0; padding: 10px 12px; border-radius: 8px; font-size: 12px; overflow-x: auto; margin: 0; white-space: pre-wrap; word-break: break-word; }
+  .btn.small { padding: 5px 10px; font-size: 12px; margin-top: 10px; }
   .empty-state { color: #16a34a; font-weight: 600; }
   .warn { margin-top: 16px; font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 12px 16px; }
 
@@ -144,6 +145,7 @@ export function renderUiPage(options: UiPageOptions): string {
     <div class="toolbar">
       <div id="filters" class="row"></div>
       <span class="spacer"></span>
+      <button class="btn hidden" id="copy-all" data-i18n="copyAll">Copy one prompt for all findings</button>
       <button class="btn" id="download" data-i18n="download">Download HTML report</button>
     </div>
     <div id="findings"></div>
@@ -185,6 +187,7 @@ export function renderUiPage(options: UiPageOptions): string {
 
   var I18N = {
     en: {
+      copyFix: 'Copy prompt for my AI assistant', copyAll: 'Copy one prompt for all findings', copied: 'Copied!',
       suppressed: 'Hidden by security-hub-ignore comments: {n}.',
       subtitle: 'Find security holes in your code before someone else does',
       pathLabel: 'Project folder', browse: 'Choose folder\\u2026', scan: 'Scan', scanning: 'Scanning\\u2026',
@@ -200,6 +203,7 @@ export function renderUiPage(options: UiPageOptions): string {
       disclaimer: 'Heuristic static analysis \\u2014 a helper, not a replacement for security review.'
     },
     ru: {
+      copyFix: '\\u0421\\u043a\\u043e\\u043f\\u0438\\u0440\\u043e\\u0432\\u0430\\u0442\\u044c \\u043f\\u0440\\u043e\\u043c\\u043f\\u0442 \\u0434\\u043b\\u044f \\u0418\\u0418-\\u0430\\u0441\\u0441\\u0438\\u0441\\u0442\\u0435\\u043d\\u0442\\u0430', copyAll: '\\u0421\\u043a\\u043e\\u043f\\u0438\\u0440\\u043e\\u0432\\u0430\\u0442\\u044c \\u043e\\u0434\\u0438\\u043d \\u043f\\u0440\\u043e\\u043c\\u043f\\u0442 \\u043d\\u0430 \\u0432\\u0441\\u0435 \\u043d\\u0430\\u0445\\u043e\\u0434\\u043a\\u0438', copied: '\\u0421\\u043a\\u043e\\u043f\\u0438\\u0440\\u043e\\u0432\\u0430\\u043d\\u043e!',
       suppressed: '\\u0421\\u043a\\u0440\\u044b\\u0442\\u043e \\u043a\\u043e\\u043c\\u043c\\u0435\\u043d\\u0442\\u0430\\u0440\\u0438\\u044f\\u043c\\u0438 security-hub-ignore: {n}.',
       subtitle: '\\u041d\\u0430\\u0439\\u0434\\u0438\\u0442\\u0435 \\u0443\\u044f\\u0437\\u0432\\u0438\\u043c\\u043e\\u0441\\u0442\\u0438 \\u0432 \\u0441\\u0432\\u043e\\u0451\\u043c \\u043a\\u043e\\u0434\\u0435 \\u0440\\u0430\\u043d\\u044c\\u0448\\u0435, \\u0447\\u0435\\u043c \\u044d\\u0442\\u043e \\u0441\\u0434\\u0435\\u043b\\u0430\\u0435\\u0442 \\u043a\\u0442\\u043e-\\u0442\\u043e \\u0434\\u0440\\u0443\\u0433\\u043e\\u0439',
       pathLabel: '\\u041f\\u0430\\u043f\\u043a\\u0430 \\u043f\\u0440\\u043e\\u0435\\u043a\\u0442\\u0430', browse: '\\u0412\\u044b\\u0431\\u0440\\u0430\\u0442\\u044c \\u043f\\u0430\\u043f\\u043a\\u0443\\u2026', scan: '\\u0421\\u043a\\u0430\\u043d\\u0438\\u0440\\u043e\\u0432\\u0430\\u0442\\u044c', scanning: '\\u0421\\u043a\\u0430\\u043d\\u0438\\u0440\\u0443\\u044e\\u2026',
@@ -215,6 +219,7 @@ export function renderUiPage(options: UiPageOptions): string {
       disclaimer: '\\u042d\\u0432\\u0440\\u0438\\u0441\\u0442\\u0438\\u0447\\u0435\\u0441\\u043a\\u0438\\u0439 \\u0441\\u0442\\u0430\\u0442\\u0438\\u0447\\u0435\\u0441\\u043a\\u0438\\u0439 \\u0430\\u043d\\u0430\\u043b\\u0438\\u0437 \\u2014 \\u043f\\u043e\\u043c\\u043e\\u0449\\u043d\\u0438\\u043a, \\u0430 \\u043d\\u0435 \\u0437\\u0430\\u043c\\u0435\\u043d\\u0430 \\u0430\\u0443\\u0434\\u0438\\u0442\\u0443 \\u0431\\u0435\\u0437\\u043e\\u043f\\u0430\\u0441\\u043d\\u043e\\u0441\\u0442\\u0438.'
     },
     kk: {
+      copyFix: '\\u0416\\u0418-\\u043a\\u04e9\\u043c\\u0435\\u043a\\u0448\\u0456 \\u04af\\u0448\\u0456\\u043d \\u043f\\u0440\\u043e\\u043c\\u043f\\u0442\\u0442\\u044b \\u043a\\u04e9\\u0448\\u0456\\u0440\\u0443', copyAll: '\\u0411\\u0430\\u0440\\u043b\\u044b\\u049b \\u0442\\u0430\\u0431\\u044b\\u043b\\u044b\\u043c\\u0434\\u0430\\u0440\\u0493\\u0430 \\u0431\\u0456\\u0440 \\u043f\\u0440\\u043e\\u043c\\u043f\\u0442 \\u043a\\u04e9\\u0448\\u0456\\u0440\\u0443', copied: '\\u041a\\u04e9\\u0448\\u0456\\u0440\\u0456\\u043b\\u0434\\u0456!',
       suppressed: 'security-hub-ignore \\u0442\\u04af\\u0441\\u0456\\u043d\\u0456\\u043a\\u0442\\u0435\\u043c\\u0435\\u043b\\u0435\\u0440\\u0456\\u043c\\u0435\\u043d \\u0436\\u0430\\u0441\\u044b\\u0440\\u044b\\u043b\\u0493\\u0430\\u043d: {n}.',
       subtitle: '\\u041a\\u043e\\u0434\\u044b\\u04a3\\u044b\\u0437\\u0434\\u0430\\u0493\\u044b \\u043e\\u0441\\u0430\\u043b\\u0434\\u044b\\u049b\\u0442\\u0430\\u0440\\u0434\\u044b \\u0431\\u0430\\u0441\\u049b\\u0430\\u043b\\u0430\\u0440 \\u0442\\u0430\\u0431\\u0443\\u0434\\u0430\\u043d \\u0431\\u04b1\\u0440\\u044b\\u043d \\u0442\\u0430\\u0431\\u044b\\u04a3\\u044b\\u0437',
       pathLabel: '\\u0416\\u043e\\u0431\\u0430 \\u049b\\u0430\\u043b\\u0442\\u0430\\u0441\\u044b', browse: '\\u049a\\u0430\\u043b\\u0442\\u0430\\u043d\\u044b \\u0442\\u0430\\u04a3\\u0434\\u0430\\u0443\\u2026', scan: '\\u0421\\u043a\\u0430\\u043d\\u0435\\u0440\\u043b\\u0435\\u0443', scanning: '\\u0421\\u043a\\u0430\\u043d\\u0435\\u0440\\u043b\\u0435\\u0443\\u0434\\u0435\\u2026',
@@ -342,6 +347,11 @@ export function renderUiPage(options: UiPageOptions): string {
       filters.appendChild(chip);
     });
 
+    var copyAll = $('copy-all');
+    copyAll.classList.toggle('hidden', !data.allPrompt);
+    copyAll.textContent = t('copyAll');
+    copyAll.onclick = function () { copyText(data.allPrompt, copyAll, 'copyAll'); };
+
     var list = $('findings');
     list.textContent = '';
     var shown = 0;
@@ -365,9 +375,28 @@ export function renderUiPage(options: UiPageOptions): string {
       var pre = el('pre', 'snippet');
       pre.appendChild(el('code', '', f.sinkSnippet));
       item.appendChild(pre);
+      var copy = el('button', 'btn small', t('copyFix'));
+      copy.addEventListener('click', function () { copyText(f.fixPrompt, copy, 'copyFix'); });
+      item.appendChild(copy);
       list.appendChild(item);
     });
     if (shown === 0) list.appendChild(el('p', 'empty-state', t('noFindings')));
+  }
+
+  function copyText(text, button, label) {
+    var done = function () {
+      button.textContent = t('copied');
+      setTimeout(function () { button.textContent = t(label); }, 1500);
+    };
+    var fallback = function () {
+      var area = document.createElement('textarea');
+      area.value = text; area.style.position = 'fixed'; area.style.opacity = '0';
+      document.body.appendChild(area); area.select();
+      try { document.execCommand('copy'); done(); } catch (e) { /* nothing more to try */ }
+      document.body.removeChild(area);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
   }
 
   function runScan() {

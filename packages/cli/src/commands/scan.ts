@@ -7,6 +7,7 @@ import {
   toHtml,
   toMarkdown,
   toGithubAnnotations,
+  toFixPrompt,
   changedFiles,
   filterSummary,
   SEVERITY_RANK,
@@ -18,7 +19,7 @@ import {
 } from "security-hub-scanner";
 
 export interface ScanCommandOptions {
-  format: "text" | "json" | "sarif" | "html" | "markdown" | "github";
+  format: "text" | "json" | "sarif" | "html" | "markdown" | "github" | "prompt";
   out?: string;
   severity?: Severity;
   failOn?: Severity;
@@ -128,6 +129,8 @@ export function runScan(targetPath: string, options: ScanCommandOptions): number
   } else if (options.format === "markdown") {
     const scopeNote = changed ? `Only files changed since \`${options.changedSince}\` are listed (${changed.length} changed).` : undefined;
     output = toMarkdown(summary, { relativeTo: path.resolve(process.cwd()), scopeNote });
+  } else if (options.format === "prompt") {
+    output = toFixPrompt(summary, { relativeTo: path.resolve(process.cwd()) }) || "No findings: nothing to fix.";
   } else if (options.format === "github") {
     output = toGithubAnnotations(summary, { relativeTo: path.resolve(process.cwd()) }).join("\n");
   } else {

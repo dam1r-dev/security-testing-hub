@@ -39,6 +39,7 @@ That is all. Open a pull request and the check runs.
 | **Files changed** tab | An inline `error` / `warning` / `notice` on the exact line (critical + high = error, medium = warning, low = notice) |
 | **Pull request conversation** | One comment — updated on every push, never a new one — with the score, counts and a table linking to each line |
 | **Job summary** | The same report on the run page |
+| **"Fix with AI" block** | A collapsed block in the comment with one prompt for the listed findings, ready to paste into Cursor / Claude / Copilot |
 | **Code scanning** (optional) | `sarif: true` also uploads the results to the Security tab |
 | **Check status** | Red when a reported finding is at or above `fail-on`; otherwise green |
 

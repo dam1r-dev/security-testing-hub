@@ -89,6 +89,8 @@ describe("toMarkdown (pull request comment)", () => {
   it("neutralises markdown, HTML and @-mentions that come from the scanned code", () => {
     const md = toMarkdown(
       summaryOf(finding({ message: "Input <img src=x onerror=alert(1)> reaches [click](http://evil) and pings @everyone | extra." })),
+      // The table is what must neutralise text; the AI-prompt block holds raw text inside a code fence (see fix-prompt.test.ts).
+      { fixPrompt: false },
     );
     expect(md).not.toContain("<img");
     expect(md).toContain("&lt;img");

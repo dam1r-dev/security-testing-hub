@@ -98,7 +98,9 @@ npx security-hub ui            # opens http://127.0.0.1:4173 in your browser
 npx security-hub ui ./my-app   # same, with a folder pre-filled
 ```
 
-Pick a project folder (or paste its path), click **Scan**, get the 0-100 score,
+Pick a project folder (or paste its path), click **Scan**, get the 0-100 score, a
+**"Copy prompt for my AI assistant"** button on every finding (paste it into Cursor / Claude / Copilot and get the
+fix; also `security-hub scan . --format prompt`),
 filterable findings and a downloadable HTML report. The page is available in
 English, Russian and Kazakh. It runs entirely on your machine: the server listens
 on `127.0.0.1` only, requires a per-run token on every request, and your code is

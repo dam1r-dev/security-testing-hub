@@ -352,6 +352,14 @@ Both are covered as manual checklist items in
   the score as a colored ring, a severity breakdown, and a filterable
   findings list. Always writes to a file (`security-report.html` by default,
   or `--out <path>`) since raw HTML isn't useful printed to a terminal.
+- `markdown` — the pull-request-comment report (score, table, collapsed AI prompt).
+- `github` — one `::error` / `::warning` / `::notice` workflow annotation per finding.
+- `prompt` — **one prompt for your AI assistant** covering every finding (most severe first): file and line,
+  what is wrong, the code, how to fix it, and requirements ("change only what is needed, show the diff").
+  Paste it into Cursor / Claude / Copilot. It is built from the already redacted fields, so it never contains
+  a secret. The HTML report and the web interface have the same thing as a button on each finding
+  ("Copy prompt for my AI assistant") and one for all findings; the pull-request comment has it in a collapsed
+  block.
 
 ## The 0-100 score
 

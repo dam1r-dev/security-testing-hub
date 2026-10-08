@@ -30,6 +30,7 @@ export { computeScore, SecurityScore, ScoreColor } from "./output/score";
 export { toHtml } from "./output/html";
 export { toMarkdown, MARKDOWN_MARKER, MarkdownOptions } from "./output/markdown";
 export { toGithubAnnotations, annotationFor } from "./output/github";
+export { fixPromptFor, toFixPrompt, fenced, FixPromptOptions } from "./output/fix-prompt";
 export { filterSummary, FilterOptions, SEVERITY_RANK } from "./filter";
 export { changedFiles } from "./changed";
 export { parseFile, parseSource, languageForExtension } from "./parsers/ast-parser";
