@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // VULNERABLE: the console's "test mode" rule. Anyone can read and write EVERYTHING until the date.
+    match /{document=**} {
+      allow read, write: if request.time < timestamp.date(2099, 12, 31);
+    }
+
+    // VULNERABLE: any signed-in user (anonymous sign-ins too) can edit or delete anyone's profile.
+    match /users/{userId} {
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // VULNERABLE: private-looking data readable by anyone.
+    match /orders/{orderId} {
+      allow read: if true;
+    }
+
+    // Safe: owner only. Must NOT be flagged.
+    match /notes/{noteId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.ownerId;
+    }
+  }
+}

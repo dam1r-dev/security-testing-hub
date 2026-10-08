@@ -5,6 +5,18 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
 ## Unreleased
 
 ### Added
+- **Supabase and Firebase rules** (3 new rules, 20 in total): `supabase-rls` reads your SQL migrations as one
+  timeline and reports tables served by the API without Row Level Security, `USING (true)` and "signed in only"
+  policies, `user_metadata` in policies, views without `security_invoker`, open storage policies and
+  `SECURITY DEFINER` functions; `supabase-auth` flags `getSession()` trusted on the server and roles read from
+  `user_metadata`; `firebase-rules` checks `firestore.rules`, `storage.rules` and `database.rules.json`
+  (`if true`, test-mode rules, signed-in-only writes, open private paths). A Firebase service-account key or OAuth
+  client secret committed to git is reported by `hardcoded-secret`. See [docs/rules.md](docs/rules.md).
+- Project facts read from `package.json` are now cached per file *modification*, so a long-running
+  `security-hub ui` follows edits instead of using the first scan's answer forever.
+- `broken-access-control` recognises `supabase.auth.getUser()` / `getSession()` and Firebase `verifyIdToken` as
+  access checks; a `secret` property counts as a signing secret only in calls about sessions, tokens or auth.
+
 - **`hardcoded-secret` rule** (17th): provider token formats (AWS, GitHub, Stripe, OpenAI/Anthropic, Slack,
   SendGrid, npm, Telegram, PEM private keys, database URLs with a password, Supabase `service_role` keys),
   guessable `jwt.sign` / `session` secrets, credentials assigned to `password` / `apiKey` / `token` names,

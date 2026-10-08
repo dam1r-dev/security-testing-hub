@@ -65,6 +65,20 @@ const HOW_TO_FIX: Record<VulnerabilityType, string> = {
     "(server-side only; never behind a NEXT_PUBLIC_/VITE_/REACT_APP_ prefix), put the value in a gitignored .env file " +
     "and add a .env.example with empty values. If a .env file is tracked, run `git rm --cached .env` and add it to " +
     ".gitignore. Remind me that the old key must be revoked and replaced, because it stays in the git history.",
+  "supabase-rls":
+    "Enable Row Level Security on every table in the exposed schema (ALTER TABLE ... ENABLE ROW LEVEL SECURITY) and write " +
+    "policies that scope each row to its owner, e.g. USING ((select auth.uid()) = user_id) and WITH CHECK ((select auth.uid()) = " +
+    "user_id). Never use USING (true) for writes; use app_metadata, not user_metadata, for roles; create views WITH " +
+    "(security_invoker = true); pin search_path on SECURITY DEFINER functions. Put the change in a new migration file.",
+  "supabase-auth":
+    "On the server, call supabase.auth.getUser() (it re-validates the token with Supabase) instead of getSession(), and use the " +
+    "returned user. Decide roles and permissions from app_metadata or a roles table that only the server can write, never from " +
+    "user_metadata, which users can edit.",
+  "firebase-rules":
+    "Rewrite the rules so each document or file is tied to its owner: allow read, write: if request.auth != null && " +
+    "request.auth.uid == resource.data.ownerId (or the {userId} segment of the path). Never use `if true`, a test-mode date, or a " +
+    "bare `request.auth != null` for writes. For the Realtime Database use \"auth != null && auth.uid === $uid\". Deploy with " +
+    "`firebase deploy --only firestore:rules` (or storage / database) and test with the Rules Playground or the emulator.",
 };
 
 const REQUIREMENTS = [

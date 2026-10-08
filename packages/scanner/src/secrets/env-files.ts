@@ -47,7 +47,7 @@ function gitState(file: string, root: string): GitState {
   }
 }
 
-function envFilesUnder(root: string, skipDirs: Set<string>, isIgnored: (relative: string) => boolean): string[] {
+function filesUnder(root: string, skipDirs: Set<string>, isIgnored: (relative: string) => boolean, accept: (name: string) => boolean): string[] {
   const files: string[] = [];
   const stack = [root];
   while (stack.length > 0) {
@@ -63,7 +63,7 @@ function envFilesUnder(root: string, skipDirs: Set<string>, isIgnored: (relative
       if (isIgnored(path.relative(root, full).split(path.sep).join("/"))) continue;
       if (entry.isDirectory()) {
         if (!skipDirs.has(entry.name) && entry.name !== ".git") stack.push(full);
-      } else if (entry.isFile() && ENV_FILE.test(entry.name) && !TEMPLATE_ENV_FILE.test(entry.name)) {
+      } else if (entry.isFile() && accept(entry.name)) {
         files.push(full);
       }
     }
@@ -91,7 +91,7 @@ export function scanEnvFiles(
   isIgnored: (relative: string) => boolean,
 ): ScanResult[] {
   const results: ScanResult[] = [];
-  for (const file of envFilesUnder(root, skipDirs, isIgnored)) {
+  for (const file of filesUnder(root, skipDirs, isIgnored, (name) => ENV_FILE.test(name) && !TEMPLATE_ENV_FILE.test(name))) {
     let text: string;
     try {
       text = fs.readFileSync(file, "utf8");
@@ -137,6 +137,65 @@ export function scanEnvFiles(
     const result: ScanResult = { file, findings: kept };
     if (suppressed > 0) result.suppressed = suppressed;
     results.push(result);
+  }
+  results.push(...scanCredentialFiles(root, skipDirs, isIgnored));
+  return results;
+}
+
+// Names that suggest a downloaded cloud credential: service-account keys, Firebase Admin SDK keys, OAuth clients.
+const CREDENTIAL_JSON_NAME = /service[-_]?account|adminsdk|firebase.*(key|admin|credential)|gcloud|gcp|credentials?|client[-_]?secret|private[-_]?key/i;
+const MAX_CREDENTIAL_JSON_BYTES = 64 * 1024;
+
+/**
+ * A Google Cloud / Firebase service-account key (`"type": "service_account"` + `"private_key"`) gives full admin
+ * access to the project (the Firebase Admin SDK bypasses every security rule). It is downloaded as a JSON file, and
+ * committing it is how most Firebase projects get taken over.
+ */
+function scanCredentialFiles(root: string, skipDirs: Set<string>, isIgnored: (relative: string) => boolean): ScanResult[] {
+  const results: ScanResult[] = [];
+  for (const file of filesUnder(root, skipDirs, isIgnored, (name) => /\.json$/i.test(name) && CREDENTIAL_JSON_NAME.test(name))) {
+    let text: string;
+    try {
+      if (fs.statSync(file).size > MAX_CREDENTIAL_JSON_BYTES) continue;
+      text = fs.readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    let json: Record<string, unknown>;
+    try {
+      json = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const web = (json.web ?? json.installed) as Record<string, unknown> | undefined;
+    const isServiceAccount = json.type === "service_account" && typeof json.private_key === "string" && json.private_key.includes("PRIVATE KEY");
+    const isOAuthClient = typeof web?.client_secret === "string" && web.client_secret.length >= 8;
+    if (!isServiceAccount && !isOAuthClient) continue;
+
+    const state = gitState(file, root);
+    if (state === "ignored") continue;
+    const tracked = state === "tracked";
+    const display = path.basename(file);
+    const who = isServiceAccount ? String(json.client_email ?? "a service account") : String(web?.client_id ?? "an OAuth client");
+    const secretKey = isServiceAccount ? "private_key" : "client_secret";
+    const line = Math.max(1, text.split(/\r?\n/).findIndex((l) => l.includes(`"${secretKey}"`)) + 1);
+    const value = String(isServiceAccount ? json.private_key : web?.client_secret);
+    const what = isServiceAccount
+      ? "a Google Cloud / Firebase service-account key. The Firebase Admin SDK it unlocks bypasses every Firestore, Storage and Realtime Database rule, so whoever has this file owns the whole project"
+      : "a Google OAuth client secret";
+    const fix = tracked
+      ? `Revoke the key now (Google Cloud console -> IAM -> Service accounts -> Keys, or rotate the client secret), run \`git rm --cached ${display}\`, add it to .gitignore, and load credentials from an environment variable or a secret manager. Deleting the file is not enough: the key stays in the git history.`
+      : `Add ${display} to .gitignore now and keep the key in an environment variable or a secret manager; if it was ever committed or shared, revoke it.`;
+    const finding: Finding = {
+      ruleId: "hardcoded-secret",
+      severity: tracked ? "critical" : "high",
+      confidence: "high",
+      message: `${display} is ${what} (${who}), ${tracked ? "and it is committed to git" : "and git does not ignore it"}. ${fix}`,
+      location: { file, startLine: line, startColumn: 1, endLine: line, endColumn: 2 },
+      sourceSnippet: redact(value),
+      sinkSnippet: `"${secretKey}": "<redacted>"`,
+    };
+    results.push({ file, findings: [finding] });
   }
   return results;
 }

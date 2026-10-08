@@ -162,6 +162,9 @@ function analyzeFunctionBody(funcNode, sourcePatterns, sinkPatterns) {
   комментарий с оценкой, job summary, SARIF в Code Scanning, `fail-on`; отчёт только по изменённым файлам при
   полном анализе проекта (`--changed-since`); форматы `markdown` и `github` в CLI. Репозиторий проверяет сам себя
   (`.github/workflows/security.yml`).
+- ✅ **Supabase и Firebase** — правила `supabase-rls` (SQL-миграции как единая хронология), `supabase-auth`
+  (`getSession()`/`user_metadata` на сервере) и `firebase-rules` (Firestore/Storage/Realtime Database); ключ service
+  account в репозитории ловит `hardcoded-secret`. Примеры: `examples/vulnerable-supabase-app`, `vulnerable-firebase-app`.
 - 🟡 **Phase 7 (Documentation)** — README (EN+RU), `docs/rules.md`, `docs/attack-playbook.md` (EN/RU/KK) есть; полные гайды — в процессе
 - ✅ **Phase 8 (Testing, частично)** — coverage измерен и превышает таргет плана (70%+):
   scanner 88.5% statements / 92.2% lines, CLI 97.67% (после добавления тестов на

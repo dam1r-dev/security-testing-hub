@@ -63,6 +63,22 @@ npx security-hub ui ./my-app   # то же, сразу с нужной папк�
 компьютере: сервер слушает только `127.0.0.1`, каждый запрос защищён токеном, код
 никуда не отправляется.
 
+## Supabase и Firebase
+
+Для проектов на Supabase и Firebase главная защита — не код, а **правила доступа**, а публичный ключ приложения виден
+каждому в браузере. Поэтому сканер читает SQL-миграции Supabase (`supabase/migrations/*.sql`) и файлы правил Firebase
+(`firestore.rules`, `storage.rules`, `database.rules.json`):
+
+- **Supabase:** таблица без Row Level Security, политика `USING (true)`, «вошёл в систему» вместо проверки владельца,
+  роль из `user_metadata` (пользователь меняет её сам), вьюха без `security_invoker`, `SECURITY DEFINER` без
+  `search_path`, открытые политики хранилища; в коде — `getSession()` на сервере без проверки и роли из `user_metadata`.
+- **Firebase:** `allow read, write: if true`, «тестовый режим» консоли (`request.time < timestamp.date(...)`),
+  `request.auth != null` как единственная проверка записи, открытые приватные пути в Realtime Database.
+  Ключ service account (`*-firebase-adminsdk-*.json`) в репозитории — критичная находка.
+
+Читает именно миграции, а не живую базу: что исправлено только в панели Supabase и не попало в миграцию, будет
+показано как проблема. Подробности — в `docs/rules.md`.
+
 ## GitHub Action (проверка каждого pull request)
 
 ```yaml
