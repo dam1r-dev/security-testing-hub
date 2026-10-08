@@ -2,6 +2,16 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
+## Unreleased
+
+### Added
+- **`hardcoded-secret` rule** (17th): provider token formats (AWS, GitHub, Stripe, OpenAI/Anthropic, Slack,
+  SendGrid, npm, Telegram, PEM private keys, database URLs with a password, Supabase `service_role` keys),
+  guessable `jwt.sign` / `session` secrets, credentials assigned to `password` / `apiKey` / `token` names,
+  secrets behind browser-exposed env prefixes (`NEXT_PUBLIC_…_SECRET`), and `.env` files that are committed to
+  git or not gitignored. Secrets are always redacted in every output. See
+  [docs/rules.md](docs/rules.md#hardcoded-secret-high--critical--pattern-match-no-sink).
+
 ## 0.4.0
 
 ### Added

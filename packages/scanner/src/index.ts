@@ -18,6 +18,8 @@ import { OpenRedirectAnalyzer } from "./analyzers/open-redirect";
 import { NoSqlInjectionAnalyzer } from "./analyzers/nosql-injection";
 import { InsecureDeserializationAnalyzer } from "./analyzers/insecure-deserialization";
 import { XxeAnalyzer } from "./analyzers/xxe";
+import { HardcodedSecretAnalyzer } from "./analyzers/hardcoded-secret";
+import { scanEnvFiles } from "./secrets/env-files";
 import { applyInlineSuppressions, compileIgnorePatterns, parseIgnoreFile } from "./suppress";
 import { ProjectContext } from "./taint/project";
 import { ScanResult, ScanSummary } from "./types";
@@ -85,6 +87,7 @@ export function defaultAnalyzers(): Analyzer[] {
     new NoSqlInjectionAnalyzer(),
     new InsecureDeserializationAnalyzer(),
     new XxeAnalyzer(),
+    new HardcodedSecretAnalyzer(),
   ];
 }
 
@@ -174,12 +177,9 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
   const analyzers = options.analyzers ?? defaultAnalyzers();
   const start = Date.now();
   const stat = fs.statSync(targetPath);
-  const files = stat.isDirectory()
-    ? walkDirectory(targetPath, {
-        includeTests: options.includeTests ?? false,
-        isIgnored: compileIgnorePatterns([...readIgnoreFile(targetPath), ...(options.ignore ?? [])]),
-      })
-    : [targetPath];
+  const includeTests = options.includeTests ?? false;
+  const isIgnored = compileIgnorePatterns([...readIgnoreFile(targetPath), ...(options.ignore ?? [])]);
+  const files = stat.isDirectory() ? walkDirectory(targetPath, { includeTests, isIgnored }) : [targetPath];
   // Shared by every file of this scan so a call can be followed into another file.
   const context = new ProjectContext(stat.isDirectory() ? targetPath : path.dirname(targetPath));
 
@@ -202,8 +202,14 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
     return scanSource(sourceCode, file, analyzers, context);
   });
 
+  // `.env` files are not source code, but a committed one is the most common secret leak.
+  const envResults = stat.isDirectory()
+    ? scanEnvFiles(targetPath, new Set([...DEFAULT_IGNORED_DIRS, ...(includeTests ? [] : TEST_DIRS)]), isIgnored)
+    : [];
+  results.push(...envResults);
+
   return {
-    filesScanned: files.length,
+    filesScanned: files.length + envResults.length,
     findingsCount: results.reduce((sum, r) => sum + r.findings.length, 0),
     results,
     durationMs: Date.now() - start,

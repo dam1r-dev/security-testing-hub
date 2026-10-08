@@ -26,10 +26,11 @@ export const RULE_IDS: readonly VulnerabilityType[] = [
   "nosql-injection",
   "insecure-deserialization",
   "xxe",
+  "hardcoded-secret",
 ];
 
 // `// security-hub-ignore`, `/* security-hub-ignore */`, `// security-hub-ignore sql-injection, xss -- reason`
-const DIRECTIVE = /(?:\/\/|\/\*|\*)\s*security-hub-ignore\b([^\n]*)/;
+const DIRECTIVE = /(?:\/\/|\/\*|\*|#)\s*security-hub-ignore\b([^\n]*)/;
 
 /** Rule ids named by a directive; empty array = the directive covers every rule. */
 function directiveRules(rest: string): VulnerabilityType[] {
@@ -42,7 +43,7 @@ function suppressedBy(line: string | undefined, ruleId: VulnerabilityType, mustB
   if (line === undefined) return false;
   // The line above only counts when it is just a comment — otherwise a trailing
   // `// security-hub-ignore` on unrelated code would silently cover the next line too.
-  if (mustBeCommentLine && !/^\s*(\/\/|\/\*|\*)/.test(line)) return false;
+  if (mustBeCommentLine && !/^\s*(\/\/|\/\*|\*|#)/.test(line)) return false;
   const match = DIRECTIVE.exec(line);
   if (!match) return false;
   const rules = directiveRules(match[1] ?? "");

@@ -68,6 +68,9 @@ Test code was the biggest false-positive source on real projects — see
 [validation.md](validation.md). Pass a single test file path explicitly to
 scan it anyway.
 
+Besides source files, `.env*` files (not templates like `.env.example`) are checked for committed secrets
+— see [`hardcoded-secret`](#hardcoded-secret-high--critical--pattern-match-no-sink).
+
 ## Sources (shared by all five data-flow rules)
 
 Defined once in `src/analyzers/sources.ts` so every rule stays in sync:
@@ -291,6 +294,35 @@ Two independent checks:
   `noent: true`** in the options, fed with request data. Entities stay off by
   default, so the same call without `noent` isn't flagged.
 - Found in dvna (`parseXmlString(req.files.products.data..., {noent:true})`).
+
+## `hardcoded-secret` (high / critical) — pattern match, no sink
+
+Secrets typed into the source (or a committed `.env`) are the most common way a small project gets
+breached: they sit in every clone and every old commit. Four kinds of evidence, strongest first:
+
+| Evidence | Examples | Confidence |
+|---|---|---|
+| **Provider token formats** (found anywhere, comments included) | AWS access key IDs, GitHub tokens, Stripe live/test keys, OpenAI/Anthropic keys, Slack tokens and webhooks, SendGrid, npm and Telegram tokens, PEM private keys, database URLs with a password, **Supabase `service_role` keys** (decoded from the JWT: the public `anon` key is not flagged) | high |
+| **Guessable signing secrets** | `jwt.sign(x, "secret")`, `jwt.verify(t, "...")`, `session({ secret: "keyboard cat" })`, `const JWT_SECRET = "your-secret-key"` (flagged even when it looks like a placeholder: a forgotten placeholder is the usual way this ships) | high |
+| **Credentials by name** | a string that looks random (length, mixed character classes, entropy) assigned to `password`, `apiKey`, `accessToken`, `clientSecret`, ... | medium |
+| **Browser-exposed secrets** | `process.env.NEXT_PUBLIC_..._SERVICE_ROLE_KEY` / `..._SECRET` / `..._PASSWORD` / `..._DATABASE_URL` (also `VITE_`, `REACT_APP_`, `EXPO_PUBLIC_`, ...): the build copies these into the JavaScript every visitor downloads | high |
+
+**`.env` files** (`.env`, `.env.local`, `.env.production`, ...; templates such as `.env.example` are skipped): a
+file holding real-looking values is reported as **critical when it is committed to git**, **high when it is
+not ignored** (one `git add .` away), and not at all when `.gitignore` covers it — the correct setup. Without
+git it falls back to reading `.gitignore`.
+
+**A secret is never printed in full.** Messages, snippets, JSON, HTML, SARIF, annotations and the pull
+request comment show only a recognisable head (`sk-a…[40 chars redacted]`), because a report posted on a
+public pull request would otherwise publish the leak. Every message tells you to treat the value as already
+leaked and rotate it — deleting the line does not remove it from the git history.
+
+What it deliberately does not flag: placeholders (`your-api-key`, `changeme`, `${VAR}`, documentation
+examples like `AKIAIOSFODNN7EXAMPLE`), local development databases (`localhost`), URLs and paths, lowercase
+identifier-style values (`same-origin`), public-by-design keys (Supabase `anon`, Stripe publishable,
+`NEXT_PUBLIC_*_PUBLISHABLE_KEY`), Google/Firebase `AIza` web keys, and test folders. It cannot see a secret that
+is built at run time, and entropy-based detection will miss low-entropy passwords outside the signing-secret and
+known-format cases.
 
 ## Not covered by static analysis (see the manual testing guide instead)
 

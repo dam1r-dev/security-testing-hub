@@ -22,6 +22,7 @@ is intentionally vulnerable.
 | `GET /reports?owner=` | SQL Injection **across files**: `routes/reports.js` passes `req.query.owner` to `services/report-service.js`, which builds the query |
 | `GET /reports/search?q=` | Same, through two functions (`search` -> `runQuery`) |
 | `GET /reports/mine?owner=` | Safe: the service uses a bound parameter — should **not** be flagged |
+| `config.js` | Hard-coded secrets: a JWT signing secret, an admin password and a database URL with a password in the source |
 | `upload.js` (`multer` config, no route) | Insecure File Upload (filter checks `file.mimetype` only) |
 
 Run the scanner against it from the repo root:
