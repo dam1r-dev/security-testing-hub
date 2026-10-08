@@ -20,6 +20,10 @@ function parseSeverity(value: string): Severity {
   return normalized;
 }
 
+function collect(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
 export function run(argv: string[]): void {
   const program = new Command();
 
@@ -35,6 +39,8 @@ export function run(argv: string[]): void {
     .option("-o, --out <file>", "write output to a file instead of stdout (html always writes to a file)")
     .option("-s, --severity <level>", "only report findings at or above this severity (low|medium|high|critical)")
     .option("--fail-on <level>", "exit with code 1 if any finding is at or above this severity (for CI)")
+    .option("--ignore <pattern>", "skip files/folders matching this pattern (repeatable; also reads .security-hub-ignore)", collect, [])
+    .option("--include-tests", "also scan test folders and *.test.* / *.spec.* files (skipped by default)")
     .action((targetPath: string, opts) => {
       const format = opts.format;
       if (!["text", "json", "sarif", "html"].includes(format)) {
@@ -47,6 +53,8 @@ export function run(argv: string[]): void {
         out: opts.out,
         severity: opts.severity ? parseSeverity(opts.severity) : undefined,
         failOn: opts.failOn ? parseSeverity(opts.failOn) : undefined,
+        ignore: opts.ignore.length > 0 ? opts.ignore : undefined,
+        includeTests: opts.includeTests,
       });
       process.exitCode = exitCode;
     });

@@ -167,6 +167,7 @@ function scan(rawPath: unknown) {
       filesScanned: summary.filesScanned,
       findingsCount: summary.findingsCount,
       durationMs: summary.durationMs,
+      suppressedCount: summary.suppressedCount ?? 0,
     },
     score: computeScore(summary),
     html: toHtml(summary, target),
