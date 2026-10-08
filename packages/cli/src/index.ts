@@ -35,7 +35,7 @@ export function run(argv: string[]): void {
   program
     .command("scan <path>")
     .description("Scan a file or directory for vulnerabilities")
-    .option("-f, --format <format>", "output format: text | json | sarif | html | markdown | github", "text")
+    .option("-f, --format <format>", "output format: text | json | sarif | html | markdown | github | prompt", "text")
     .option("-o, --out <file>", "write output to a file instead of stdout (html always writes to a file)")
     .option("-s, --severity <level>", "only report findings at or above this severity (low|medium|high|critical)")
     .option("--fail-on <level>", "exit with code 1 if any finding is at or above this severity (for CI)")
@@ -44,8 +44,8 @@ export function run(argv: string[]): void {
     .option("--include-tests", "also scan test folders and *.test.* / *.spec.* files (skipped by default)")
     .action((targetPath: string, opts) => {
       const format = opts.format;
-      if (!["text", "json", "sarif", "html", "markdown", "github"].includes(format)) {
-        console.error(chalk.red(`Invalid format "${format}". Expected: text | json | sarif | html | markdown | github`));
+      if (!["text", "json", "sarif", "html", "markdown", "github", "prompt"].includes(format)) {
+        console.error(chalk.red(`Invalid format "${format}". Expected: text | json | sarif | html | markdown | github | prompt`));
         process.exitCode = 2;
         return;
       }

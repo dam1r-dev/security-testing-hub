@@ -12,6 +12,11 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
   git or not gitignored. Secrets are always redacted in every output. See
   [docs/rules.md](docs/rules.md#hardcoded-secret-high--critical--pattern-match-no-sink).
 
+- **"Fix with AI" prompts.** Every finding comes with a ready-to-paste prompt for Cursor / Claude / Copilot
+  (file, line, problem, code, how to fix, requirements): a copy button per finding and one for all in the web
+  interface and HTML report, a collapsed block in the pull request comment, and `--format prompt` on the command
+  line. Prompts never contain secrets.
+
 ## 0.4.0
 
 ### Added

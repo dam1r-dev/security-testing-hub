@@ -93,6 +93,19 @@ describe("security-hub ui (local web interface)", () => {
     expect(data.html).toMatch(/^<!DOCTYPE html>/);
   });
 
+  it("returns a ready-to-paste AI prompt for every finding and one for all", async () => {
+    const reply = await request(ui, "POST", "/api/scan", { headers: auth(), body: { path: FIXTURE_APP } });
+    const data = JSON.parse(reply.body);
+    const findings = data.results.flatMap((r: { findings: Array<{ fixPrompt: string; ruleId: string }> }) => r.findings);
+    expect(findings.length).toBeGreaterThan(10);
+    for (const f of findings) {
+      expect(f.fixPrompt).toContain(`Rule: ${f.ruleId}`);
+      expect(f.fixPrompt).toContain("How to fix:");
+    }
+    expect(data.allPrompt).toContain("## Issue 1");
+    expect(data.allPrompt).toContain("Requirements for every fix:");
+  });
+
   it("accepts a path pasted with quotes (Windows 'Copy as path')", async () => {
     const reply = await request(ui, "POST", "/api/scan", { headers: auth(), body: { path: `"${FIXTURE_APP}"` } });
     expect(reply.status).toBe(200);

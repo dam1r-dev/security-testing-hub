@@ -5,7 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { spawn } from "child_process";
 import chalk from "chalk";
-import { computeScore, scanPath, toHtml } from "security-hub-scanner";
+import { computeScore, fixPromptFor, scanPath, toFixPrompt, toHtml } from "security-hub-scanner";
 import { renderUiPage } from "./ui-page";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
@@ -162,7 +162,10 @@ function scan(rawPath: unknown) {
   return {
     target,
     // Files with nothing to report are dropped: a large project has thousands of them.
-    results: summary.results.filter((r) => r.findings.length > 0 || r.parseError),
+    results: summary.results
+      .filter((r) => r.findings.length > 0 || r.parseError)
+      .map((r) => ({ ...r, findings: r.findings.map((f) => ({ ...f, fixPrompt: fixPromptFor(f, { relativeTo: target }) })) })),
+    allPrompt: toFixPrompt(summary, { relativeTo: target }),
     summary: {
       filesScanned: summary.filesScanned,
       findingsCount: summary.findingsCount,

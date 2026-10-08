@@ -1,5 +1,6 @@
 import * as path from "path";
 import { Finding, ScanSummary, Severity } from "../types";
+import { fenced, toFixPrompt } from "./fix-prompt";
 import { computeScore } from "./score";
 
 /** Hidden marker so a bot can find and update its own comment instead of posting a new one each push. */
@@ -14,6 +15,8 @@ export interface MarkdownOptions {
   maxRows?: number;
   /** Shown above the table, e.g. "Only files changed in this pull request are listed." */
   scopeNote?: string;
+  /** Add a collapsed "prompt for your AI assistant" block (default true). */
+  fixPrompt?: boolean;
 }
 
 const SEVERITY_ICON: Record<Severity, string> = { critical: "🟥", high: "🟧", medium: "🟨", low: "⬜" };
@@ -79,6 +82,19 @@ export function toMarkdown(summary: ScanSummary, options: MarkdownOptions = {}):
     }
     if (ordered.length > maxRows) lines.push("", `…and ${ordered.length - maxRows} more.`);
     lines.push("");
+
+    if (options.fixPrompt !== false) {
+      // The prompt sits in a code fence: nothing inside it is rendered as markdown/HTML or can ping anyone.
+      const prompt = toFixPrompt(summary, { relativeTo: options.relativeTo, maxFindings: 10 });
+      lines.push(
+        "<details><summary>🤖 Fix with AI: copy this prompt into Cursor / Claude / Copilot</summary>",
+        "",
+        fenced(prompt),
+        "",
+        "</details>",
+        "",
+      );
+    }
   }
 
   lines.push(

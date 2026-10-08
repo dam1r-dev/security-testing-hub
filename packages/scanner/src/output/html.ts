@@ -1,4 +1,5 @@
 import { Finding, ScanSummary, Severity } from "../types";
+import { fixPromptFor, toFixPrompt } from "./fix-prompt";
 import { computeScore, ScoreColor } from "./score";
 
 const COLOR_HEX: Record<ScoreColor, { main: string; bg: string; ring: string }> = {
@@ -39,8 +40,9 @@ function scoreRingSvg(value: number, color: ScoreColor): string {
     </svg>`;
 }
 
-function findingCard(finding: Finding): string {
+function findingCard(finding: Finding, relativeTo?: string): string {
   const loc = finding.location;
+  const prompt = fixPromptFor(finding, { relativeTo });
   return `
     <article class="finding" data-severity="${finding.severity}">
       <div class="finding-head">
@@ -51,6 +53,7 @@ function findingCard(finding: Finding): string {
       <p class="message">${escapeHtml(finding.message)}</p>
       <div class="location">${escapeHtml(loc.file)}:${loc.startLine}:${loc.startColumn}</div>
       <pre class="snippet"><code>${escapeHtml(finding.sinkSnippet)}</code></pre>
+      <button class="copy" type="button" data-prompt="${escapeHtml(prompt)}">Copy prompt for my AI assistant</button>
     </article>`;
 }
 
@@ -63,7 +66,7 @@ export function toHtml(summary: ScanSummary, targetPath?: string): string {
 
   const findingsHtml =
     allFindings.length > 0
-      ? allFindings.map(findingCard).join("\n")
+      ? allFindings.map((f) => findingCard(f, targetPath)).join("\n")
       : `<p class="empty-state">No findings — nice work. Remember this is a heuristic scanner (see the README's false-negative caveats), not a guarantee.</p>`;
 
   const generatedAt = new Date().toISOString();
@@ -106,6 +109,9 @@ export function toHtml(summary: ScanSummary, targetPath?: string): string {
     font-size: 13px; cursor: pointer; color: #334155;
   }
   .filters button.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+  .filters .copy-all { margin-left: auto; border-color: #0f172a; }
+  button.copy { margin-top: 10px; border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; color: #334155; }
+  button.copy:hover { background: #e2e8f0; }
   .finding {
     background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
     padding: 16px 18px; margin-bottom: 12px;
@@ -162,6 +168,7 @@ export function toHtml(summary: ScanSummary, targetPath?: string): string {
     <button data-filter="high">High (${score.bySeverity.high})</button>
     <button data-filter="medium">Medium (${score.bySeverity.medium})</button>
     <button data-filter="low">Low (${score.bySeverity.low})</button>
+    ${allFindings.length > 0 ? `<button type="button" class="copy-all" data-prompt="${escapeHtml(toFixPrompt(summary, { relativeTo: targetPath }))}">Copy one prompt for all findings</button>` : ""}
   </div>
 
   <div id="findings">
@@ -175,7 +182,23 @@ export function toHtml(summary: ScanSummary, targetPath?: string): string {
 </div>
 <script>
   (function () {
-    var buttons = document.querySelectorAll('#filters button');
+    function copyText(text, button) {
+      var done = function () { var old = button.textContent; button.textContent = 'Copied!'; setTimeout(function () { button.textContent = old; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallback(text, done); });
+      } else { fallback(text, done); }
+    }
+    function fallback(text, done) {
+      var area = document.createElement('textarea');
+      area.value = text; area.style.position = 'fixed'; area.style.opacity = '0';
+      document.body.appendChild(area); area.select();
+      try { document.execCommand('copy'); done(); } catch (e) { /* nothing more to try */ }
+      document.body.removeChild(area);
+    }
+    document.querySelectorAll('button[data-prompt]').forEach(function (b) {
+      b.addEventListener('click', function () { copyText(b.getAttribute('data-prompt'), b); });
+    });
+    var buttons = document.querySelectorAll('#filters button[data-filter]');
     var cards = document.querySelectorAll('.finding');
     buttons.forEach(function (btn) {
       btn.addEventListener('click', function () {

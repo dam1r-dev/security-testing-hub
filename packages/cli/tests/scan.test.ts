@@ -91,6 +91,18 @@ describe("runScan against the vulnerable-express-app fixture", () => {
     }
   });
 
+  it("prints a prompt for an AI assistant with --format prompt", () => {
+    const writeSpy = jest.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      runScan(FIXTURE_APP, { format: "prompt" });
+      const printed = writeSpy.mock.calls.map((c) => c[0]).join("");
+      expect(printed).toContain("Fix these");
+      expect(printed).toContain("How to fix:");
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
   it("explains itself and exits 2 when --changed-since is used outside a git repository", () => {
     const plain = fs.mkdtempSync(path.join(os.tmpdir(), "security-hub-nogit-"));
     fs.writeFileSync(path.join(plain, "a.js"), "const a = 1;\n");
