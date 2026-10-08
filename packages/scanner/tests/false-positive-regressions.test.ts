@@ -1,3 +1,4 @@
+import { cookieProjectFile } from "./helpers/cookie-project";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -18,7 +19,7 @@ describe("CSRF: noise reduction", () => {
       router.post("/b", handlerB);
       router.put("/c", handlerC);
     `;
-    const result = scanSource(source, "routes.js", analyzers);
+    const result = scanSource(source, cookieProjectFile("routes.js"), analyzers);
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]?.message).toContain("3 state-changing routes");
   });
@@ -53,8 +54,14 @@ describe("CSRF: noise reduction", () => {
       expect(scanPath(dir, { analyzers }).findingsCount).toBe(1);
     });
 
-    it("still flags it when there's no auth library information at all", () => {
+    it("skips CSRF when the project has no authentication library at all (nothing to forge)", () => {
       writeProject({ express: "4" });
+      expect(scanPath(dir, { analyzers }).findingsCount).toBe(0);
+    });
+
+    it("still flags it when there is no package.json to learn from", () => {
+      writeProject({ express: "4" });
+      fs.rmSync(path.join(dir, "package.json"));
       expect(scanPath(dir, { analyzers }).findingsCount).toBe(1);
     });
   });
@@ -65,12 +72,12 @@ describe("IDOR: id-param naming", () => {
 
   it.each([":provider", ":video", ":guide", ":identifier"])("does not treat %s as an id param", (param) => {
     const source = `app.get("/thing/${param}", handler);`;
-    expect(scanSource(source, "app.js", analyzers).findings).toHaveLength(0);
+    expect(scanSource(source, cookieProjectFile("app.js"), analyzers).findings).toHaveLength(0);
   });
 
   it.each([":id", ":userId", ":user_id", ":accountID"])("still treats %s as an id param", (param) => {
     const source = `app.get("/thing/${param}", handler);`;
-    expect(scanSource(source, "app.js", analyzers).findings).toHaveLength(1);
+    expect(scanSource(source, cookieProjectFile("app.js"), analyzers).findings).toHaveLength(1);
   });
 });
 

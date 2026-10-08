@@ -3,7 +3,7 @@ import { findNodes, snippet, toLocation, SyntaxNode } from "../parsers/utils";
 import { Finding } from "../types";
 import { Analyzer } from "./base-analyzer";
 import { findNextHandlers, isNextRouteFile, STATE_CHANGING_METHOD_NAMES } from "./nextjs-routes";
-import { isBearerOnlyProject } from "./project-info";
+import { authKind, isBearerOnlyProject } from "./project-info";
 
 const STATE_CHANGING_METHODS = new Set(["post", "put", "delete", "patch"]);
 const ROUTER_OBJECT_PATTERN = /^(app|router)$/i;
@@ -14,7 +14,9 @@ const CSRF_PROTECTION_HINT = /csrf/i;
 // Webhooks (Stripe, GitHub, ...) are authenticated by a signature over the
 // body, not by a browser cookie, so a forged cross-site request can't pass —
 // CSRF doesn't apply, and flagging them is pure noise.
-const WEBHOOK_HINT = /webhook|stripe-signature|x-hub-signature|x-slack-signature|svix-signature/i;
+const WEBHOOK_HINT = /webhook|stripe-signature|x-hub-signature|x-slack-signature|svix-signature|revalidate/i;
+// A route that is switched off by a "deny everything" middleware cannot be forged either.
+const DENY_GUARD = /\b(deny\w*|forbid\w*|reject\w*|disable\w*|notAllowed|blockAll)\s*\(/i;
 
 function isStateChangingRouteRegistration(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;
@@ -49,6 +51,12 @@ export class CsrfAnalyzer implements Analyzer {
     // Pure bearer-token API (JWT in a header, no cookie/session library): the
     // browser never attaches the credential on its own, so CSRF can't happen.
     if (isBearerOnlyProject(filePath)) return [];
+    // CSRF needs a credential the browser attaches by itself. With no auth library at all, or only
+    // frameworks whose session cookie is SameSite=Lax by default (Auth.js/NextAuth, Clerk, Supabase SSR,
+    // Better Auth, ...), a cross-site POST arrives without it: nothing to forge.
+    const kind = authKind(filePath);
+    if (kind === "lax-cookies") return [];
+    if (kind === "none" && !/cookie|session/i.test(parsed.sourceCode)) return [];
 
     const nodes = isNextRouteFile(filePath)
       ? findNextHandlers(parsed.tree.rootNode)
@@ -56,7 +64,7 @@ export class CsrfAnalyzer implements Analyzer {
           .map((h) => h.node)
       : findNodes(parsed.tree.rootNode, isStateChangingRouteRegistration);
 
-    const exposed = nodes.filter((n) => !WEBHOOK_HINT.test(n.text) && !WEBHOOK_HINT.test(filePath));
+    const exposed = nodes.filter((n) => !WEBHOOK_HINT.test(n.text) && !WEBHOOK_HINT.test(filePath) && !DENY_GUARD.test(n.text));
     const first = exposed[0];
     if (!first) return [];
 

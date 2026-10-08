@@ -1,3 +1,4 @@
+import { cookieProjectFile } from "./helpers/cookie-project";
 import { scanSource } from "../src/index";
 import { CsrfAnalyzer } from "../src/analyzers/csrf";
 
@@ -11,7 +12,7 @@ describe("CsrfAnalyzer", () => {
         res.send("ok");
       })
     `;
-    const result = scanSource(source, "app.js", analyzers);
+    const result = scanSource(source, cookieProjectFile("app.js"), analyzers);
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]?.ruleId).toBe("csrf");
   });
@@ -22,7 +23,7 @@ describe("CsrfAnalyzer", () => {
         res.send(getBalance());
       })
     `;
-    const result = scanSource(source, "app.js", analyzers);
+    const result = scanSource(source, cookieProjectFile("app.js"), analyzers);
     expect(result.findings).toHaveLength(0);
   });
 
@@ -35,7 +36,7 @@ describe("CsrfAnalyzer", () => {
         res.send("ok");
       })
     `;
-    const result = scanSource(source, "app.js", analyzers);
+    const result = scanSource(source, cookieProjectFile("app.js"), analyzers);
     expect(result.findings).toHaveLength(0);
   });
 });

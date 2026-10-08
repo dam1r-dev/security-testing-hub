@@ -40,13 +40,26 @@ export function entropy(value: string): number {
   return bits;
 }
 
+/** bcrypt / argon2 / scrypt / pbkdf2 / crypt() hashes: what a seed file or a user table is SUPPOSED to hold. */
+export function isPasswordHash(value: string): boolean {
+  return /^\$(?:2[abxy]|argon2(?:id|i|d)|scrypt|pbkdf2[-\w]*|[156y7])\$/.test(value) || /^pbkdf2_sha\d+\$/.test(value);
+}
+
 /** A value that plausibly IS a credential (as opposed to a label, a sentence, a path or a placeholder). */
-export function looksLikeSecret(value: string): boolean {
+export function looksLikeSecret(value: string, normalizedName?: string): boolean {
   if (value.length < 8 || value.length > 512) return false;
   if (/\s/.test(value) || isPlaceholder(value)) return false;
   if (/^(https?:\/\/[^@\s]*$|\/|\.\.?\/|[a-z]:\\)/i.test(value)) return false; // URL without credentials / path
   // `same-origin`, `user_password_input`: lowercase words joined by - _ . are identifiers / option values, not secrets.
   if (/^[a-z]+(?:[-_.][a-z]+)+$/.test(value)) return false;
+  // camelCase / PascalCase words (`incorrectPassword`, `resetPassword`, `MissingOldPassword`) are error codes and
+  // enum values, and a password HASH (bcrypt, argon2, ...) is by design not a secret.
+  // An error code names the thing it is about (`incorrectPassword`, `resetPassword`, `MissingOldPassword`),
+  // while a passphrase like `IamUsedForTesting` does not: only the former is skipped.
+  const keyword = normalizedName?.split("_").pop();
+  const isWordsInCamelCase = /^[a-z]+(?:[A-Z][a-z0-9]*)+$/.test(value) || /^(?:[A-Z][a-z0-9]+){2,}$/.test(value);
+  if (isWordsInCamelCase && keyword && value.toLowerCase().includes(keyword)) return false;
+  if (isPasswordHash(value)) return false;
   const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((re) => re.test(value)).length;
   return classes >= 2 && entropy(value) >= 3.0;
 }

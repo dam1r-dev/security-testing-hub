@@ -125,10 +125,14 @@ export function findCrossFileFlows(
   spec: SinkSpec,
   sources: SyntaxNode[],
   info: FileInfo,
+  origins: Array<{ node: SyntaxNode; names: string[] }> = [],
 ): CrossFileFlow[] {
-  if (sources.length === 0) return [];
+  if (sources.length === 0 && origins.length === 0) return [];
   const assignments = info.assignmentsIn(scope);
-  const tracked = sources.map((source) => ({ source, names: getAliases(source, scope, assignments) }));
+  const tracked = [
+    ...sources.map((source) => ({ source, names: getAliases(source, scope, assignments) })),
+    ...origins.map((origin) => ({ source: origin.node, names: aliasesOfNames(origin.names, scope) })),
+  ];
 
   const flows: CrossFileFlow[] = [];
   for (const call of info.callsIn(scope)) {

@@ -2,6 +2,7 @@ import { ParsedFile } from "../parsers/ast-parser";
 import { SyntaxNode, findFunctionBodies, findNodes, snippet, toLocation } from "../parsers/utils";
 import { CrossFileFlow, findCrossFileFlows, firstArgument } from "../taint/interprocedural";
 import { ProjectContext } from "../taint/project";
+import { requestParamOrigins } from "../taint/request-params";
 import { analyzeFunctionBody } from "../taint/simple-taint";
 import { Finding, Severity, VulnerabilityType } from "../types";
 
@@ -28,6 +29,11 @@ export interface AnalyzerConfig {
    * Default: all arguments.
    */
   sinkArgs?: (sink: SyntaxNode) => SyntaxNode[];
+  /**
+   * Which parts of a destructured request parameter count as input for this rule
+   * (`({ body, query }: Request, res) => ...`). Default: body, query, params, cookies, headers, file(s).
+   */
+  paramKeys?: readonly string[];
   messageFor: (taintedVia: string) => string;
 }
 
@@ -62,10 +68,13 @@ export abstract class BaseAnalyzer implements Analyzer {
 
     for (const scope of scopes) {
       const sources = info ? info.sourcesIn(scope, cfg.isSource) : findNodes(scope, cfg.isSource);
-      if (sources.length === 0) continue; // nothing user-controlled in this function
+      const origins = requestParamOrigins(scope, cfg.paramKeys);
+      if (sources.length === 0 && origins.length === 0) continue; // nothing user-controlled in this function
       const pairs = analyzeFunctionBody(scope, cfg.isSource, cfg.isSink, {
         sources,
         assignments: info?.assignmentsIn(scope),
+        sinkArgs: cfg.sinkArgs,
+        origins,
       });
       for (const pair of pairs) {
         const sinkKey = nodeKey(pair.sink);
@@ -83,7 +92,7 @@ export abstract class BaseAnalyzer implements Analyzer {
       }
 
       // User input handed to a function (in this file or another) that passes it to a sink.
-      const flows: CrossFileFlow[] = info ? findCrossFileFlows(scope, spec, sources, info) : [];
+      const flows: CrossFileFlow[] = info ? findCrossFileFlows(scope, spec, sources, info, origins) : [];
       for (const flow of flows) {
         const callKey = nodeKey(flow.call);
         if (seenSinks.has(callKey)) continue;

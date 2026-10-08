@@ -3,7 +3,13 @@ import { SyntaxNode } from "../parsers/utils";
 // Express: req.params / req.query / req.body / req.cookies / req.headers / req.files
 // (uploaded file contents are attacker-controlled too),
 // with or without a trailing property/index access.
-const EXPRESS_MEMBER_PATTERN = /^req\.(params|query|body|cookies|headers|files|file)(\.\w+|\[[^\]]*\])?$/;
+// Fastify and others name the object `request`; Koa keeps everything on `ctx` / `ctx.request`.
+const EXPRESS_MEMBER_PATTERN = /^(?:req|request)\.(params|query|body|cookies|headers|files|file)(\.\w+|\[[^\]]*\])?$/;
+const KOA_MEMBER_PATTERN = /^ctx\.(?:request\.)?(params|query|body|cookies|headers|files)(\.\w+|\[[^\]]*\])?$/;
+// Next.js route context: GET(request, context) -> context.params.id
+const CONTEXT_PARAMS_PATTERN = /^(?:ctx|context)\.params(\.\w+|\[[^\]]*\])?$/;
+// Hono: c.req.param("id"), c.req.query("q"), await c.req.json(), c.req.parseBody(), c.req.header("x")
+const HONO_CALL_PATTERN = /^(?:c|ctx|context)\.req\.(param|query|queries|json|text|formData|parseBody|header)$/;
 
 // Next.js App Router / Web Request API body readers: request.json(), req.text(), ...
 const NEXT_BODY_READ_PATTERN = /^(req|request)\.(json|text|formData)$/;
@@ -17,7 +23,8 @@ const NEXT_ACCESSOR_SUFFIX_PATTERN = /(^|\.)(searchParams\.get|cookies\.get)$/;
 
 function isExpressSource(node: SyntaxNode): boolean {
   if (node.type !== "member_expression" && node.type !== "subscript_expression") return false;
-  return EXPRESS_MEMBER_PATTERN.test(node.text);
+  const text = node.text;
+  return EXPRESS_MEMBER_PATTERN.test(text) || KOA_MEMBER_PATTERN.test(text) || CONTEXT_PARAMS_PATTERN.test(text);
 }
 
 function isNextSource(node: SyntaxNode): boolean {
@@ -25,7 +32,7 @@ function isNextSource(node: SyntaxNode): boolean {
   const callee = node.childForFieldName("function");
   if (!callee || callee.type !== "member_expression") return false;
   const calleeText = callee.text;
-  if (NEXT_BODY_READ_PATTERN.test(calleeText)) return true;
+  if (NEXT_BODY_READ_PATTERN.test(calleeText) || HONO_CALL_PATTERN.test(calleeText)) return true;
   return NEXT_ACCESSOR_SUFFIX_PATTERN.test(calleeText);
 }
 

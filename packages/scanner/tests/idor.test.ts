@@ -1,3 +1,4 @@
+import { cookieProjectFile } from "./helpers/cookie-project";
 import { scanSource } from "../src/index";
 import { IdorAnalyzer } from "../src/analyzers/idor";
 
@@ -11,7 +12,7 @@ describe("IdorAnalyzer", () => {
         res.json(account);
       })
     `;
-    const result = scanSource(source, "app.js", analyzers);
+    const result = scanSource(source, cookieProjectFile("app.js"), analyzers);
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]?.ruleId).toBe("idor");
   });
@@ -24,7 +25,7 @@ describe("IdorAnalyzer", () => {
         res.json(account);
       })
     `;
-    const result = scanSource(source, "app.js", analyzers);
+    const result = scanSource(source, cookieProjectFile("app.js"), analyzers);
     expect(result.findings).toHaveLength(0);
   });
 
@@ -34,7 +35,7 @@ describe("IdorAnalyzer", () => {
         res.json(db.findAll());
       })
     `;
-    const result = scanSource(source, "app.js", analyzers);
+    const result = scanSource(source, cookieProjectFile("app.js"), analyzers);
     expect(result.findings).toHaveLength(0);
   });
 });

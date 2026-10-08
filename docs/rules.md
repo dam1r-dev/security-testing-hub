@@ -14,6 +14,17 @@ it (all rules if none are named); a `.security-hub-ignore` file or `--ignore <pa
 `--include-tests` scans test folders. Hidden findings are counted in the report (`suppressedCount` in the
 JSON output), never dropped silently. See the README for the pattern syntax.
 
+## What counts as a dangerous argument, and what cleans a value
+
+A sink only fires through the argument that matters: the query **text** of `db.query(sql, values)`, the
+**path** of `fs.writeFile(path, data)`, the **target** of `redirect(url, { headers })`, the **URL** of `fetch(url,
+options)`. A tainted value in the bound parameters, the file content or a header is not an injection through that
+sink. A value that went through a **cleaning call** is no longer tainted: numeric coercion (`parseInt`, `Number`),
+hashing (`hash*`, `md5`, `sha*`), escaping / sanitising (`escape*`, `sanitize*`, `encodeURIComponent`, `quote*`).
+`String(x)` and `x.toString()` change nothing and are not on the list. A value picked from a **list after a
+membership check** (`ALLOWED.includes(x) ? x : "jpg"`) is treated as validated, and so is one **looked up by a
+user-chosen key** (`TABLE[req.query.name]`).
+
 ## How data is followed across functions and files
 
 For every project function, per rule, the engine works out **which parameters
@@ -75,15 +86,20 @@ Besides source files, `.env*` files (not templates like `.env.example`) are chec
 
 Defined once in `src/analyzers/sources.ts` so every rule stays in sync:
 
-- **Express:** `req.params`, `req.query`, `req.body`, `req.cookies`, `req.headers`
-  (with or without a property/index access), e.g. `req.params.id`.
+- **Express / Fastify:** `req.params`, `req.query`, `req.body`, `req.cookies`, `req.headers`, `req.file(s)`
+  (also spelled `request.…`), with or without a property/index access, e.g. `req.params.id`.
+- **Koa:** `ctx.query`, `ctx.params`, `ctx.request.body`, `ctx.headers`, `ctx.cookies`, ...
+- **Hono:** `c.req.param()`, `c.req.query()`, `c.req.json()`, `c.req.parseBody()`, `c.req.header()`, ...
+- **Destructured handler parameters:** `async ({ body, file }: Request, res) => ...` and Remix's
+  `({ request, params })` bind names that carry request data from the first line. A first parameter is treated
+  as a request only when its type mentions `Request` / `Args` or a `res` / `response` / `reply` parameter follows,
+  so an ordinary `function Card({ body })` is not.
 - **Next.js App Router / Web Request API:** `request.nextUrl.searchParams.get(...)`,
   `new URL(request.url).searchParams.get(...)` (including the common
   `const { searchParams } = new URL(request.url)` destructured form),
   `request.cookies.get(...)`, and body readers `request.json()` / `.text()` / `.formData()`.
-  Not yet covered: dynamic route segments (the `{ params }` second handler
-  argument) — the name `params` is too generic to match safely without more
-  context, so it's a known gap.
+  Dynamic route segments arrive as the second handler argument, `GET(request, { params })`
+  (also `await params` in Next 15, and `context.params.id`).
 
 ## `sql-injection` (critical)
 
@@ -137,15 +153,24 @@ Defined once in `src/analyzers/sources.ts` so every rule stays in sync:
 - **File-scoped, not route-scoped on purpose:** CSRF middleware is normally
   registered once per file (`app.use(...)` in Express), not repeated per
   route, so per-route detection would just miss it and always fire.
-- **False positives:** pure bearer-token/JWT APIs (not cookie-based) aren't
-  exploitable via CSRF at all; this rule doesn't yet distinguish that and
-  will still flag them. Session/cookie auth is the assumed case.
+- **When it does not apply (and stays quiet):** CSRF needs a credential the browser attaches by itself,
+  so the rule is skipped for (a) pure bearer-token/JWT APIs, (b) projects whose only session mechanism is a
+  framework whose cookie is `SameSite=Lax` by default (Auth.js/NextAuth, Clerk, Supabase SSR, Better Auth,
+  iron-session, Lucia) — a cross-site POST arrives without the cookie, and (c) projects whose `package.json`
+  shows no authentication library at all (demos, public APIs). It also skips webhook / on-demand-revalidation
+  endpoints and routes switched off by a `denyAll()`-style middleware. Cookie/session middleware the app
+  configures itself (`express-session`, `cookie-parser`, `cookie-session`, ...) keeps the rule on. Measured
+  effect: 25 of 25 CSRF findings on modern Next.js projects in the second validation round were noise.
 - **Fixture-authoring gotcha (learned the hard way):** a comment describing
   *why* a route is vulnerable that happens to contain the word "CSRF"
   silently suppresses this rule on that exact file — the heuristic can't
   tell a real fix from a comment mentioning the bug by name. Both fixture
   apps' `transfer` routes hit this originally; see the comment in
   `examples/vulnerable-express-app/routes/transfer.js`.
+
+Path traversal sinks cover the `fs` read/write/delete/list calls (`readFile`, `writeFile`, `createReadStream`,
+`readdir`, `stat`, `rm`, `rename`, `copyFile`, `mkdir`, ...) and the file-serving calls `res.sendFile()` and
+`res.download()`.
 
 ## `ssrf` (high)
 
@@ -161,7 +186,10 @@ Defined once in `src/analyzers/sources.ts` so every rule stays in sync:
 - **Express:** flags `app`/`router` routes whose path has an id-like param
   (`:id`, `:userId`, `:accountId`, `:orderId`, ...) when the handler has
   **no** reference to `req.user`, `req.session`, `req.auth`, or
-  `req.currentUser` anywhere in it.
+  `req.currentUser` anywhere in it — nor a helper whose NAME shows an ownership check
+  (`verifyCurrentUserHasAccessToPost(id)`, `checkOwnership`, `security.appendUserId()`), nor a deny-everything
+  middleware (`security.denyAll()`). Skipped entirely for projects with no authentication library (there is no
+  per-user data to reach through someone else's id) and for Next.js handlers that take no arguments.
 - **Next.js App Router:** the id-like segment comes from the route's *file
   path* instead of a string (`app/api/accounts/[accountId]/route.ts`), so
   each exported `GET`/`POST`/`PUT`/`DELETE`/`PATCH` handler in the file is
