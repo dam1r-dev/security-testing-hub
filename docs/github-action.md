@@ -65,7 +65,7 @@ On a push (or any non-PR event) the full report is produced.
 | `sarif` | `false` | Upload to code scanning. Needs `security-events: write`; private repositories need GitHub Code Security. |
 | `ignore` | | Extra path patterns to skip, one per line (same syntax as `.security-hub-ignore`). |
 | `include-tests` | `false` | Also scan test folders and `*.test.*` / `*.spec.*` files. |
-| `version` | `latest` | `security-hub-scanner` version: `latest`, an exact one like `0.4.0` (recommended for reproducible CI), or `local` (use the checked-out, already built `packages/scanner` — this repository's own workflow does that). |
+| `version` | `latest` | `security-hub-scanner` version: `latest`, an exact one like `0.5.0` (recommended for reproducible CI), or `local` (use the checked-out, already built `packages/scanner` — this repository's own workflow does that). |
 | `github-token` | `${{ github.token }}` | Used for the comment only. |
 
 Outputs: `score` (0–100) and `findings` (count), e.g. to show them in a badge or gate a later step.

@@ -40,7 +40,7 @@ inputs:
     default: "false"
   version:
     description: >-
-      Version of security-hub-scanner to use: "latest", an exact version such as 0.4.0, or "local" to use the
+      Version of security-hub-scanner to use: "latest", an exact version such as 0.5.0, or "local" to use the
       already built packages/scanner of the checked-out repository (used by this project's own workflow).
     default: latest
   github-token:

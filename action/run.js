@@ -40,7 +40,7 @@ function parseSeverity(value, name) {
 function loadScanner(env, deps) {
   const version = (env.INPUT_VERSION || "latest").trim();
   if (!VERSION_PATTERN.test(version)) {
-    throw new Error(`Input "version" must be "latest", "local" or an exact version like 0.4.0 (got "${version}").`);
+    throw new Error(`Input "version" must be "latest", "local" or an exact version like 0.5.0 (got "${version}").`);
   }
   if (deps.scanner) return deps.scanner;
   if (version === "local") {
@@ -134,7 +134,7 @@ async function run(env, overrides = {}) {
     if (typeof scanner[required] !== "function") {
       throw new Error(
         `The installed security-hub-scanner is too old for this action (missing ${required}). ` +
-          `Use version 0.4.0 or newer: set the action's "version" input accordingly.`,
+          `Use version 0.5.0 or newer: set the action's "version" input accordingly.`,
       );
     }
   }

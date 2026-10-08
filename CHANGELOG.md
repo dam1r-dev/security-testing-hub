@@ -2,7 +2,10 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
-## Unreleased
+## 0.5.0
+
+The first release since 0.3.0: it contains everything below, including the work that was prepared as 0.4.0 (that
+version was never published). `security-hub-scanner` and `security-hub` are both 0.5.0.
 
 ### Added
 - **Supabase and Firebase rules** (3 new rules, 20 in total): `supabase-rls` reads your SQL migrations as one
@@ -45,7 +48,7 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
 - **More sinks:** `res.sendFile()` / `res.download()` and more `fs` calls (`readdir`, `stat`, `rm`, `rename`, ...)
   for path traversal.
 
-## 0.4.0
+## 0.4.0 (never published; included in 0.5.0)
 
 ### Added
 - **Taint across functions and files.** Request data is followed into the project functions it is passed to —
