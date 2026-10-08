@@ -92,6 +92,26 @@ shorthand property in a query (`User.findOne({ username })`) counts as a use of 
 Scan time did not regress: the same rules share one walk of each function now
 (hackathon-starter 2.6 s -> 2.2 s, nextjs-subscription-payments 2.0 s -> 1.2 s).
 
+## Round 5: hard-coded secrets (`hardcoded-secret`)
+
+Run on the same six projects plus JumaTime and this repository itself.
+
+| Project | Findings | Verdict |
+|---|---|---|
+| NodeGoat | 4 (`cookieSecret`, a ZAP API key, a seed admin password) | all real hard-coded credentials (deliberately vulnerable app) |
+| dvna | 1 (`session({ secret: 'keyboard cat' })`) | real |
+| the other four + JumaTime | 0 | JumaTime's `.env` is correctly gitignored |
+
+Two false positives showed up and were fixed with regression tests before release:
+- `fetch(url, { credentials: "same-origin" })` (nextjs-subscription-payments): the name `credentials` is a fetch
+  option, and `same-origin` looked random enough. `credentials` is no longer a credential name, and
+  lowercase-words-joined-by-`-`/`_` values are treated as identifiers.
+- A comment in this repository's own source that quoted `process.env.NEXT_PUBLIC_X_SECRET` as an example was read
+  as a use of that variable. Mentions inside comments no longer count for the browser-exposed-variable check
+  (known token formats are still matched in comments on purpose).
+
+Same caveat as before: the rule was tuned on these projects, so treat "5 real, 0 false" as direction, not a rate.
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are

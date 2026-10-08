@@ -90,6 +90,11 @@ const RULE_DESCRIPTIONS: Record<VulnerabilityType, { name: string; description: 
     description: "User-controlled XML is parsed with external entity expansion enabled.",
     helpUri: "https://cwe.mitre.org/data/definitions/611.html",
   },
+  "hardcoded-secret": {
+    name: "Hard-coded Secret",
+    description: "A password, API key, token or signing secret is written into the source code or a committed .env file.",
+    helpUri: "https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_password",
+  },
 };
 
 function levelFor(severity: Severity): "error" | "warning" | "note" {

@@ -7,7 +7,7 @@ const FIXTURE_APP = path.resolve(__dirname, "../../../examples/vulnerable-expres
 const NEXTJS_FIXTURE_APP = path.resolve(__dirname, "../../../examples/vulnerable-nextjs-app");
 
 describe("runScan against the vulnerable-express-app fixture", () => {
-  it("finds all sixteen vulnerability classes, none in the safe routes", () => {
+  it("finds all seventeen vulnerability classes, none in the safe routes", () => {
     const outFile = path.join(os.tmpdir(), `security-hub-test-${Date.now()}.json`);
     const exitCode = runScan(FIXTURE_APP, { format: "json", out: outFile });
     const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
@@ -35,6 +35,7 @@ describe("runScan against the vulnerable-express-app fixture", () => {
         "nosql-injection",
         "insecure-deserialization",
         "xxe",
+        "hardcoded-secret",
       ]),
     );
     // Safe, parameterized query in users.js (the /user-safe/:id route) must not be
@@ -187,7 +188,7 @@ describe("runScan against the vulnerable-express-app fixture", () => {
 });
 
 describe("runScan against the vulnerable-nextjs-app fixture", () => {
-  it("finds all nine vulnerability classes via Next.js App Router conventions, none in the safe routes", () => {
+  it("finds all ten vulnerability classes via Next.js App Router conventions, none in the safe routes", () => {
     const outFile = path.join(os.tmpdir(), `security-hub-test-nextjs-${Date.now()}.json`);
     const exitCode = runScan(NEXTJS_FIXTURE_APP, { format: "json", out: outFile });
     const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
@@ -207,6 +208,7 @@ describe("runScan against the vulnerable-nextjs-app fixture", () => {
         "broken-access-control",
         "code-injection",
         "open-redirect",
+        "hardcoded-secret",
       ]),
     );
 

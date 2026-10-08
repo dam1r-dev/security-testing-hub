@@ -17,6 +17,7 @@ but in Next.js App Router style (`route.ts` handlers, `NextRequest`/`Request`,
 | `GET /api/accounts-safe/[accountId]` | Safe (checks `account.ownerId === session.user.id`) — should **not** be flagged as IDOR |
 | `GET /api/orders?status=` | SQL Injection **across files**: the route forwards the value to `lib/orders.ts`, which interpolates it |
 | `GET /api/orders-safe?status=` | Safe: `lib/orders.ts` uses a bound parameter — should **not** be flagged |
+| `lib/supabase-client.ts` | Hard-coded secret exposure: a service-role key read through the browser-exposed `NEXT_PUBLIC_` prefix |
 | `GET /admin/users` | Broken Access Control (no auth check, no `middleware.ts` guarding it) |
 
 Run the scanner against it from the repo root:

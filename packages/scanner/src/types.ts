@@ -14,7 +14,8 @@ export type VulnerabilityType =
   | "open-redirect"
   | "nosql-injection"
   | "insecure-deserialization"
-  | "xxe";
+  | "xxe"
+  | "hardcoded-secret";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 
