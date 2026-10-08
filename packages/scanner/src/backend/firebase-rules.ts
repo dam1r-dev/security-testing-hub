@@ -9,6 +9,9 @@ import { Finding, Severity } from "../types";
  */
 
 const SENSITIVE_PATH = /user|profile|customer|order|payment|invoice|message|chat|account|subscription|private|secret|token|member|patient|kyc|billing|admin|session/i;
+// Personal / financial data: a public read is a leak. Messages and chats are "sensitive" too, but whether a chat is
+// public is a design choice (a public chat room, a guestbook), so those get a lower severity.
+const PII_PATH = /user|profile|customer|order|payment|invoice|account|subscription|private|secret|token|member|patient|kyc|billing|admin|session/i;
 
 type Method = "get" | "list" | "create" | "update" | "delete";
 
@@ -54,10 +57,11 @@ function balancedOuter(c: string): boolean {
 function isSignedInOnly(c: string): boolean {
   const rest = c
     .replace(/request\.auth!=null/g, "")
+    .replace(/request\.auth\.uid!=null/g, "")
     .replace(/request\.auth\.token\.email_verified==true/g, "")
     .replace(/request\.auth\.token\.firebase\.sign_in_provider!='anonymous'/g, "")
     .replace(/[&()]/g, "");
-  return c.includes("request.auth!=null") && rest === "";
+  return (c.includes("request.auth!=null") || c.includes("request.auth.uid!=null")) && rest === "";
 }
 
 function testModeDate(c: string): Date | undefined {
@@ -138,7 +142,8 @@ export function analyzeFirebaseRules(source: string, file: string, kind: RulesKi
           makeFinding(
             file,
             line,
-            isGlobal ? "critical" : "high",
+            // Public reads of ALL files in Storage are common (public images); of all Firestore documents they are not.
+            isGlobal ? (kind === "storage" ? "medium" : "critical") : PII_PATH.test(collection) ? "high" : "medium",
             "high",
             `This rule lets ANYONE on the internet read ${where}${sensitive && !isGlobal ? ", which looks like private data" : ""} (\`if true\`). ` +
               `Restrict reads to the signed-in owner: allow read: if request.auth != null && request.auth.uid == resource.data.ownerId;`,
@@ -190,7 +195,7 @@ export function analyzeFirebaseRules(source: string, file: string, kind: RulesKi
           makeFinding(
             file,
             line,
-            isGlobal ? "high" : "medium",
+            isGlobal && kind !== "storage" ? "high" : "medium",
             "medium",
             `This rule lets any signed-in user (anonymous sign-ins included) read ${where}${sensitive && !isGlobal ? ", which looks like private data" : ""}. ` +
               `Limit reads to the owner: request.auth.uid == resource.data.ownerId.`,
@@ -245,7 +250,8 @@ export function analyzeRealtimeDatabaseRules(source: string, file: string): Find
             makeFinding(
               file,
               line,
-              kind === "write" || path.length === 0 ? "critical" : "high",
+              // a public database with writes closed is exposure, not takeover; a public chat is a design choice
+              kind === "write" ? "critical" : path.length === 0 || path.some((p) => PII_PATH.test(p)) ? "high" : "medium",
               "high",
               `This rule lets ANYONE on the internet ${kind} ${where}. Your Firebase config is public by design, so nothing else protects it. ` +
                 `Require the owner: "${key}": "auth != null && auth.uid === $uid".`,
