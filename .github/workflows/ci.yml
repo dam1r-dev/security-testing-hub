@@ -8,10 +8,13 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    name: build-and-test (${{ matrix.os }}, node ${{ matrix.node-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false # one broken platform must not hide the results of the others
       matrix:
-        node-version: [18.x, 20.x]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node-version: [18.x, 20.x, 22.x]
     steps:
       - uses: actions/checkout@v4
 
@@ -33,7 +36,13 @@ jobs:
       - name: Test
         run: npm test
 
+      # What a new user does: install the packed packages into an empty folder and run them.
+      # The native parser (tree-sitter) is the likeliest thing to break on another OS / Node.
+      - name: Install smoke test (pack, install into an empty project, scan, web interface)
+        run: node scripts/install-smoke.js
+
       - name: Scan the example vulnerable app (should find issues, non-blocking)
+        shell: bash
         run: node packages/cli/bin/security-hub.js scan examples/vulnerable-express-app --format text || true
 
   sql-injection-lab-e2e:
