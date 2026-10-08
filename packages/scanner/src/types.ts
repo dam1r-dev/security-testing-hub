@@ -51,4 +51,6 @@ export interface ScanSummary {
   durationMs: number;
   /** Total findings hidden by `// security-hub-ignore` comments (reported, never silent). */
   suppressedCount?: number;
+  /** Findings left out of the report because they are in files outside the requested scope (e.g. unchanged files). */
+  filteredOutCount?: number;
 }

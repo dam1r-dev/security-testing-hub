@@ -17,9 +17,9 @@
     "test": "jest"
   },
   "dependencies": {
-    "security-hub-scanner": "0.2.0",
+    "chalk": "^4.1.2",
     "commander": "^12.1.0",
-    "chalk": "^4.1.2"
+    "security-hub-scanner": "0.2.0"
   },
   "keywords": [
     "sast",
@@ -43,5 +43,8 @@
   "bugs": "https://github.com/dam1r-dev/security-testing-hub/issues",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "js-yaml": "^4.3.2"
   }
 }

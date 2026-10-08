@@ -107,6 +107,14 @@ describe("CLI argument parsing (run)", () => {
     );
   });
 
+  it("passes --changed-since and the new formats through", () => {
+    mockRunScan.mockReturnValue(0);
+    run(["node", "security-hub", "scan", ".", "--format", "markdown", "--changed-since", "origin/main"]);
+    expect(mockRunScan).toHaveBeenCalledWith(".", expect.objectContaining({ format: "markdown", changedSince: "origin/main" }));
+    run(["node", "security-hub", "scan", ".", "--format", "github"]);
+    expect(mockRunScan).toHaveBeenLastCalledWith(".", expect.objectContaining({ format: "github" }));
+  });
+
   it("dispatches 'ui' with defaults, a path, a port and --no-open", async () => {
     mockRunUi.mockResolvedValue(0);
     run(["node", "security-hub", "ui"]);

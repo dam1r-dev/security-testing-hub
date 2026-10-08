@@ -5,6 +5,11 @@ import {
   scanPath,
   toSarifString,
   toHtml,
+  toMarkdown,
+  toGithubAnnotations,
+  changedFiles,
+  filterSummary,
+  SEVERITY_RANK,
   computeScore,
   Finding,
   ScanSummary,
@@ -13,7 +18,7 @@ import {
 } from "security-hub-scanner";
 
 export interface ScanCommandOptions {
-  format: "text" | "json" | "sarif" | "html";
+  format: "text" | "json" | "sarif" | "html" | "markdown" | "github";
   out?: string;
   severity?: Severity;
   failOn?: Severity;
@@ -21,6 +26,8 @@ export interface ScanCommandOptions {
   ignore?: string[];
   /** Also scan test folders and *.test.* / *.spec.* files. */
   includeTests?: boolean;
+  /** Report only findings in files changed since this git ref (the whole project is still scanned). */
+  changedSince?: string;
 }
 
 const SCORE_COLOR_CHALK: Record<ScoreColor, (text: string) => string> = {
@@ -29,28 +36,12 @@ const SCORE_COLOR_CHALK: Record<ScoreColor, (text: string) => string> = {
   red: chalk.bgRed.white.bold,
 };
 
-const SEVERITY_RANK: Record<Severity, number> = { low: 0, medium: 1, high: 2, critical: 3 };
-
 const SEVERITY_COLOR: Record<Severity, (text: string) => string> = {
   critical: chalk.bgRed.white.bold,
   high: chalk.red.bold,
   medium: chalk.yellow,
   low: chalk.gray,
 };
-
-function filterBySeverity(summary: ScanSummary, minSeverity?: Severity): ScanSummary {
-  if (!minSeverity) return summary;
-  const threshold = SEVERITY_RANK[minSeverity];
-  const results = summary.results.map((r) => ({
-    ...r,
-    findings: r.findings.filter((f) => SEVERITY_RANK[f.severity] >= threshold),
-  }));
-  return {
-    ...summary,
-    results,
-    findingsCount: results.reduce((sum, r) => sum + r.findings.length, 0),
-  };
-}
 
 function renderText(summary: ScanSummary): string {
   const lines: string[] = [];
@@ -63,10 +54,11 @@ function renderText(summary: ScanSummary): string {
     }
   }
   lines.push("");
+  const outside = summary.filteredOutCount ? ` (+${summary.filteredOutCount} in unchanged files, not shown)` : "";
   const hidden = summary.suppressedCount ? ` (${summary.suppressedCount} hidden by security-hub-ignore comments)` : "";
   lines.push(
     chalk.bold(
-      `Scanned ${summary.filesScanned} file(s) in ${summary.durationMs}ms — ${summary.findingsCount} finding(s)${hidden}.`,
+      `Scanned ${summary.filesScanned} file(s) in ${summary.durationMs}ms — ${summary.findingsCount} finding(s)${outside}${hidden}.`,
     ),
   );
 
@@ -109,18 +101,35 @@ export function runScan(targetPath: string, options: ScanCommandOptions): number
     return 2;
   }
 
+  let changed: string[] | undefined;
+  if (options.changedSince) {
+    try {
+      changed = changedFiles(fs.statSync(targetPath).isDirectory() ? targetPath : path.dirname(targetPath), options.changedSince);
+    } catch (err) {
+      process.stderr.write(chalk.red(`${(err as Error).message}\n`));
+      return 2;
+    }
+  }
+
+  // The scan always covers the whole project (a call in a changed file can reach a query in
+  // an untouched one); --changed-since only narrows what is reported.
   const rawSummary = scanPath(targetPath, { ignore: options.ignore, includeTests: options.includeTests });
-  const summary = filterBySeverity(rawSummary, options.severity);
+  const summary = filterSummary(rawSummary, { minSeverity: options.severity, files: changed });
 
   let output: string;
   let outFile = options.out;
   if (options.format === "sarif") {
-    output = toSarifString(summary.results);
+    output = toSarifString(summary.results, { relativeTo: path.resolve(process.cwd()) });
   } else if (options.format === "json") {
     output = JSON.stringify({ ...summary, score: computeScore(summary) }, null, 2);
   } else if (options.format === "html") {
     output = toHtml(summary, targetPath);
     outFile = outFile ?? DEFAULT_HTML_REPORT_FILE; // always a file — printing raw HTML to a terminal isn't useful
+  } else if (options.format === "markdown") {
+    const scopeNote = changed ? `Only files changed since \`${options.changedSince}\` are listed (${changed.length} changed).` : undefined;
+    output = toMarkdown(summary, { relativeTo: path.resolve(process.cwd()), scopeNote });
+  } else if (options.format === "github") {
+    output = toGithubAnnotations(summary, { relativeTo: path.resolve(process.cwd()) }).join("\n");
   } else {
     output = renderText(summary);
   }

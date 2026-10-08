@@ -1,0 +1,92 @@
+name: Security Testing Hub
+description: >-
+  Scan a Node.js / Next.js project for security bugs (SQL injection, XSS, command injection, SSRF, IDOR
+  and more, including flows across files). On pull requests it reports only what the change touches.
+author: dam1r-dev
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  path:
+    description: Folder to scan, relative to the repository root.
+    default: "."
+  fail-on:
+    description: >-
+      Fail the job if the report has a finding at or above this severity (low | medium | high | critical).
+      Empty: never fail, just report.
+    default: ""
+  severity:
+    description: "Only report findings at or above this severity (low | medium | high | critical). Empty = everything."
+    default: ""
+  changed-only:
+    description: >-
+      On pull requests, report only findings in files the pull request changed. The whole project is
+      still scanned, so a call in a changed file that reaches a query in an untouched one is found.
+    default: "true"
+  comment:
+    description: >-
+      On pull requests, post (and keep updating) one summary comment. Needs `pull-requests: write`
+      permission; skipped with a warning when the token is read-only (pull requests from forks).
+    default: "true"
+  sarif:
+    description: "Upload results to GitHub code scanning (needs the security-events: write permission; private repositories need GitHub Code Security)."
+    default: "false"
+  ignore:
+    description: "Extra path patterns to skip, one per line (also reads .security-hub-ignore from the scanned folder)."
+    default: ""
+  include-tests:
+    description: "Also scan test folders and *.test.* / *.spec.* files."
+    default: "false"
+  version:
+    description: >-
+      Version of security-hub-scanner to use: "latest", an exact version such as 0.4.0, or "local" to use the
+      already built packages/scanner of the checked-out repository (used by this project's own workflow).
+    default: latest
+  github-token:
+    description: Token used to post the pull request comment.
+    default: ${{ github.token }}
+
+outputs:
+  score:
+    description: Security score 0-100 for the reported findings.
+    value: ${{ steps.scan.outputs.score }}
+  findings:
+    description: Number of reported findings.
+    value: ${{ steps.scan.outputs.findings }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - id: scan
+      shell: bash
+      # Inputs go through the environment, never into the script text, so a crafted
+      # input can't become shell code.
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_SEVERITY: ${{ inputs.severity }}
+        INPUT_CHANGED_ONLY: ${{ inputs.changed-only }}
+        INPUT_COMMENT: ${{ inputs.comment }}
+        INPUT_SARIF: ${{ inputs.sarif }}
+        INPUT_IGNORE: ${{ inputs.ignore }}
+        INPUT_INCLUDE_TESTS: ${{ inputs.include-tests }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: node "${{ github.action_path }}/action/run.js"
+
+    - name: Upload SARIF to code scanning
+      if: ${{ always() && inputs.sarif == 'true' && steps.scan.outputs.sarif-file != '' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.scan.outputs.sarif-file }}
+        category: security-testing-hub
+
+    - name: Fail on findings above the threshold
+      if: ${{ steps.scan.outputs.failed == 'true' }}
+      shell: bash
+      run: exit 1

@@ -32,6 +32,8 @@ security-hub scan ./my-app --format html          # open security-report.html in
 security-hub scan ./my-app --fail-on high         # CI gate: exit 1 if anything critical/high found
 security-hub scan ./my-app --ignore legacy/ --ignore "*.mock.js"   # skip paths (also reads .security-hub-ignore)
 security-hub scan ./my-app --include-tests        # tests are skipped by default
+security-hub scan ./my-app --changed-since origin/main   # report only files changed vs. a branch (whole project still scanned)
+security-hub scan ./my-app --format markdown      # or: github (workflow annotations)
 ```
 
 Hide a single finding you have reviewed with a comment on the flagged line or the line above:

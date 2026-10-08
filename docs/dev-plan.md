@@ -158,6 +158,10 @@ function analyzeFunctionBody(funcNode, sourcePatterns, sinkPatterns) {
   в глубину; возвращаемые значения и колбэки не отслеживаются (см. `docs/rules.md`).
 - ✅ **Подавление находок** — `// security-hub-ignore [правило] -- причина`, файл `.security-hub-ignore`,
   `--ignore`, `--include-tests`; число скрытых находок видно в отчёте.
+- ✅ **GitHub Action** (`action.yml`, `action/run.js`) — проверка pull request: аннотации в диффе, один обновляемый
+  комментарий с оценкой, job summary, SARIF в Code Scanning, `fail-on`; отчёт только по изменённым файлам при
+  полном анализе проекта (`--changed-since`); форматы `markdown` и `github` в CLI. Репозиторий проверяет сам себя
+  (`.github/workflows/security.yml`).
 - 🟡 **Phase 7 (Documentation)** — README (EN+RU), `docs/rules.md`, `docs/attack-playbook.md` (EN/RU/KK) есть; полные гайды — в процессе
 - ✅ **Phase 8 (Testing, частично)** — coverage измерен и превышает таргет плана (70%+):
   scanner 88.5% statements / 92.2% lines, CLI 97.67% (после добавления тестов на
