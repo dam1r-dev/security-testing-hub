@@ -1,4 +1,5 @@
 import { execFileSync } from "child_process";
+import * as fs from "fs";
 import * as path from "path";
 
 function git(cwd: string, args: string[]): string {
@@ -43,5 +44,14 @@ export function changedFiles(directory: string, baseRef: string): string[] {
       );
     }
   }
-  return names.map((name) => path.resolve(topLevel, name));
+  // Report paths the way the caller spells them: git prints the real path of the repository
+  // (/private/var/... on macOS, a long Windows name), the caller may have given a symlink or a short name.
+  let root = topLevel;
+  try {
+    const relativeToRepo = path.relative(fs.realpathSync.native(directory), fs.realpathSync.native(topLevel));
+    root = path.resolve(directory, relativeToRepo);
+  } catch {
+    // fall back to git's spelling
+  }
+  return names.map((name) => path.resolve(root, name));
 }

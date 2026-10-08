@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as path from "path";
 import { ScanSummary, Severity } from "./types";
 
@@ -10,10 +11,25 @@ export interface FilterOptions {
   files?: Iterable<string>;
 }
 
-/** Path form that compares equal for the same file however it was spelled (Windows is case-insensitive). */
+const realPaths = new Map<string, string>();
+
+/**
+ * Path form that compares equal for the same file however it was spelled: symlinks resolved
+ * (macOS `/var` -> `/private/var`), Windows short names expanded (`RUNNER~1`), case folded on Windows.
+ * git reports the real path of a repository, a scan reports the path the user gave — they must still match.
+ */
 export function comparablePath(file: string): string {
   const resolved = path.resolve(file);
-  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  let real = realPaths.get(resolved);
+  if (real === undefined) {
+    try {
+      real = fs.realpathSync.native(resolved);
+    } catch {
+      real = resolved; // a file that no longer exists: compare as spelled
+    }
+    realPaths.set(resolved, real);
+  }
+  return process.platform === "win32" ? real.toLowerCase() : real;
 }
 
 /**
