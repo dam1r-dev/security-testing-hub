@@ -1,3 +1,5 @@
+import { mascotDataUri } from "security-hub-scanner";
+
 export interface UiPageOptions {
   /** Per-run secret the page must send back with every API call. */
   token: string;
@@ -70,6 +72,8 @@ export function renderUiPage(options: UiPageOptions): string {
   .ring-inner { width: 118px; height: 118px; border-radius: 50%; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .ring-value { font-size: 38px; font-weight: 700; line-height: 1; }
   .ring-max { font-size: 12px; color: #64748b; margin-top: 2px; }
+  .mascot { width: 132px; height: 132px; object-fit: contain; flex: none; }
+  .mascot-say { margin: 0 0 10px; font-size: 14px; font-style: italic; color: #334155; }
   .score-meta { flex: 1; min-width: 220px; }
   .score-label { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
   .score-sub { margin: 0 0 12px; font-size: 14px; color: #475569; }
@@ -134,9 +138,11 @@ export function renderUiPage(options: UiPageOptions): string {
 
   <div id="result" class="hidden">
     <div class="score-card" id="score-card">
+      <img class="mascot" id="mascot" alt="" />
       <div class="ring" id="ring"><div class="ring-inner"><span class="ring-value" id="ring-value">0</span><span class="ring-max">/ 100</span></div></div>
       <div class="score-meta">
         <p class="score-label" id="score-label"></p>
+        <p class="mascot-say" id="mascot-say"></p>
         <p class="score-sub" id="score-sub"></p>
         <div class="stat-row" id="stats"></div>
       </div>
@@ -185,8 +191,16 @@ export function renderUiPage(options: UiPageOptions): string {
     red: { main: '#dc2626', bg: '#fef2f2' }
   };
 
+  // Armo, the mascot: one image per score colour, embedded so the page needs no extra request.
+  var MASCOT = ${JSON.stringify({
+    green: mascotDataUri("green"),
+    yellow: mascotDataUri("yellow"),
+    red: mascotDataUri("red"),
+  })};
+
   var I18N = {
     en: {
+      armoGreen: 'Looks calm in here. Keep it that way.', armoYellow: 'I do not like some of this. Have a look.', armoRed: 'Alarm! Fix the critical ones first.',
       copyFix: 'Copy prompt for my AI assistant', copyAll: 'Copy one prompt for all findings', copied: 'Copied!',
       suppressed: 'Hidden by security-hub-ignore comments: {n}.',
       subtitle: 'Find security holes in your code before someone else does',
@@ -203,6 +217,7 @@ export function renderUiPage(options: UiPageOptions): string {
       disclaimer: 'Heuristic static analysis \\u2014 a helper, not a replacement for security review.'
     },
     ru: {
+      armoGreen: 'Здесь спокойно. Так и держать.', armoYellow: 'Мне кое-что не нравится. Посмотрите.', armoRed: 'Тревога! Сначала исправьте критические.',
       copyFix: '\\u0421\\u043a\\u043e\\u043f\\u0438\\u0440\\u043e\\u0432\\u0430\\u0442\\u044c \\u043f\\u0440\\u043e\\u043c\\u043f\\u0442 \\u0434\\u043b\\u044f \\u0418\\u0418-\\u0430\\u0441\\u0441\\u0438\\u0441\\u0442\\u0435\\u043d\\u0442\\u0430', copyAll: '\\u0421\\u043a\\u043e\\u043f\\u0438\\u0440\\u043e\\u0432\\u0430\\u0442\\u044c \\u043e\\u0434\\u0438\\u043d \\u043f\\u0440\\u043e\\u043c\\u043f\\u0442 \\u043d\\u0430 \\u0432\\u0441\\u0435 \\u043d\\u0430\\u0445\\u043e\\u0434\\u043a\\u0438', copied: '\\u0421\\u043a\\u043e\\u043f\\u0438\\u0440\\u043e\\u0432\\u0430\\u043d\\u043e!',
       suppressed: '\\u0421\\u043a\\u0440\\u044b\\u0442\\u043e \\u043a\\u043e\\u043c\\u043c\\u0435\\u043d\\u0442\\u0430\\u0440\\u0438\\u044f\\u043c\\u0438 security-hub-ignore: {n}.',
       subtitle: '\\u041d\\u0430\\u0439\\u0434\\u0438\\u0442\\u0435 \\u0443\\u044f\\u0437\\u0432\\u0438\\u043c\\u043e\\u0441\\u0442\\u0438 \\u0432 \\u0441\\u0432\\u043e\\u0451\\u043c \\u043a\\u043e\\u0434\\u0435 \\u0440\\u0430\\u043d\\u044c\\u0448\\u0435, \\u0447\\u0435\\u043c \\u044d\\u0442\\u043e \\u0441\\u0434\\u0435\\u043b\\u0430\\u0435\\u0442 \\u043a\\u0442\\u043e-\\u0442\\u043e \\u0434\\u0440\\u0443\\u0433\\u043e\\u0439',
@@ -219,6 +234,7 @@ export function renderUiPage(options: UiPageOptions): string {
       disclaimer: '\\u042d\\u0432\\u0440\\u0438\\u0441\\u0442\\u0438\\u0447\\u0435\\u0441\\u043a\\u0438\\u0439 \\u0441\\u0442\\u0430\\u0442\\u0438\\u0447\\u0435\\u0441\\u043a\\u0438\\u0439 \\u0430\\u043d\\u0430\\u043b\\u0438\\u0437 \\u2014 \\u043f\\u043e\\u043c\\u043e\\u0449\\u043d\\u0438\\u043a, \\u0430 \\u043d\\u0435 \\u0437\\u0430\\u043c\\u0435\\u043d\\u0430 \\u0430\\u0443\\u0434\\u0438\\u0442\\u0443 \\u0431\\u0435\\u0437\\u043e\\u043f\\u0430\\u0441\\u043d\\u043e\\u0441\\u0442\\u0438.'
     },
     kk: {
+      armoGreen: 'Мұнда бәрі тыныш. Осылай қала берсін.', armoYellow: 'Кейбір жерлері ұнамай тұр. Қарап шығыңыз.', armoRed: 'Дабыл! Алдымен критикалық олқылықтарды түзетіңіз.',
       copyFix: '\\u0416\\u0418-\\u043a\\u04e9\\u043c\\u0435\\u043a\\u0448\\u0456 \\u04af\\u0448\\u0456\\u043d \\u043f\\u0440\\u043e\\u043c\\u043f\\u0442\\u0442\\u044b \\u043a\\u04e9\\u0448\\u0456\\u0440\\u0443', copyAll: '\\u0411\\u0430\\u0440\\u043b\\u044b\\u049b \\u0442\\u0430\\u0431\\u044b\\u043b\\u044b\\u043c\\u0434\\u0430\\u0440\\u0493\\u0430 \\u0431\\u0456\\u0440 \\u043f\\u0440\\u043e\\u043c\\u043f\\u0442 \\u043a\\u04e9\\u0448\\u0456\\u0440\\u0443', copied: '\\u041a\\u04e9\\u0448\\u0456\\u0440\\u0456\\u043b\\u0434\\u0456!',
       suppressed: 'security-hub-ignore \\u0442\\u04af\\u0441\\u0456\\u043d\\u0456\\u043a\\u0442\\u0435\\u043c\\u0435\\u043b\\u0435\\u0440\\u0456\\u043c\\u0435\\u043d \\u0436\\u0430\\u0441\\u044b\\u0440\\u044b\\u043b\\u0493\\u0430\\u043d: {n}.',
       subtitle: '\\u041a\\u043e\\u0434\\u044b\\u04a3\\u044b\\u0437\\u0434\\u0430\\u0493\\u044b \\u043e\\u0441\\u0430\\u043b\\u0434\\u044b\\u049b\\u0442\\u0430\\u0440\\u0434\\u044b \\u0431\\u0430\\u0441\\u049b\\u0430\\u043b\\u0430\\u0440 \\u0442\\u0430\\u0431\\u0443\\u0434\\u0430\\u043d \\u0431\\u04b1\\u0440\\u044b\\u043d \\u0442\\u0430\\u0431\\u044b\\u04a3\\u044b\\u0437',
@@ -317,6 +333,10 @@ export function renderUiPage(options: UiPageOptions): string {
     var label = $('score-label');
     label.textContent = t(score.label);
     label.style.color = colors.main;
+    var say = 'Armo: \\u201c' + t({ green: 'armoGreen', yellow: 'armoYellow', red: 'armoRed' }[score.color]) + '\\u201d';
+    $('mascot-say').textContent = say;
+    $('mascot').src = MASCOT[score.color];
+    $('mascot').alt = say;
     var sub = fmt('summary', { n: score.totalFindings, f: data.summary.filesScanned, ms: data.summary.durationMs });
     if (data.summary.suppressedCount) sub += ' ' + fmt('suppressed', { n: data.summary.suppressedCount });
     $('score-sub').textContent = sub;

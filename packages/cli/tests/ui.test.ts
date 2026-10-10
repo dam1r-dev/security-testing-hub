@@ -57,6 +57,10 @@ describe("security-hub ui (local web interface)", () => {
     expect(csp).toMatch(/script-src 'nonce-[^']+'/);
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).not.toContain("script-src 'unsafe-inline'");
+    expect(csp).toContain("img-src data:"); // Armo is embedded, never loaded from anywhere
+    expect(csp).not.toMatch(/img-src[^;]*https?:/);
+    expect(reply.body).toContain('id="mascot"');
+    expect(reply.body).toContain("data:image/");
   });
 
   it("refuses requests whose Host is not the loopback address (DNS rebinding)", async () => {
