@@ -30,6 +30,7 @@ export * from "./types";
 export { toSarif, toSarifString, SarifOptions } from "./output/sarif";
 export { computeScore, SecurityScore, ScoreColor } from "./output/score";
 export { toHtml } from "./output/html";
+export { MASCOT_NAME, mascotDataUri, mascotSay, mascotAlt } from "./output/mascot";
 export { toMarkdown, MARKDOWN_MARKER, MarkdownOptions } from "./output/markdown";
 export { toGithubAnnotations, annotationFor } from "./output/github";
 export { fixPromptFor, toFixPrompt, fenced, FixPromptOptions } from "./output/fix-prompt";

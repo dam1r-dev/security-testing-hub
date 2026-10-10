@@ -1,5 +1,6 @@
 import { Finding, ScanSummary, Severity } from "../types";
 import { fixPromptFor, toFixPrompt } from "./fix-prompt";
+import { MASCOT_NAME, mascotAlt, mascotDataUri, mascotSay } from "./mascot";
 import { computeScore, ScoreColor } from "./score";
 
 const COLOR_HEX: Record<ScoreColor, { main: string; bg: string; ring: string }> = {
@@ -94,6 +95,8 @@ export function toHtml(summary: ScanSummary, targetPath?: string): string {
     background: ${hex.bg}; border: 1px solid ${hex.main}33; border-radius: 16px;
     padding: 24px; margin-bottom: 24px;
   }
+  .mascot { width: 132px; height: 132px; object-fit: contain; flex: none; }
+  .mascot-say { margin: 0 0 10px; font-size: 14px; font-style: italic; color: #334155; }
   .score-ring .score-value { font-size: 40px; font-weight: 700; }
   .score-ring .score-percent { font-size: 13px; opacity: 0.8; }
   .score-meta { flex: 1; min-width: 220px; }
@@ -141,9 +144,11 @@ export function toHtml(summary: ScanSummary, targetPath?: string): string {
   </header>
 
   <div class="score-card">
+    <img class="mascot" src="${mascotDataUri(score.color)}" alt="${escapeHtml(mascotAlt(score.color))}" />
     ${scoreRingSvg(score.value, score.color)}
     <div class="score-meta">
       <p class="score-label">${score.label}</p>
+      <p class="mascot-say">${MASCOT_NAME}: “${escapeHtml(mascotSay(score.color))}”</p>
       <p class="score-sub">${score.totalFindings} finding(s) across ${summary.filesScanned} scanned file(s). This score is a rough heuristic signal, not a certification — see the README for known false-positive/false-negative rates.</p>
       <div class="stat-row">
         <div class="stat" style="border-color:${SEVERITY_COLOR.critical}55"><span class="n" style="color:${SEVERITY_COLOR.critical}">${score.bySeverity.critical}</span><span class="l">Critical</span></div>

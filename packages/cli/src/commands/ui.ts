@@ -202,7 +202,7 @@ function handle(
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
       "content-security-policy":
-        `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; ` +
+        `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src data:; ` +
         `connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
     });
     res.end(html);

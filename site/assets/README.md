@@ -1,5 +1,8 @@
 # Mascot images
 
+The mascot is **Armo**, an armadillo: curled up in his shell when the code is safe, nervous when it is not, alarmed
+when it is bad. Use one separate file per state, with no text baked into the picture and a transparent background.
+
 The site shows one image per security state. Replace these three files with the final artwork (same file names;
 SVG or PNG — if you use PNG, change the extension in `site/index.html`, search for `mascot-`):
 
