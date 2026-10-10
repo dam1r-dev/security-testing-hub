@@ -32,7 +32,9 @@ function render() {
   ];
   for (const [color, name] of Object.entries(MOODS)) {
     const { file, ext } = findImage(name);
-    const bytes = fs.readFileSync(file);
+    let bytes = fs.readFileSync(file);
+    // git on Windows may check text files out with CRLF; embed the same bytes everywhere
+    if (ext === ".svg") bytes = Buffer.from(bytes.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
     if (bytes.length > MAX_BYTES) {
       throw new Error(`${path.relative(root, file)} is ${Math.round(bytes.length / 1024)} KB; keep each mascot under ${MAX_BYTES / 1024} KB`);
     }
@@ -44,7 +46,7 @@ function render() {
 
 const output = render();
 if (process.argv.includes("--check")) {
-  const current = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
+  const current = fs.existsSync(target) ? fs.readFileSync(target, "utf8").replace(/\r\n/g, "\n") : "";
   if (current !== output) {
     console.error("mascot-data.ts is out of date: run `npm run mascot`");
     process.exit(1);
