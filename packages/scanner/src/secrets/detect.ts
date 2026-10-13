@@ -82,7 +82,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> | undefined {
 }
 
 export const KNOWN_SECRETS: KnownSecret[] = [
-  { id: "private-key", label: "private key", severity: "critical", pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----/g },
+  { id: "private-key", label: "private key", severity: "critical", pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----(?=[A-Za-z0-9+/=\s\\n]{40})/g },
   { id: "aws-access-key", label: "AWS access key ID", severity: "high", pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, accept: (m) => !isPlaceholder(m[0]) },
   { id: "github-token", label: "GitHub token", severity: "critical", pattern: /\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{50,255})\b/g },
   { id: "stripe-live-key", label: "Stripe live secret key", severity: "critical", pattern: /\b[sr]k_live_[0-9a-zA-Z]{24,99}\b/g, accept: (m) => !isPlaceholder(m[0]) },

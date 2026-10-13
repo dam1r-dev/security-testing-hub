@@ -17,7 +17,7 @@ const TOKENS = {
   anthropic: "sk-" + "ant-" + "api03-Zk3QpW7vLmN2xRtY9bHd5FgJ8cVn4XsA1uEi6oPq",
   openai: "sk-" + "proj-" + "T3bK9mXq2LzWv8RcYh5NfJd7PaUe4GsO1iVn6xCt",
   slack: "xox" + "b-" + "9283746510-Zk3QpW7vLmN2xRtY",
-  privateKey: "-----BEGIN " + "RSA PRIVATE KEY-----",
+  privateKey: "-----BEGIN " + "RSA PRIVATE KEY-----" + "\\nMIIEowIBAAKCAQEAu1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gun",
   serviceRole: [b64url({ alg: "HS256", typ: "JWT" }), b64url({ role: "service_role", iss: "supabase" }), "c2lnbmF0dXJlLWJ5dGVzLWhlcmU"].join("."),
   anon: [b64url({ alg: "HS256", typ: "JWT" }), b64url({ role: "anon", iss: "supabase" }), "c2lnbmF0dXJlLWJ5dGVzLWhlcmU"].join("."),
   dbUrl: "postgres://" + "admin:" + "Sup3rS3cret" + "@db.prod-host.io:5432/shop",
@@ -26,6 +26,38 @@ const TOKENS = {
 const analyzers = [new HardcodedSecretAnalyzer()];
 const scan = (source: string, file = "app.js") => scanSource(source, file, analyzers).findings;
 const rules = (source: string) => scan(source).map((f) => f.ruleId);
+
+describe("hardcoded-secret: found by validating real projects (round 9)", () => {
+  it("does not take the PEM header in a format check for a private key", () => {
+    const marker = "-----BEGIN " + "PRIVATE KEY-----";
+    expect(rules(`if (rawKey.includes("${marker}")) { return rawKey.replace(/\\\\n/g, "\\n"); }`)).toEqual([]);
+  });
+
+  it("does not report the Firebase web config apiKey: it ships in every browser bundle by design", () => {
+    const key = "AIza" + "SyD0aB3cD4eF5gH6iJ7kL8mN9oP0qR1sT2u";
+    expect(rules(`const firebaseConfig = { apiKey: process.env.NEXT_PUBLIC_FB_API_KEY || "${key}", authDomain: "x.firebaseapp.com", projectId: "x" };`)).toEqual([]);
+    expect(rules(`const config = { apiKey: "${key}", projectId: "x", appId: "1:2:web:3" };`)).toEqual([]);
+    // the same value next to nothing that says "Firebase config" is still reported
+    expect(rules(`const options = { apiKey: "${key}", region: "eu" };`)).toEqual(["hardcoded-secret"]);
+  });
+
+  it("does not report a constant named as a development-only stand-in", () => {
+    expect(rules(`const DEV_ONLY_JWT_SECRET = "dev-only-secret-change-me-please";`)).toEqual([]);
+    expect(rules(`const JWT_SECRET = "dev-only-secret-change-me-please";`)).toEqual(["hardcoded-secret"]);
+  });
+
+  it("skips test scripts kept next to the code (test-suite.ts, login-test.js)", () => {
+    const code = `const user = { email: "a@b.co", password: "Senha-Teste-123" };`;
+    expect(scanSource(code, "scripts/app.ts", analyzers).findings).toHaveLength(1);
+    // file discovery skips these names; the check lives in scanPath
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sh-testfiles-"));
+    fs.writeFileSync(path.join(dir, "test-suite.ts"), code);
+    fs.writeFileSync(path.join(dir, "login-test.js"), code);
+    fs.writeFileSync(path.join(dir, "app.ts"), code);
+    const scanned = scanPath(dir, { analyzers }).results.map((r) => path.basename(r.file));
+    expect(scanned).toEqual(["app.ts"]);
+  });
+});
 
 describe("hardcoded-secret: known token formats", () => {
   it.each([

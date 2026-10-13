@@ -2,6 +2,26 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
+## Unreleased
+
+### Added
+- **Armo, the mascot** (an armadillo): shown in the HTML report and in `security-hub ui`, curled up when the score is
+  good, nervous when it needs attention, alarmed when the project is at risk. The images are embedded (`npm run mascot`
+  rebuilds them from `site/assets/`), so the report is still one file that makes no network request.
+- `firebase-rules` reports writes that never mention `request.auth` (only the shape of the data is validated) and
+  public reads of documents that hold phone numbers, ID numbers, e-mails or bank details, whatever the collection
+  is called; zero-argument helper functions such as `ok()` are expanded first.
+
+### Changed (fewer false findings, from validating 16 real vibe-coded projects, see docs/validation.md round 9)
+- First pass on those projects: 118 findings, 20% real. After the changes below: 40 findings, all real or reasonable.
+- `idor` follows the handler into the controller file and its helpers, and skips routes behind an explicit role check.
+- `csrf` reads the whole project: a csrf middleware registered in another file, an `Authorization`-header API that
+  never reads cookies, and Firebase / Supabase-client apps no longer produce findings.
+- `hardcoded-secret` ignores the Firebase web config `apiKey`, a PEM header with no key body, `DEV_ONLY_*` constants
+  and test scripts (`test-suite.ts`).
+- `supabase-auth` reports `getSession()` only in server code; `broken-access-control` accepts a shared-secret header
+  check; `supabase-rls` lowers a table without RLS to medium when the app uses Supabase only from a server.
+
 ## 0.5.0
 
 The first release since 0.3.0: it contains everything below, including the work that was prepared as 0.4.0 (that

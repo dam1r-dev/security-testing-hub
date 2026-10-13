@@ -64,7 +64,9 @@ const DEFAULT_IGNORED_DIRS = new Set([
 const TEST_DIRS = new Set(["test", "tests", "__tests__", "__mocks__", "e2e", "cypress"]);
 // *.test.js / *.spec.ts (tests living next to the code) and minified bundles.
 const MINIFIED_FILE_PATTERN = /\.min\.[cm]?js$/i;
-const TEST_FILE_PATTERN = /\.(test|spec)\.[cm]?[jt]sx?$/i;
+// Also `test-suite.ts`, `test_users.js`, `login-test.ts`: a test script kept next to the code (seen in a real project:
+// its fake sign-up passwords were reported as leaked credentials).
+const TEST_FILE_PATTERN = /(?:\.(?:test|spec)|[-_](?:test|tests|spec)|^(?:test|tests|spec)[-_][^.]*)\.[cm]?[jt]sx?$/i;
 /** Optional project-level ignore list, one path pattern per line (see docs/rules.md). */
 export const IGNORE_FILE_NAME = ".security-hub-ignore";
 // Hand-written source is far below this. A multi-megabyte file is a bundle or generated

@@ -73,10 +73,31 @@ interface Candidates {
   sql: string[];
   rules: string[];
   rtdb: string[];
+  /** Application source files, to see whether the app ships the Supabase anon key to browsers. */
+  source: string[];
+}
+
+const MAX_SOURCE_FILES = 1500;
+const BROWSER_SUPABASE = /(?:NEXT_PUBLIC|VITE|REACT_APP|EXPO_PUBLIC|NUXT_PUBLIC|PUBLIC)_SUPABASE|createBrowserClient|import\.meta\.env\.\w*SUPABASE|anon[_-]?key|["']use client["']/i;
+
+/**
+ * Does the app put the Supabase anon key into the browser? `undefined` when no Supabase client code was seen at
+ * all (then nothing is assumed). Server-only apps that talk to Supabase with the service-role key never publish
+ * the anon key, so a missing RLS policy is a safety-net gap there rather than an open door.
+ */
+function anonKeyShipped(sources: string[]): boolean | undefined {
+  let client = false;
+  for (const file of sources) {
+    const text = read(file);
+    if (text === undefined || !/@supabase\/(?:supabase-js|ssr)/.test(text)) continue;
+    client = true;
+    if (BROWSER_SUPABASE.test(text)) return true;
+  }
+  return client ? false : undefined;
 }
 
 function collect(root: string, skipDirs: Set<string>, isIgnored: (relative: string) => boolean): Candidates {
-  const found: Candidates = { sql: [], rules: [], rtdb: [] };
+  const found: Candidates = { sql: [], rules: [], rtdb: [], source: [] };
   const stack = [root];
   while (stack.length > 0) {
     const current = stack.pop() as string;
@@ -95,6 +116,7 @@ function collect(root: string, skipDirs: Set<string>, isIgnored: (relative: stri
         if (/\.sql$/i.test(entry.name)) found.sql.push(full);
         else if (/\.rules$/i.test(entry.name)) found.rules.push(full);
         else if (/\.rules\.json$/i.test(entry.name) || entry.name === "database.rules.json") found.rtdb.push(full);
+        else if (/\.(?:[cm]?[jt]sx?|vue|svelte)$/i.test(entry.name) && found.source.length < MAX_SOURCE_FILES) found.source.push(full);
       }
     }
   }
@@ -131,7 +153,8 @@ export function scanBackendConfigs(root: string, skipDirs: Set<string>, isIgnore
     groups.set(key, [...(groups.get(key) ?? []), { file, text }]);
   }
   for (const [supabaseRoot, files] of groups) {
-    for (const [file, findings] of analyzeSupabaseSql(files, { exposedSchemas: exposedSchemas(supabaseRoot) })) addFindings(file, findings);
+    const shipped = anonKeyShipped(candidates.source);
+    for (const [file, findings] of analyzeSupabaseSql(files, { exposedSchemas: exposedSchemas(supabaseRoot), anonKeyShipped: shipped })) addFindings(file, findings);
   }
 
   // Firebase: Firestore / Storage rules and Realtime Database rules.

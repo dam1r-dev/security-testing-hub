@@ -15,6 +15,59 @@ const PII_PATH = /user|profile|customer|order|payment|invoice|account|subscripti
 
 type Method = "get" | "list" | "create" | "update" | "delete";
 
+/** Index of the `}` that closes the block opened just before `from`. */
+function blockEnd(text: string, from: number): number {
+  let depth = 1;
+  for (let i = from; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}" && --depth === 0) return i;
+  }
+  return text.length;
+}
+
+/** `function name(params) { ... }` -> body text (everything between the braces). */
+function collectFunctions(text: string): Map<string, { params: string; body: string }> {
+  const functions = new Map<string, { params: string; body: string }>();
+  for (const m of text.matchAll(/\bfunction\s+(\w+)\s*\(([^)]*)\)\s*\{/g)) {
+    const start = (m.index ?? 0) + m[0].length;
+    functions.set(m[1] as string, { params: (m[2] as string).trim(), body: text.slice(start, blockEnd(text, start)) });
+  }
+  return functions;
+}
+
+/** Zero-argument helpers such as `function ok() { return request.auth != null; }` are replaced by their expression. */
+function inlineSimpleFunctions(condition: string, functions: Map<string, { params: string; body: string }>): string {
+  let out = condition;
+  for (let pass = 0; pass < 4; pass++) {
+    const next = out.replace(/\b(\w+)\s*\(\s*\)/g, (whole, name: string) => {
+      const fn = functions.get(name);
+      const only = fn && fn.params === "" ? /^\s*return\s+([^;]*);\s*$/.exec(fn.body)?.[1] : undefined;
+      return only === undefined ? whole : `(${only})`;
+    });
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
+/** The condition plus the body of every helper it calls (recursively), for "does this ever look at request.auth?". */
+function withCalledFunctions(condition: string, functions: Map<string, { params: string; body: string }>): string {
+  const seen = new Set<string>();
+  let text = condition;
+  for (let pass = 0; pass < 5; pass++) {
+    let added = false;
+    for (const [name, fn] of functions) {
+      if (!seen.has(name) && new RegExp(`\\b${name}\\s*\\(`).test(text)) {
+        seen.add(name);
+        text += `\n${fn.body}`;
+        added = true;
+      }
+    }
+    if (!added) break;
+  }
+  return text;
+}
+
 function expandMethods(text: string): Set<Method> {
   const methods = new Set<Method>();
   for (const raw of text.split(",")) {
@@ -88,6 +141,8 @@ export function analyzeFirebaseRules(source: string, file: string, kind: RulesKi
   const text = stripComments(source);
   const findings: Finding[] = [];
   const frames: string[] = [];
+  const blocks: string[] = []; // text of each open `match` block (so the fields it mentions are known), "" otherwise
+  const functions = collectFunctions(text);
   const store = kind === "storage" ? "Cloud Storage" : "Firestore";
   const noun = kind === "storage" ? "file" : "document";
   const token = /\bmatch\s+((?:[^\s{};]|\{[^{}]*\})+)\s*\{|\bfunction\s+\w+\s*\([^)]*\)\s*\{|\ballow\s+([\w\s,]+?)\s*(?::\s*if\s+([^;]*))?;|\{|\}/g;
@@ -95,14 +150,18 @@ export function analyzeFirebaseRules(source: string, file: string, kind: RulesKi
   for (let m = token.exec(text); m !== null; m = token.exec(text)) {
     if (m[0] === "}") {
       frames.pop();
+      blocks.pop();
       continue;
     }
     if (m[0].startsWith("match")) {
       frames.push((m[1] as string).trim());
+      const start = m.index + m[0].length;
+      blocks.push(text.slice(start, blockEnd(text, start)));
       continue;
     }
     if (m[0].startsWith("function") || m[0] === "{") {
       frames.push("");
+      blocks.push("");
       continue;
     }
 
@@ -111,7 +170,14 @@ export function analyzeFirebaseRules(source: string, file: string, kind: RulesKi
     const writes = (["create", "update", "delete"] as const).filter((x) => methods.has(x));
     const modifies = (["update", "delete"] as const).filter((x) => methods.has(x));
     const reads = methods.has("get") || methods.has("list");
-    const condition = m[3] === undefined ? "true" : unwrap(m[3]);
+    const rawCondition = m[3] === undefined ? "true" : m[3];
+    const condition = unwrap(inlineSimpleFunctions(rawCondition, functions));
+    const blockText = [...blocks].reverse().find((b) => b !== "") ?? "";
+    // the whole picture of this rule: its condition, the helpers it calls, and the block's own field validators
+    const rulePicture = withCalledFunctions(`${rawCondition}\n${blockText}`, functions);
+    // Field names that hold personal or financial data: a public read of a document that has them is a leak even when
+    // the collection's own name ("reports", "volunteers") says nothing.
+    const piiFields = [...new Set([...rulePicture.matchAll(/['".]\s*(\w*(?:phone|cedula|dni|ssn|passport|e-?mail|address|birth|iban|bank|password|secret|salary)\w*)/gi)].map((x) => x[1] as string))].slice(0, 4);
     const line = lineAt(text, m.index);
     const snippet = m[0].replace(/\s+/g, " ").trim();
 
@@ -137,15 +203,16 @@ export function analyzeFirebaseRules(source: string, file: string, kind: RulesKi
             snippet,
           ),
         );
-      } else if (reads && (isGlobal || sensitive)) {
+      } else if (reads && (isGlobal || sensitive || piiFields.length > 0)) {
+        const personal = piiFields.length > 0 && !isGlobal ? `, which holds personal data (${piiFields.join(", ")})` : sensitive && !isGlobal ? ", which looks like private data" : "";
         findings.push(
           makeFinding(
             file,
             line,
             // Public reads of ALL files in Storage are common (public images); of all Firestore documents they are not.
-            isGlobal ? (kind === "storage" ? "medium" : "critical") : PII_PATH.test(collection) ? "high" : "medium",
+            isGlobal ? (kind === "storage" ? "medium" : "critical") : PII_PATH.test(collection) || piiFields.length > 0 ? "high" : "medium",
             "high",
-            `This rule lets ANYONE on the internet read ${where}${sensitive && !isGlobal ? ", which looks like private data" : ""} (\`if true\`). ` +
+            `This rule lets ANYONE on the internet read ${where}${personal} (\`if true\`). ` +
               `Restrict reads to the signed-in owner: allow read: if request.auth != null && request.auth.uid == resource.data.ownerId;`,
             "allow read if true",
             snippet,
@@ -170,6 +237,31 @@ export function analyzeFirebaseRules(source: string, file: string, kind: RulesKi
             : `These test-mode rules expired on ${expires.toISOString().slice(0, 10)}, so every request is denied right now. Do not "fix" it by moving the date: ` +
                 `write real rules (signed-in owner only) instead.`,
           "request.time < timestamp.date(...)",
+          snippet,
+        ),
+      );
+      continue;
+    }
+
+    // A rule that never looks at request.auth: whoever can reach the database may do it, signed in or not. Validating
+    // the shape of the data (hasOnly, size limits) is not an access check.
+    const conditionPicture = withCalledFunctions(rawCondition, functions);
+    if (
+      modifies.length > 0 &&
+      condition !== "false" &&
+      !/request\.auth/.test(conditionPicture) &&
+      !/\b(?:get|exists|getAfter|existsAfter)\s*\(/.test(conditionPicture)
+    ) {
+      findings.push(
+        makeFinding(
+          file,
+          line,
+          isGlobal ? "critical" : "high",
+          "medium",
+          `Nothing in this rule checks who is asking: any visitor on the internet, signed in or not, can ${modifies.join(" or ")} ${where}` +
+            `${piiFields.length > 0 ? ` (fields such as ${piiFields.join(", ")})` : ""}. Checking the shape of the data does not protect it. ` +
+            `Require a signed-in owner (request.auth.uid == resource.data.ownerId), or an admin check, for every ${modifies.join("/")}.`,
+          "no request.auth in the rule",
           snippet,
         ),
       );

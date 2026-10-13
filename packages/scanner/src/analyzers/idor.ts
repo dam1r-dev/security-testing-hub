@@ -4,6 +4,7 @@ import { Finding } from "../types";
 import { Analyzer } from "./base-analyzer";
 import { findNextHandlers, idLikeDynamicSegments, isNextRouteFile, routeSegments } from "./nextjs-routes";
 import { authKind } from "./project-info";
+import { FileInfo, ProjectContext } from "../taint/project";
 
 const ROUTER_OBJECT_PATTERN = /^(app|router)$/i;
 const ROUTER_SUFFIX_PATTERN = /router$/i;
@@ -34,6 +35,38 @@ const OWNERSHIP_CHECK_HINT = new RegExp(
   ].join("|"),
   "i",
 );
+
+// A route behind an explicit role check (`checkRole(['Admin'])`, `authorize('ADMIN')`, `requireAdmin`) is gated by
+// the developer's own authorization model; whether a role may see every record of a table (a catalogue, an admin
+// screen) or only its own is a design decision this rule cannot read from the code.
+const ROLE_GATE = /\b(?:checkRole|requireRole|hasRole|authorizeRoles?|restrictTo|allowRoles?|permit|requirePermission|hasPermission|authorize)\s*\(\s*\[?\s*['"`]|\b(?:requireAdmin|isAdmin|adminOnly|onlyAdmin)\b/;
+
+/** True when this code, or a project function it calls (two levels deep), looks at who the caller is. */
+function checksOwnership(node: SyntaxNode, info: FileInfo, project: ProjectContext, depth: number): boolean {
+  if (OWNERSHIP_CHECK_HINT.test(node.text)) return true;
+  if (depth <= 0) return false;
+  for (const call of info.callsIn(node)) {
+    const fn = project.resolveCallee(call, info);
+    if (fn && checksOwnership(fn.node, fn.info, project, depth - 1)) return true;
+  }
+  return false;
+}
+
+/** Route handlers given by name (`Controller.getUser`) live in another file; follow them there. */
+function handlerChecksOwnership(route: SyntaxNode, info: FileInfo, project: ProjectContext): boolean {
+  const args = route.childForFieldName("arguments");
+  for (let i = 1; args && i < args.namedChildCount; i++) {
+    const arg = args.namedChild(i);
+    if (!arg) continue;
+    if (arg.type === "identifier" || arg.type === "member_expression") {
+      const entity = project.resolve(arg.type === "identifier" ? info.lookup(arg.text, route) : info.entityFromExpr(arg));
+      if (entity?.kind === "fn" && checksOwnership(entity.fn.node, entity.fn.info, project, 2)) return true;
+    } else if (checksOwnership(arg, info, project, 2)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 interface RouteRegistration {
   call: SyntaxNode;
@@ -76,16 +109,19 @@ function findIdParamRoutes(root: SyntaxNode): RouteRegistration[] {
  * IDs just make the attack slower to find manually, not impossible.
  */
 export class IdorAnalyzer implements Analyzer {
-  analyze(parsed: ParsedFile, filePath: string): Finding[] {
+  analyze(parsed: ParsedFile, filePath: string, context?: ProjectContext): Finding[] {
     // No authentication library anywhere in the project: there is no per-user data to be reached through
     // someone else's id (a demo or public API). Admin-looking routes are still covered by broken-access-control.
     if (authKind(filePath) === "none") return [];
-    if (isNextRouteFile(filePath)) return this.analyzeNextRoute(parsed, filePath);
+    const project = context ?? ProjectContext.forSingleFile(filePath, parsed);
+    const info = project.fileInfo(filePath, parsed);
+    if (isNextRouteFile(filePath)) return this.analyzeNextRoute(parsed, filePath, project, info);
 
     const routes = findIdParamRoutes(parsed.tree.rootNode);
 
     return routes
-      .filter((route) => !OWNERSHIP_CHECK_HINT.test(route.call.text))
+      .filter((route) => !OWNERSHIP_CHECK_HINT.test(route.call.text) && !ROLE_GATE.test(route.call.text))
+      .filter((route) => !info || !handlerChecksOwnership(route.call, info, project))
       .map((route) => ({
         ruleId: "idor" as const,
         severity: "high" as const,
@@ -107,13 +143,14 @@ export class IdorAnalyzer implements Analyzer {
    * "route registration" node to flag — each exported HTTP method handler
    * in the file is checked independently instead.
    */
-  private analyzeNextRoute(parsed: ParsedFile, filePath: string): Finding[] {
+  private analyzeNextRoute(parsed: ParsedFile, filePath: string, project: ProjectContext, info: FileInfo | undefined): Finding[] {
     const idSegments = idLikeDynamicSegments(routeSegments(filePath));
     if (idSegments.length === 0) return [];
 
     const handlers = findNextHandlers(parsed.tree.rootNode);
     return handlers
-      .filter((h) => !OWNERSHIP_CHECK_HINT.test(h.node.text))
+      .filter((h) => (info ? !checksOwnership(h.node, info, project, 2) : !OWNERSHIP_CHECK_HINT.test(h.node.text)))
+      .filter((h) => !ROLE_GATE.test(h.node.text))
       // A handler that takes no arguments cannot read the id from the URL at all.
       .filter((h) => (h.node.childForFieldName("parameters")?.namedChildCount ?? 1) > 0)
       .map((h) => ({

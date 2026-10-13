@@ -225,6 +225,46 @@ service firebase.storage {
     expect(found[0]?.message).toContain("EVERY file");
     expect(found[0]?.location.startLine).toBe(5);
   });
+
+  describe("found by validating real projects (round 9)", () => {
+    it("a write that only validates the shape of the data, with no request.auth anywhere, lets any visitor change it", () => {
+      const found = check(
+        `    function valid(d) { return d.keys().hasOnly(['title', 'bankAccount']) && d.title is string; }\n` +
+          `    match /config/{id} {\n      allow read: if false;\n      allow create, update: if valid(request.resource.data);\n    }`,
+      );
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatchObject({ severity: "high", confidence: "medium" });
+      expect(found[0]?.message).toContain("signed in or not");
+      expect(found[0]?.message).toContain("bankAccount");
+    });
+
+    it("but creating a document through a validated public form is a design choice, and an auth check anywhere in the rule is fine", () => {
+      expect(check(`    match /feedback/{id} {\n      allow create: if request.resource.data.text is string;\n    }`)).toEqual([]);
+      expect(check(`    match /notes/{id} {\n      allow update, delete: if request.auth.uid == resource.data.ownerId;\n    }`)).toEqual([]);
+      expect(
+        check(`    function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }\n    match /notes/{uid} {\n      allow write: if isOwner(uid);\n    }`),
+      ).toEqual([]);
+      // a lookup in another document may well be the admin check: not provable, so no finding
+      expect(check(`    match /notes/{id} {\n      allow update: if get(/databases/$(database)/documents/admins/x).data.ok == true;\n    }`)).toEqual([]);
+    });
+
+    it("a public read is flagged when the documents hold phone numbers or ID numbers, whatever the collection is called", () => {
+      const found = check(
+        `    function valid(d) { return d.keys().hasOnly(['name', 'phone', 'cedula']); }\n` +
+          `    match /volunteers/{id} {\n      allow read: if true;\n      allow create: if valid(request.resource.data);\n    }`,
+      );
+      expect(found).toHaveLength(1);
+      expect(found[0]?.message).toContain("personal data (phone, cedula)");
+      expect(found[0]?.severity).toBe("high");
+      expect(check(`    match /announcements/{id} {\n      allow read: if true;\n      allow create: if request.resource.data.text is string;\n    }`)).toEqual([]);
+    });
+
+    it("sees through a zero-argument helper such as ok() = signed in", () => {
+      const found = check(`    function ok() { return request.auth != null; }\n    match /tasks/{doc} {\n      allow read, write: if ok();\n    }`);
+      expect(found).toHaveLength(1);
+      expect(found[0]?.message).toContain("only checks that the caller is signed in");
+    });
+  });
 });
 
 describe("Realtime Database rules", () => {
