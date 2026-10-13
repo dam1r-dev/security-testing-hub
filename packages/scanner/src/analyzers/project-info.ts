@@ -86,9 +86,12 @@ export function databaseKind(filePath: string): DatabaseKind {
 const LAX_COOKIE_AUTH_DEPS = /^(next-auth|@auth\/.+|@clerk\/.+|@supabase\/ssr|@supabase\/auth-helpers-nextjs|better-auth|iron-session|lucia)$/;
 // Cookie/session middleware where the application chooses the cookie attributes itself.
 const GENERIC_COOKIE_DEPS = /^(express-session|cookie-session|cookie-parser|koa-session|@fastify\/session|@fastify\/cookie|passport-local|csurf|cookies-next|cookie|connect-.+)$/;
+// Client libraries that keep the user's token in the page (IndexedDB / localStorage) and send it in a header: the
+// browser never attaches it to a cross-site request by itself, so CSRF cannot happen through them.
+const TOKEN_CLIENT_DEPS = /^(firebase|firebase-admin|@supabase\/supabase-js)$/;
 // Anything else that signals "this app has users and logins".
 const OTHER_AUTH_DEPS =
-  /^(passport(-.+)?|firebase|firebase-admin|@supabase\/supabase-js|auth0|@auth0\/.+|express-openid-connect|@okta\/.+|oauth2-server|bcrypt|bcryptjs|argon2|@node-rs\/argon2)$/;
+  /^(passport(-.+)?|auth0|@auth0\/.+|express-openid-connect|@okta\/.+|oauth2-server|bcrypt|bcryptjs|argon2|@node-rs\/argon2)$/;
 
 /**
  * - `cookies`: cookie/session middleware the app configures itself (CSRF can apply)
@@ -113,7 +116,7 @@ export function authKind(filePath: string): AuthKind {
         ? "cookies"
         : has(LAX_COOKIE_AUTH_DEPS)
           ? "lax-cookies"
-          : has(BEARER_AUTH_DEPS)
+          : has(BEARER_AUTH_DEPS) || has(TOKEN_CLIENT_DEPS)
             ? has(OTHER_AUTH_DEPS)
               ? "unknown"
               : "bearer"
@@ -128,4 +131,80 @@ export function authKind(filePath: string): AuthKind {
     dir = parent;
   }
   return "unknown";
+}
+
+export interface SourceFacts {
+  /** Some source file mentions CSRF/XSRF in code (middleware, a token check, ...). */
+  csrf: boolean;
+  /** The code reads the credential from the Authorization header. */
+  authHeader: boolean;
+  /** The code reads or sets cookies / sessions (a library merely being installed does not count). */
+  cookieUse: boolean;
+}
+
+const SOURCE_EXT = /\.(?:[cm]?[jt]sx?)$/;
+const SKIP_DIR = /^(?:node_modules|\.git|dist|build|\.next|out|coverage|vendor|\.turbo|__tests__|tests?|e2e|cypress)$/i;
+const MAX_FACT_FILES = 800;
+const MAX_FACT_BYTES = 300 * 1024;
+const FACTS_TTL_MS = 20_000;
+const factsCache = new Map<string, { at: number; facts: SourceFacts }>();
+
+function stripComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:"'`\\])\/\/[^\n]*/g, "$1");
+}
+
+function projectRoot(filePath: string): string | undefined {
+  let dir = path.dirname(path.resolve(filePath));
+  for (let depth = 0; depth < 10; depth++) {
+    if (fs.existsSync(path.join(dir, "package.json"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
+}
+
+/**
+ * What the project's own source code does about authentication and CSRF, read once per project (and again after
+ * a short while, since `security-hub ui` keeps running while the code is edited). Dependencies alone mislead:
+ * `cookie-session` can be installed and never used, and a CSRF middleware is usually registered in one entry file
+ * while the routes live in a hundred others.
+ */
+export function sourceFacts(filePath: string): SourceFacts | undefined {
+  const root = projectRoot(filePath);
+  if (!root) return undefined;
+  const cached = factsCache.get(root);
+  if (cached && Date.now() - cached.at < FACTS_TTL_MS) return cached.facts;
+
+  const facts: SourceFacts = { csrf: false, authHeader: false, cookieUse: false };
+  let seen = 0;
+  const walk = (dir: string): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (seen >= MAX_FACT_FILES) return;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!SKIP_DIR.test(entry.name)) walk(full);
+      } else if (entry.isFile() && SOURCE_EXT.test(entry.name) && !/\.(?:test|spec)\./.test(entry.name)) {
+        seen++;
+        try {
+          if (fs.statSync(full).size > MAX_FACT_BYTES) continue;
+          const code = stripComments(fs.readFileSync(full, "utf8"));
+          facts.csrf ||= /csrf|xsrf/i.test(code);
+          facts.authHeader ||= /headers\??\.authorization|headers\[\s*['"]authorization['"]\s*\]|\.get\(\s*['"]authorization['"]\s*\)|\bBearer\b/i.test(code);
+          facts.cookieUse ||= /\b(?:req|request|ctx)\.(?:cookies|session)\b|\b(?:res|response)\.cookie\s*\(|\bcookies\s*\(\s*\)|\bcookieSession\s*\(|\bsession\s*\(\s*\{|\bsetCookie\b|\bcookieParser\s*\(/.test(code);
+        } catch {
+          // an unreadable file adds nothing
+        }
+      }
+    }
+  };
+  walk(root);
+  factsCache.set(root, { at: Date.now(), facts });
+  return facts;
 }

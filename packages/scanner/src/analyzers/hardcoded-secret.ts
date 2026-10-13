@@ -70,7 +70,9 @@ function nameFor(literal: SyntaxNode): string | undefined {
 
 // `const PLACEHOLDER_SECRETS = { AUTH_JWT_SECRET: "secret" }` is a list of values the program REJECTS
 // (checks the environment against them at start-up), not credentials it uses.
-const NON_SECRET_CONTAINER = /placeholder|example|sample|dummy|fake|mock|fixture|forbidden|blocklist|denylist|weak|insecure/i;
+// `DEV_ONLY_JWT_SECRET` is the same idea: a value named as a development stand-in (the code around it usually refuses
+// to start in production without the real one).
+const NON_SECRET_CONTAINER = /placeholder|example|sample|dummy|fake|mock|fixture|forbidden|blocklist|denylist|weak|insecure|dev[-_]?only|development[-_]?only|local[-_]?only/i;
 
 function insideNonSecretContainer(literal: SyntaxNode): boolean {
   for (let p = literal.parent; p; p = p.parent) {
@@ -99,7 +101,27 @@ function isCallOptionsProperty(literal: SyntaxNode): boolean {
   return /session|jwt|nextauth|auth|cookie|csrf|passport|token|sign/i.test(callee);
 }
 
-const PUBLIC_ENV_USE = /(?:process\.env|import\.meta\.env)\.([A-Z][A-Z0-9_]*)/g;
+/**
+ * `{ apiKey: "AIza...", authDomain: ..., projectId: ..., appId: ... }` is the Firebase web config: it ships in every
+ * browser bundle by design (the rules, not the key, protect the data), so it is not a leaked credential.
+ */
+function isFirebaseWebConfig(literal: SyntaxNode): boolean {
+  let current = literal;
+  for (;;) {
+    const parent = current.parent;
+    if (!parent) return false;
+    const isFallback = parent.type === "binary_expression" && /^(\|\||\?\?)$/.test(parent.childForFieldName("operator")?.text ?? "");
+    if (WRAPPERS.has(parent.type) || isFallback) {
+      current = parent;
+      continue;
+    }
+    if (parent.type !== "pair" || parent.parent?.type !== "object") return false;
+    const keys = new Set(parent.parent.namedChildren.map((p) => p.childForFieldName("key")?.text.replace(/^["'`]|["'`]$/g, "")));
+    return keys.has("authDomain") || (keys.has("projectId") && (keys.has("appId") || keys.has("messagingSenderId") || keys.has("storageBucket")));
+  }
+}
+
+const PUBLIC_ENV_USE =/(?:process\.env|import\.meta\.env)\.([A-Z][A-Z0-9_]*)/g;
 const SIGNING_CALL = /^(?:jwt|jsonwebtoken)\.(?:sign|verify)$/;
 
 /**
@@ -223,7 +245,7 @@ export class HardcodedSecretAnalyzer implements Analyzer {
             `${isPlaceholder(value) ? " (it looks like a placeholder that was never replaced)" : ""}. Anyone who reads the ` +
             `code can forge logins. Use a long random value from an environment variable (process.env.${name.toUpperCase()}).`,
         );
-      } else if (isSensitiveName(name) && looksLikeSecret(value, name)) {
+      } else if (isSensitiveName(name) && looksLikeSecret(value, name) && !isFirebaseWebConfig(node)) {
         add(
           node.startIndex,
           node.endIndex,

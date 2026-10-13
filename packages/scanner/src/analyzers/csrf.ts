@@ -3,7 +3,7 @@ import { findNodes, snippet, toLocation, SyntaxNode } from "../parsers/utils";
 import { Finding } from "../types";
 import { Analyzer } from "./base-analyzer";
 import { findNextHandlers, isNextRouteFile, STATE_CHANGING_METHOD_NAMES } from "./nextjs-routes";
-import { authKind, isBearerOnlyProject } from "./project-info";
+import { authKind, isBearerOnlyProject, sourceFacts } from "./project-info";
 
 const STATE_CHANGING_METHODS = new Set(["post", "put", "delete", "patch"]);
 const ROUTER_OBJECT_PATTERN = /^(app|router)$/i;
@@ -55,7 +55,12 @@ export class CsrfAnalyzer implements Analyzer {
     // frameworks whose session cookie is SameSite=Lax by default (Auth.js/NextAuth, Clerk, Supabase SSR,
     // Better Auth, ...), a cross-site POST arrives without it: nothing to forge.
     const kind = authKind(filePath);
-    if (kind === "lax-cookies") return [];
+    if (kind === "lax-cookies" || kind === "bearer") return [];
+    // The protection is usually registered once (app.use(verifyCsrf)) in a different file from the routes, and a
+    // session library can be installed without the app ever reading a cookie: ask the project's own code.
+    const facts = sourceFacts(filePath);
+    if (facts?.csrf) return [];
+    if (facts?.authHeader && !facts.cookieUse) return [];
     if (kind === "none" && !/cookie|session/i.test(parsed.sourceCode)) return [];
 
     const nodes = isNextRouteFile(filePath)

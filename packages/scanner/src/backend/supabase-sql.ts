@@ -19,6 +19,8 @@ export interface SqlFile {
 export interface SupabaseSqlOptions {
   /** Schemas the API exposes (supabase/config.toml `[api] schemas`); default `["public"]`. */
   exposedSchemas?: string[];
+  /** false when the app only talks to Supabase from a server (no anon key in the browser); undefined = unknown. */
+  anonKeyShipped?: boolean;
 }
 
 interface Table {
@@ -232,13 +234,17 @@ export function analyzeSupabaseSql(files: SqlFile[], options: SupabaseSqlOptions
       if (!exposed.has(table.name.schema) || table.rls || table.restricted || NOT_USER_DATA.has(table.name.name)) continue;
       const where = table.disabled ?? { file: table.file, line: table.line };
       const q = `${table.name.schema}.${table.name.name}`;
+      const serverOnly = options.anonKeyShipped === false;
       add(
         where.file,
         where.line,
-        "critical",
-        table.disabled ? "high" : "medium",
+        serverOnly ? "medium" : "critical",
+        serverOnly ? "low" : table.disabled ? "high" : "medium",
         `Table ${q} is served by Supabase's auto-generated API but Row Level Security is ${table.disabled ? "switched OFF" : "never enabled"}. ` +
-          `Anyone who has your project's anon key (it ships in the browser, so everyone does) can read, change and delete every row. ` +
+          (serverOnly
+            ? `This app seems to use Supabase only from a server (the anon key is not shipped to browsers), so it is a missing safety net rather than an open door: ` +
+              `anyone who gets hold of the project's anon key, which is not a secret by design, can read, change and delete every row. `
+            : `Anyone who has your project's anon key (it ships in the browser, so everyone does) can read, change and delete every row. `) +
           `Run: ALTER TABLE ${q} ENABLE ROW LEVEL SECURITY; and add policies that scope rows to their owner (e.g. USING (auth.uid() = user_id)).`,
         "row level security off",
         table.disabled ? `ALTER TABLE ${q} DISABLE ROW LEVEL SECURITY` : `CREATE TABLE ${q} (...)`,

@@ -19,6 +19,12 @@ const USE_CLIENT = /^(?:\s*(?:\/\/[^\n]*\n|\/\*[\s\S]*?\*\/))*\s*["']use client[
 const GET_SESSION_CALLEE = /\.auth\.getSession$/;
 const ROLE_LIKE_METADATA = /user_metadata\??(?:\.|\[["'])(role|roles|is_?admin|admin|plan|tier|permissions?|subscription\w*|access\w*)(?:["']\])?$/;
 
+// getSession() is the normal call in the browser (a single-page app, a hook, a context): only code that runs on a
+// server can be handed a forged cookie. Server code is recognised by what it imports or where it lives.
+const SERVER_HINT =
+  /["']use server["']|from\s+["']next\/(?:headers|server)["']|require\(["']next\/(?:headers|server)["']\)|createServerClient|from\s+["'](?:express|fastify|koa|hono|@hono\/[\w-]+|h3|@remix-run\/(?:node|server-runtime)|@sveltejs\/kit)["']|require\(["'](?:express|fastify|koa)["']\)/;
+const SERVER_PATH = /(?:^|[\\/])(?:api|server|actions|middleware|functions)(?:[\\/.]|$)|(?:^|[\\/])route\.[jt]sx?$|\+(?:page|layout)\.server\./;
+
 export class SupabaseAuthAnalyzer implements Analyzer {
   analyze(parsed: ParsedFile, filePath: string): Finding[] {
     const text = parsed.sourceCode;
@@ -26,8 +32,9 @@ export class SupabaseAuthAnalyzer implements Analyzer {
     const root = parsed.tree.rootNode;
     const findings: Finding[] = [];
     const verifiesUser = /\.auth\.getUser\s*\(/.test(text);
+    const runsOnServer = SERVER_HINT.test(text) || SERVER_PATH.test(filePath);
 
-    if (!verifiesUser) {
+    if (!verifiesUser && runsOnServer) {
       for (const call of findNodes(root, (n) => n.type === "call_expression")) {
         const callee = call.childForFieldName("function");
         if (callee && GET_SESSION_CALLEE.test(callee.text)) findings.push(this.sessionFinding(call, filePath, text));

@@ -212,6 +212,67 @@ a human has to decide "is this public on purpose?" — that is why those are med
 real test is vibe-coded Firebase apps, where open rules are far more often a mistake than a teaching shortcut, and
 none was in the corpus.
 
+## Round 9: 16 small vibe-coded Supabase / Firebase projects, first pass vs. second pass
+
+The first test on the kind of project the scanner is for, not on official samples: small, recent, few-star GitHub
+repositories built with Next.js / Vite / Express on Supabase or Firebase (several say "Lovable", "Bolt" or "Cursor"
+in their README). Sixteen were picked from GitHub search results (ten on Supabase, six on Firebase) and cloned
+read-only; nothing was installed or run. Every finding was checked against the real code BEFORE any rule was
+changed, so the first-pass number is honest.
+
+**First pass: 118 findings, 24 real or reasonable (20%), 94 false (80%).**
+
+| Source of the false findings | Count | Why |
+|---|---|---|
+| `idor` | 61 | a catalogue (countries, brands, categories) behind `checkRole(['Admin'])` (52); the ownership check lives in the controller, not in the route file (8); a local `authorize()` helper that checks the session (1) |
+| `csrf` | 20 | a `verifyCsrf` middleware registered once in `app.ts` (5); the API authenticates with the `Authorization` header and `cookie-session` is installed but never used (14); a Firebase-only app (1) |
+| `hardcoded-secret` | 8 | the Firebase web `apiKey` (2); `includes("-----BEGIN PRIVATE KEY-----")`, a format check, reported twice as a leaked private key (2); passwords in a test script `test-suite.ts` (3); `DEV_ONLY_JWT_SECRET`, a development fallback the app refuses to use in production (1) |
+| `supabase-auth` | 4 | `getSession()` in a hook, a context and a client-side lib of single-page apps: it is the normal call in the browser |
+| `broken-access-control` | 1 | an `/internal/` route protected by a secret header compared with `timingSafeEqual` |
+
+It also **missed** the worst thing in the corpus: one disaster-response app (`tablero-respuesta-ve`) has Firestore
+rules with no `request.auth` anywhere. Anyone on the internet can read volunteers' phone numbers and national ID
+numbers, change the status of every report, and overwrite the bank account shown to donors. The old rules only knew
+`if true`, "signed in only" and collections whose name sounds private. A second app (`theswtch`) hid "signed in only"
+behind a helper function `ok()`.
+
+What changed (each with a regression test in `round9.test.ts`, `backend.test.ts`, `hardcoded-secret.test.ts`):
+
+- `firebase-rules`: a write whose condition never mentions `request.auth` is reported (the shape of the data is not
+  an access check); a public read is reported when the fields it holds are personal (phone, ID, e-mail, bank...),
+  whatever the collection is called; zero-argument helper functions are expanded.
+- `idor`: follows the route's handler into the controller file and into helpers it calls; skips routes behind an
+  explicit role check.
+- `csrf`: reads the whole project (a csrf mention anywhere, `Authorization` header without cookie use) and treats
+  Firebase / Supabase-client apps as token-in-page auth.
+- `hardcoded-secret`: Firebase web config, PEM headers without a body, `DEV_ONLY_*` names, test scripts.
+- `supabase-auth`: `getSession()` only counts in server code.
+- `broken-access-control`: a shared-secret check counts as an access check.
+- `supabase-rls`: a project that only uses Supabase from a server (no anon key in the browser) gets medium / low
+  instead of critical for a table without RLS.
+
+**Second pass: 40 findings, all 40 real or reasonable (checked against the code), 0 false.**
+
+| Project | Findings | What they are |
+|---|---|---|
+| `tablero-respuesta-ve` (Firebase) | 11 | public writes without auth to `tasks`, `reports`, `volunteers`, `announcements`, `suggestions`, `visits` and `config` (donation bank details); public reads of phone / ID numbers |
+| `endtimes-live` (Supabase) | 12 | role read from `user_metadata` in 3 policies; 2 API keys written as fallbacks next to `process.env`; views without `security_invoker`; `SECURITY DEFINER` functions without `search_path` |
+| `LibraEase` (Express + Supabase) | 5 | four tables without RLS (medium: server-only app); distinct "user not found" / "wrong password" messages |
+| `theswtch` (Firebase) | 5 | any signed-in user can write settings, tasks, links; any signed-in user can read every profile |
+| `watchtower` (Supabase) | 4 | four tables created in migrations without RLS |
+| `nextjs-supabase-saas-starter` x2 | 2 | `${origin}${next}` redirect: `next=@evil.example` makes `https://app@evil.example` |
+| `shopkeeper-price-tracker` (Supabase) | 1 | a table created without RLS (a later migration protects a different table, `prices`) |
+
+Five projects (`FleetEase`, `web3-sabi`, `me-controla-ai`, `PHC-Copilot`, a Lovable finance app) went from 79
+findings to 0; three stayed at 0 (`App-treino-nutricao` has careful rules, `JBF-Lite-QR-Catalog` and one SaaS starter
+have nothing to report). The six official Firebase repos of round 8 still give the same 35 findings, and the nine
+projects of round 6 give the same results as before.
+
+**Honest limits:** 16 projects is a small sample, chosen from search results rather than at random, and "all findings
+correct" says nothing about what was missed (the first pass missed the most serious problem in the corpus, and a
+second pass can too). The `idor` change trades recall for precision: a driver reading another driver's inspection
+by id behind `checkRole(['Admin', 'Manager', 'Driver'])` is no longer reported.
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are
