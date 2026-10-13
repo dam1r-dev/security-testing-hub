@@ -32,6 +32,10 @@ function request(
   });
 }
 
+// These tests run real scans (native parsing) next to dozens of other test workers: on a busy macOS CI runner the
+// default 5 s was not enough (a UI scan test timed out once, with the same code that passed minutes earlier).
+jest.setTimeout(30_000);
+
 describe("security-hub ui (local web interface)", () => {
   let ui: UiServer;
   const auth = (): Record<string, string> => ({ "x-security-hub-token": ui.token, "content-type": "application/json" });
