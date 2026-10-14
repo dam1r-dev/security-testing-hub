@@ -3,6 +3,7 @@ import chalk from "chalk";
 import { runScan } from "./commands/scan";
 import { runLab } from "./commands/lab";
 import { runUi } from "./commands/ui";
+import { runFix } from "./commands/fix";
 import { Severity } from "security-hub-scanner";
 
 // Read at runtime so `--version` can never drift from the published package.json
@@ -74,6 +75,24 @@ export function run(argv: string[]): void {
         return;
       }
       process.exitCode = await runUi({ path: targetPath, port, open: opts.open });
+    });
+
+  program
+    .command("fix <path>")
+    .description("Fix what can be fixed safely: SQL parameters, JWT expiry, secrets into .env, CORS origins, Supabase RLS migration. Shows a diff; changes nothing without --write")
+    .option("--write", "apply the changes (default: only show them)")
+    .option("--only <rule>", "fix only this rule (repeatable): sql-injection | insecure-jwt | hardcoded-secret | insecure-cors | supabase-rls", collect, [])
+    .option("--force", "change files even if git shows uncommitted edits in them")
+    .option("--ignore <pattern>", "skip files/folders matching this pattern (repeatable)", collect, [])
+    .option("--include-tests", "also fix test folders and *.test.* files")
+    .action((targetPath: string, opts) => {
+      process.exitCode = runFix(targetPath, {
+        write: !!opts.write,
+        only: opts.only.length > 0 ? opts.only : undefined,
+        force: !!opts.force,
+        ignore: opts.ignore.length > 0 ? opts.ignore : undefined,
+        includeTests: !!opts.includeTests,
+      });
     });
 
   program

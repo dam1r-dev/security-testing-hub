@@ -5,6 +5,12 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
 ## Unreleased
 
 ### Added
+- **`security-hub fix`**: fixes what can be fixed mechanically and safely: SQL values become bound parameters (`$1`,
+  `?`, Sequelize `replacements`), JWTs get an expiry and lose `none` / `ignoreExpiration`, hard-coded secrets move to
+  `.env` (value) / `.env.example` (name) / `.gitignore`, permissive CORS reads `ALLOWED_ORIGINS`, and Supabase tables
+  without RLS get one migration with `ENABLE ROW LEVEL SECURITY`. It shows a diff and changes nothing without
+  `--write`; never prints a secret; refuses to touch files with uncommitted git changes (`--force`), or keeps
+  `.security-hub.bak` copies without git; and ends with a TODO list (rotate the moved secrets, write the policies).
 - **Four new rules (24 in total)**: `insecure-cors` (any origin accepted together with credentials), `insecure-jwt`
   (`none` algorithm, `ignoreExpiration`, `jwt.decode()` trusted without `verify`, tokens that never expire),
   `missing-rate-limit` (a sign-in or code-check endpoint that checks the credential itself, in a project with no rate

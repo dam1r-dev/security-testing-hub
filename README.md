@@ -186,6 +186,33 @@ npm run scan -- scan examples/vulnerable-express-app
 npm run scan -- scan examples/vulnerable-nextjs-app
 ```
 
+## Fixing what can be fixed (`security-hub fix`)
+
+```bash
+npx security-hub fix .           # shows a diff of what it would change; changes NOTHING
+npx security-hub fix . --write   # applies it
+npx security-hub fix . --only hardcoded-secret --write
+```
+
+Only fixes that are mechanical and certain are done automatically; everything else is listed under "Left for you" with the
+reason, and for the rest `scan --format prompt` gives your AI assistant a ready prompt.
+
+| Rule | What the fix does |
+|---|---|
+| `sql-injection` | moves the values out of the SQL text into bound parameters: `` db.query(`... WHERE id = ${id}`) `` becomes `` db.query(`... WHERE id = $1`, [id]) `` (`pg` style `$1`, `mysql` / `sqlite` style `?`, Sequelize `{ replacements: [...] }`; quoted values and `LIKE '%${x}%'` patterns are handled). Left alone: a value used as a table or column name (`FROM ${t}`, `ORDER BY ${c}`), an `IN (${list.join()})`, a query that already has a values array, an unrecognised driver |
+| `insecure-jwt` | adds `{ expiresIn: "1h" }` (or `.setExpirationTime("1h")`), drops `"none"` from `algorithms`, replaces `algorithm: "none"` with `"HS256"`, removes `ignoreExpiration: true`. `jwt.decode()` needs a decision and is left to you |
+| `hardcoded-secret` | replaces the literal with `process.env.NAME` (named after the variable, property or the call it configures: `API_KEY`, `SESSION_SECRET`, `JWT_SECRET`), writes the **value** to `.env`, the **name** to `.env.example`, and adds `.env` to `.gitignore`. A hard-coded fallback next to `process.env.X \|\|` is removed. Browser apps (no server framework in `package.json`) and `"use client"` files are left alone: an environment variable would be public there too |
+| `insecure-cors` | `origin: true` / a catch-all regex / an allow-all callback becomes the list in `ALLOWED_ORIGINS` (comma separated; added to `.env.example`) |
+| `supabase-rls` | one new migration `supabase/migrations/<timestamp>_enable_row_level_security.sql` with `ENABLE ROW LEVEL SECURITY` for every open table and a commented example policy per table |
+
+Safety: the preview never prints a secret (removed lines show `<hidden>`, `.env` shows `<the value moved out of your
+source code>`); `--write` refuses to touch a file with uncommitted changes in a git repository (use `--force` to
+override), so `git diff` always shows exactly what the fixer did; in a folder without git every changed file is first
+copied to `<name>.security-hub.bak`. After writing, it scans again and prints how many findings it handles before and
+after. It always ends with a **TODO** list: rotate the secrets it moved (the old value stays in the git history), set
+`ALLOWED_ORIGINS`, write the RLS policies before deploying the migration (with RLS on and no policy, the browser can no
+longer read or write those tables).
+
 ## Hands-on labs
 
 Beyond static scanning, `labs/` has runnable Docker labs — a real vulnerable

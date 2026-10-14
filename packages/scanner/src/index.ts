@@ -44,6 +44,7 @@ export { changedFiles } from "./changed";
 export { parseFile, parseSource, languageForExtension } from "./parsers/ast-parser";
 export { ProjectContext } from "./taint/project";
 export { RULE_IDS } from "./suppress";
+export { planFixes, renderPlan, applyPlan, FIXABLE_RULES, FixPlan, FixOptions, ApplyOptions } from "./fix/plan";
 
 // Directories that aren't the project's own hand-written server code:
 //  - build output / dependencies / VCS metadata
