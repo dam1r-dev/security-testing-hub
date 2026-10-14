@@ -273,6 +273,32 @@ correct" says nothing about what was missed (the first pass missed the most seri
 second pass can too). The `idor` change trades recall for precision: a driver reading another driver's inspection
 by id behind `checkRole(['Admin', 'Manager', 'Driver'])` is no longer reported.
 
+## Round 10: return-value taint, Server Actions and four new rules, measured on the 25 projects already triaged
+
+The new work was run on the 25 projects of rounds 6 and 9 (nine projects with the 56 findings triaged in round 6, 16 with
+the 40 triaged in round 9) to see what it adds and, above all, what noise it adds. Nothing was tuned on a project and
+then re-measured on the same one without saying so.
+
+**The old rules did not change: 56 findings on the round-6 projects, 40 on the round-9 projects, the same as before.**
+
+First pass of the new code, before any fix, produced three kinds of noise, all on projects where the old rules had been
+quiet. Each was read against the real code:
+
+| First-pass finding | Why it was wrong | Fix |
+|---|---|---|
+| `open-redirect` in a SaaS starter, via the return-value taint | `safeNext(searchParams.get("next"))` returns its parameter, but only after `next.startsWith("/")`. The helper validates | a helper that tests the value (`if (!ALLOWED.includes(v)) return ...`, a ternary whose condition calls `startsWith` / `includes` / `test`) is not followed; names such as `safe*`, `verify*`, `check*` are not followed |
+| 2 `path-traversal` in juice-shop | `tokens.get(token)` returns `token ? table[token] : undefined`: the **condition** `token ?` was counted as carrying the value | conditions, comparisons (`===`, `<`, `in`) and negations no longer carry a value |
+| 7 `broken-access-control` on Server Actions in two Supabase starters | the action delegates the check to `getOrgContext()`, which is `cache(async () => ...)`, and the wrapper hid the function; and `supabase.from("projects").delete()` through a cookie-bound client is protected by Row Level Security | `cache` / `asyncHandler` wrappers resolve to the wrapped function; a Supabase client acting as the caller is not reported (RLS is the control, the `supabase-rls` rule reads the policies) |
+| 1 `insecure-jwt` in juice-shop | `jwt.decode(security.authenticatedUsers.tokenOf(user))` reads a token the **server** holds | `decode` is reported only when its argument comes from the request |
+
+**After those fixes: 6 new findings on 25 projects, all real.** `missing-rate-limit` on a fleet app whose `/login` compares a
+password with no limiter anywhere; 2 `insecure-jwt` (`sign({ userId }, APP_SECRET)` with no expiry, in a Prisma example
+app); 3 `broken-access-control` on Server Actions of Prisma's own example apps (`createPost`, `addPost`, `addVotes`:
+anyone can post and vote; examples, but the claim is accurate). No `insecure-cors` and no `exposed-files` finding in any
+of the 25 projects, so those two rules are **tested on fixtures only**: nothing in this corpus says how often they fire
+on real code, and nothing says they miss anything either. Return-value taint added no finding on these projects; its
+precision is checked by the regression tests (`return-taint.test.ts`), its recall is not measured.
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are
@@ -283,9 +309,9 @@ classes with no rule yet, or ones that need cross-file data flow:
 - **Missing function-level access control** on a route that doesn't *look*
   privileged (NodeGoat's `/benefits`)
 - **IDOR when the id isn't a route param** (dvna reads `req.query.id` / `req.body.id`)
-- **Data returned from a function** (`const q = buildQuery(x); db.query(q)`), callbacks,
-  values stored in object fields, DI containers: the cross-file analysis follows data
-  *into* functions, not back out of them
+- **Callbacks, values stored in object fields, DI containers**: the cross-file analysis follows data
+  into functions and back out through their return value (`const q = buildQuery(x); db.query(q)`), but not
+  through a callback or a field
 - **ReDoS, insecure cookie/session settings, weak crypto** — no rules
 
 The original plan's "false negatives < 10%" target is still **not met** for

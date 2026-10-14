@@ -5,6 +5,18 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
 ## Unreleased
 
 ### Added
+- **Four new rules (24 in total)**: `insecure-cors` (any origin accepted together with credentials), `insecure-jwt`
+  (`none` algorithm, `ignoreExpiration`, `jwt.decode()` trusted without `verify`, tokens that never expire),
+  `missing-rate-limit` (a sign-in or code-check endpoint that checks the credential itself, in a project with no rate
+  limiting anywhere) and `exposed-files` (`.env`, keys, dumps and `.git` in `public/` or an `express.static` folder,
+  `express.static(__dirname)` at the project root). See [docs/rules.md](docs/rules.md).
+- **Next.js Server Actions**: the arguments of a `"use server"` function are request input for every data-flow rule, and
+  an action that changes data without checking the caller is reported (`broken-access-control`), or one that changes the
+  record whose id the browser sent without comparing it with the caller (`idor`).
+- **Taint through return values**: `const q = buildQuery(req.query.name); db.query(q)` and `db.query("..." + getId(req))`
+  are followed (same precision rule: only a value used directly in the returned expression counts; helpers that
+  sanitise, validate, check or hash are never followed). `asyncHandler(...)` / `cache(...)` wrappers resolve to their
+  function, and conditions, comparisons and negations no longer carry a value.
 - **Armo, the mascot** (an armadillo): shown in the HTML report and in `security-hub ui`, curled up when the score is
   good, nervous when it needs attention, alarmed when the project is at risk. The images are embedded (`npm run mascot`
   rebuilds them from `site/assets/`), so the report is still one file that makes no network request.

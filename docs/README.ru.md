@@ -32,6 +32,14 @@ Express-приложениях.
 | Insecure Role Assignment | CWE-639 | паттерн (роль читается из клиентских данных) |
 | Insecure File Upload | CWE-434 | паттерн (фильтр загрузки доверяет только Content-Type) |
 | Username Enumeration | CWE-203 | паттерн (разные сообщения об ошибке логина) |
+| Небезопасный CORS | CWE-942 | `cors({ origin: true, credentials: true })`, отражённый заголовок `Origin` вместе с credentials |
+| Небезопасные JWT | CWE-347 | алгоритм `none`, `ignoreExpiration`, `jwt.decode()` вместо `verify`, токены без срока жизни |
+| Нет ограничения попыток входа | CWE-307 | эндпоинт входа или проверки кода, который сам сверяет пароль, в проекте без rate limit |
+| Секреты в публичных папках | CWE-538 | `.env`, ключи, дампы БД и `.git` внутри `public/` или папки `express.static`; `express.static(__dirname)` |
+
+Также проверяются **Next.js Server Actions** (`"use server"`): аргументы действия считаются входными данными, а
+действие, которое меняет данные и не проверяет, кто его вызвал, попадает в находки. Данные, которые возвращает
+функция (`const q = buildQuery(req.query.name)`), отслеживаются тоже.
 
 Подробный разбор всех 15 классов атак (что это, как проверить руками,
 как защититься) — в [attack-playbook.ru.md](attack-playbook.ru.md).

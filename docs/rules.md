@@ -55,10 +55,48 @@ sink slot, so `query("... WHERE id = ?", [req.params.id])` stays clean. A value
 wrapped in a call (`parseInt(x)`, `escape(x)`) or used only as a table key
 (`CONFIG[req.query.name]`) is not treated as tainted.
 
-**Not followed** (reported as a limitation, never guessed): values returned from
-a function, callbacks, values stored in object fields, dependency-injection
-containers, dynamic `require(variable)`, factory functions that return objects,
+**Values that come back out of a function** are followed too, with the same precision rule:
+
+```js
+function buildQuery(name) { return "SELECT * FROM users WHERE name = '" + name + "'"; }
+const q = buildQuery(req.query.name);   // q carries the input
+db.query(q);                             // reported
+
+function getId(req) { return req.params.id; }   // a call that RETURNS request input is a source
+db.query("... WHERE id = " + getId(req));        // reported
+```
+
+A parameter counts as returned only when it is used **directly** in the returned expression (concatenation, a template
+literal, the bare name, a ternary branch). Passing it through another call (`return escape(name)`,
+`return parseInt(id)`) is a cleaning step the engine cannot see into, so it contributes nothing. A helper is never
+followed when its own name says it cleans or checks (`sanitize*`, `escape*`, `validate*`, `safe*`, `verify*`, `check*`,
+`toInt`, `hash*`, ...), or when it tests the value before returning it (`if (!ALLOWED.includes(v)) return "a";`,
+`return next.startsWith("/") ? next : "/"`). What a condition decides is not part of the value either:
+`token ? table[token] : undefined`, `a === b` and `!x` do not carry `token`. A helper wrapped in `asyncHandler(...)`,
+`catchAsync(...)`, `cache(...)` or `memoize(...)` resolves to the wrapped function.
+
+**Not followed** (reported as a limitation, never guessed): callbacks, values stored in object fields,
+dependency-injection containers, dynamic `require(variable)`, factory functions that return objects,
 and calls on objects whose class can't be determined by name.
+
+### Next.js Server Actions
+
+A function in a file that starts with `"use server"` (every exported async function in it) or with `"use server"` as the
+first statement of its body is a Server Action: a **public POST endpoint** whose arguments (`formData`, an id,
+`prevState`) come from the browser. They are request input for every data-flow rule above, so
+`db.query("... '" + name + "'")` inside an action is reported like it would be in a route handler. Two heuristic checks
+are specific to actions:
+
+- `broken-access-control` (high, medium confidence): an action that changes data (`prisma.x.create/update/delete`,
+  `db.x.insert`, `.from("t").insert/update/delete`, `setDoc`, ...) and never checks who is calling: no `auth()`,
+  `getUser()`, `getServerSession()`, `currentUser()`, `requireUser()`-style call in it or in a helper it calls (two
+  levels deep, across files), no session cookie read. Not reported for actions named like `login`, `signUp`,
+  `contact`, `subscribe`, `resetPassword` (they run before sign-in), for non-mutating actions, or when every change goes
+  through a Supabase client built from the request's cookies: Row Level Security is the check there and the
+  `supabase-rls` rule reads the policies. A service-role / admin client does not get that exemption.
+- `idor` (high, low confidence): the action checks that someone is signed in, then changes the record whose id the
+  browser sent (an `id` / `xId` parameter or `formData.get("todoId")`) with no sign that the record belongs to the
+  caller: no `userId` in a query filter, no comparison with the caller's id, no `verify…Ownership()` helper.
 
 The rest (`csrf`, `idor`, `broken-access-control`,
 `insecure-role-assignment`, `insecure-file-upload`, `username-enumeration`)
@@ -176,6 +214,70 @@ Defined once in `src/analyzers/sources.ts` so every rule stays in sync:
 Path traversal sinks cover the `fs` read/write/delete/list calls (`readFile`, `writeFile`, `createReadStream`,
 `readdir`, `stat`, `rm`, `rename`, `copyFile`, `mkdir`, ...) and the file-serving calls `res.sendFile()` and
 `res.download()`.
+
+## `insecure-cors` (high) — pattern match
+
+CORS that lets **any website** read what a logged-in user's browser fetches from your server. Browsers send cookies to
+another origin only when the response says `Access-Control-Allow-Credentials: true` **and** names that origin. A server
+that accepts every origin together with credentials turns every page a user visits into a client of their session:
+it can call your API as them and read the answers.
+
+Reported (high): `cors({ origin: true, credentials: true })`, an `origin` callback that tests nothing
+(`(origin, cb) => cb(null, true)`), a catch-all regex (`/.*/`), `@fastify/cors` registered the same way, and headers
+written by hand (`res.setHeader("Access-Control-Allow-Origin", req.headers.origin)` next to
+`Access-Control-Allow-Credentials: true`, also as an object of headers in a Next.js `Response`).
+
+Not reported: a named origin or a list, a callback that checks the origin against something, `origin: "*"` (browsers
+refuse to combine it with credentials), and any permissive origin **without** credentials (the response carries
+nothing personal). Wildcard CORS on a public API is a design choice, not a finding.
+
+## `insecure-jwt` (critical / high / medium) — pattern match
+
+Covers `jsonwebtoken` (including `import jwt`, `const { sign } = require(...)` and other aliases) and `jose`'s
+`SignJWT`. Client components (`"use client"`) are skipped.
+
+| Finding | Severity |
+|---|---|
+| `verify(..., { algorithms: [..., "none"] })` or `sign(..., { algorithm: "none" })`: tokens with no signature are accepted or issued | critical |
+| `verify(..., { ignoreExpiration: true })`: a token that leaked once works for ever | high |
+| `jwt.decode(x)` where `x` comes from the request (a header, a cookie, a body field, a `token` parameter) in a file that never calls `verify`: `decode` only reads the payload, anyone can write one | high |
+| `jwt.sign({ ... }, secret)` with no `exp` in the payload and no `expiresIn` in the options; `new SignJWT(...)...sign(key)` with no `setExpirationTime` | medium |
+
+The no-expiry check only fires when the payload and the options are written out in the call (a payload held in a
+variable, a spread, or options in a variable are unknown, so they are skipped). `decode` of a token the **server**
+holds (`decode(tokens.get(userId))`) is not reported. Weak and hard-coded signing secrets are `hardcoded-secret`'s job.
+
+## `missing-rate-limit` (medium) — heuristic, project-scoped
+
+A login or one-time-code endpoint that anyone can call as fast as they like: passwords and 6-digit codes are guessed by
+scripts. Reported only when the app **checks the credential itself** (`bcrypt.compare`, `argon2.verify`, `compareSync`,
+`comparePassword`, a TOTP check, a code compared with `===`, `timingSafeEqual`) in a route whose path looks like sign-in or
+a code check (`/login`, `/signin`, `/auth`, `/session`, `/token`, `/otp`, `/2fa`, `/verify-code`, ...), in an Express route (the
+handler is followed into its controller), a Next.js `route.ts`, a Server Action named like `login`, or an Auth.js
+`Credentials({ authorize })` provider. Hosted sign-in (Auth.js OAuth providers, Clerk, Supabase Auth, Firebase Auth) is
+rate limited by the provider and is not reported.
+
+It stays quiet when the project shows rate limiting **anywhere**: a limiter package in `package.json`
+(`express-rate-limit`, `rate-limiter-flexible`, `@upstash/ratelimit`, `@nestjs/throttler`, ...), or `rateLimit` / `limiter` /
+`throttle` / `lockout` / `failedAttempts` / `status(429)` in any source file. One finding per file. A limit applied by a
+gateway or CDN is invisible to a static scan: add `// security-hub-ignore missing-rate-limit` above the endpoint.
+
+## `exposed-files` (critical / high) — file system, not source code
+
+Files that must never be reachable from the internet but sit in a folder the web server hands out. Everything in
+`public/` (Next.js, Vite, CRA, Nuxt, Astro, Gatsby, SvelteKit), `static/`, `www/`, `wwwroot/` and in any folder passed to
+`express.static()` is served to every visitor as it is, at the same path.
+
+| Found in a served folder | Severity |
+|---|---|
+| `.env` with values (not `.env.example` / `.sample` / `.template`), a private key (`*.pem` containing `PRIVATE KEY`, `id_rsa`, `.p12`, `.pfx`, `.jks`), a service-account file (`private_key` inside) | critical |
+| A `.git` / `.svn` / `.hg` folder: the whole source code and every secret ever committed | critical |
+| `express.static(".")` / `express.static(__dirname)` / `path.join(__dirname, "..")` that resolves to the project folder: `/.env`, `/package.json` and every source file can be downloaded | critical |
+| A database file (`.sqlite`, `.db`), an SQL dump, a backup (`backup*.zip`, `dump*.gz`, `*.bak`), a credentials file (`credentials.json`, `.htpasswd`, `.npmrc` with a token) | high |
+
+Never prints a secret: the message names the file and the URL it can be downloaded at. A file that git ignores is
+skipped (Vercel, Netlify and GitHub Pages deploy from the repository, so an ignored file is not part of the deploy);
+a `.git` folder is always reported. Confidence is high when `package.json` shows a framework that serves `public/`.
 
 ## `ssrf` (high)
 
