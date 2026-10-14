@@ -27,6 +27,7 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
   are followed (same precision rule: only a value used directly in the returned expression counts; helpers that
   sanitise, validate, check or hash are never followed). `asyncHandler(...)` / `cache(...)` wrappers resolve to their
   function, and conditions, comparisons and negations no longer carry a value.
+- **Armo's real artwork** replaces the placeholder shield on the website, in the HTML report and in `security-hub ui`: three transparent 256 px PNGs (curled up, nervous, alarmed) cut from the generated picture.
 - **Armo, the mascot** (an armadillo): shown in the HTML report and in `security-hub ui`, curled up when the score is
   good, nervous when it needs attention, alarmed when the project is at risk. The images are embedded (`npm run mascot`
   rebuilds them from `site/assets/`), so the report is still one file that makes no network request.

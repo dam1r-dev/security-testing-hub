@@ -90,7 +90,7 @@
         <a class="btn" href="#viewer">See a sample report</a>
       </div>
     </div>
-    <img id="heroMascot" src="assets/mascot-safe.svg" alt="Armo, the armadillo who guards your code" />
+    <img id="heroMascot" src="assets/mascot-safe.png" alt="Armo, the armadillo who guards your code" />
   </div>
 
   <section id="start">
@@ -128,7 +128,7 @@
       <div class="err hidden" id="err"></div>
       <div class="result hidden" id="result">
         <div class="scorecard" id="scorecard">
-          <img id="moodImg" src="assets/mascot-safe.svg" alt="" />
+          <img id="moodImg" src="assets/mascot-safe.png" alt="" />
           <div class="ring" id="ring"><i><b id="ringValue">0</b><small>/ 100</small></i></div>
           <div class="meta">
             <p class="label" id="label"></p>
@@ -157,9 +157,9 @@
   var SEVERITIES = ['critical', 'high', 'medium', 'low'];
   var SEV_COLOR = { critical: '#7f1d1d', high: '#dc2626', medium: '#ca8a04', low: '#6b7280' };
   var MOODS = {
-    green: { img: 'assets/mascot-safe.svg', color: '#16a34a', bg: 'rgba(22,163,74,.08)', say: 'Looks calm in here. Keep it that way.' },
-    yellow: { img: 'assets/mascot-warn.svg', color: '#ca8a04', bg: 'rgba(202,138,4,.10)', say: 'I do not like some of this. Have a look.' },
-    red: { img: 'assets/mascot-danger.svg', color: '#dc2626', bg: 'rgba(220,38,38,.09)', say: 'Alarm! Fix the critical ones first.' }
+    green: { img: 'assets/mascot-safe.png', color: '#16a34a', bg: 'rgba(22,163,74,.08)', say: 'Looks calm in here. Keep it that way.' },
+    yellow: { img: 'assets/mascot-warn.png', color: '#ca8a04', bg: 'rgba(202,138,4,.10)', say: 'I do not like some of this. Have a look.' },
+    red: { img: 'assets/mascot-danger.png', color: '#dc2626', bg: 'rgba(220,38,38,.09)', say: 'Alarm! Fix the critical ones first.' }
   };
   var SAMPLE = { score: { value: 42, color: 'red', label: 'At risk', totalFindings: 5, bySeverity: { critical: 2, high: 2, medium: 1, low: 0 } },
     results: [
