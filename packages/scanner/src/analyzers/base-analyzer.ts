@@ -2,6 +2,7 @@ import { ParsedFile } from "../parsers/ast-parser";
 import { SyntaxNode, findFunctionBodies, findNodes, snippet, toLocation } from "../parsers/utils";
 import { CrossFileFlow, findCrossFileFlows, firstArgument } from "../taint/interprocedural";
 import { ProjectContext } from "../taint/project";
+import { callTaintFor, sourceReturningCalls } from "../taint/returns";
 import { requestParamOrigins } from "../taint/request-params";
 import { analyzeFunctionBody } from "../taint/simple-taint";
 import { Finding, Severity, VulnerabilityType } from "../types";
@@ -60,6 +61,7 @@ export abstract class BaseAnalyzer implements Analyzer {
     const project = context ?? ProjectContext.forSingleFile(filePath, parsed);
     const info = project.fileInfo(filePath, parsed);
     const spec = { ruleId: cfg.ruleId, isSink: cfg.isSink, sinkArgs: cfg.sinkArgs };
+    const callTaint = info ? callTaintFor(info) : undefined;
 
     // Nested functions are their own scope AND part of their parent's subtree,
     // so the same sink can be visited twice; dedupe by sink location.
@@ -67,7 +69,10 @@ export abstract class BaseAnalyzer implements Analyzer {
     const nodeKey = (node: SyntaxNode): string => `${node.startIndex}:${node.endIndex}`;
 
     for (const scope of scopes) {
-      const sources = info ? info.sourcesIn(scope, cfg.isSource) : findNodes(scope, cfg.isSource);
+      const ownSources = info ? info.sourcesIn(scope, cfg.isSource) : findNodes(scope, cfg.isSource);
+      // `getId(req)` where getId returns request input is as much a source as `req.params.id`
+      const returned = info ? sourceReturningCalls(scope, info) : [];
+      const sources = returned.length > 0 ? [...ownSources, ...returned] : ownSources;
       const origins = requestParamOrigins(scope, cfg.paramKeys);
       if (sources.length === 0 && origins.length === 0) continue; // nothing user-controlled in this function
       const pairs = analyzeFunctionBody(scope, cfg.isSource, cfg.isSink, {
@@ -75,6 +80,7 @@ export abstract class BaseAnalyzer implements Analyzer {
         assignments: info?.assignmentsIn(scope),
         sinkArgs: cfg.sinkArgs,
         origins,
+        callTaint,
       });
       for (const pair of pairs) {
         const sinkKey = nodeKey(pair.sink);

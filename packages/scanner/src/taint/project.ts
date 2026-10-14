@@ -636,6 +636,9 @@ export class ProjectContext {
   /** Per-rule "which parameters reach a sink" memo (see interprocedural.ts). */
   readonly summaries = new Map<string, Map<number, unknown>>();
   readonly summarizing = new Set<string>();
+  /** What each function's return value is made of (see returns.ts). */
+  readonly returnSummaries = new Map<string, { source: boolean; params: Set<number> }>();
+  readonly summarizingReturns = new Set<string>();
 
   private static readonly singleFile = new WeakMap<ParsedFile, ProjectContext>();
 

@@ -14,8 +14,21 @@ import { SyntaxNode, findNodes } from "../parsers/utils";
  *
  * Taint is not propagated THROUGH a call's arguments (`sanitize(x)`, `parseInt(x)`):
  * we don't know what the callee does with it. Calls into project functions that pass
- * the value to a sink are handled by the summaries in interprocedural.ts.
+ * the value to a sink are handled by the summaries in interprocedural.ts, and calls
+ * whose RETURN value is built straight from an argument (`const q = build(id)`) by the
+ * return summaries in returns.ts, which plug in here as a `CallTaint`.
  */
+
+/** What carries the attacker's value in a function: the source expression itself and/or names it flowed into. */
+export interface Carrier {
+  source?: SyntaxNode;
+  names: Set<string>;
+}
+
+/** Does this call EXPRESSION evaluate to something built from the carrier? (return-value taint, see returns.ts) */
+export type CallTaint = (call: SyntaxNode, carrier: Carrier) => boolean;
+
+const NO_NAMES: Set<string> = new Set();
 
 export interface TaintPair {
   source: SyntaxNode;
@@ -24,6 +37,7 @@ export interface TaintPair {
 }
 
 const DECLARATOR_TYPES = new Set(["variable_declarator"]);
+const COMPARISON_OPERATORS = new Set(["==", "===", "!=", "!==", "<", ">", "<=", ">=", "instanceof", "in"]);
 const ASSIGNMENT_TYPES = new Set(["assignment_expression"]);
 
 /**
@@ -107,6 +121,10 @@ export function isDirectlyWithin(node: SyntaxNode, boundary: SyntaxNode): boolea
     // `table[userKey]` picks WHICH trusted entry is used; the value that comes out is
     // not attacker-written (e.g. `const cfg = providers[name]; fetch(cfg.url)`).
     if (parent.type === "subscript_expression" && parent.childForFieldName("index")?.id === current.id) return false;
+    // What a condition decides is not part of the value: `token ? table[token] : undefined`, `a === b`, `!x`.
+    if (parent.type === "ternary_expression" && parent.childForFieldName("condition")?.id === current.id) return false;
+    if (parent.type === "binary_expression" && COMPARISON_OPERATORS.has(parent.childForFieldName("operator")?.text ?? "")) return false;
+    if (parent.type === "unary_expression" && /^(?:!|typeof|void)$/.test(parent.childForFieldName("operator")?.text ?? "")) return false;
     current = parent;
   }
   return true;
@@ -118,7 +136,7 @@ export function isDirectlyWithin(node: SyntaxNode, boundary: SyntaxNode): boolea
  * (template literals and concatenation count; being wrapped in a function call
  * such as `sanitize(x)` or `parseInt(x)` does not).
  */
-function propagateTaint(tainted: Set<string>, assignmentLikeNodes: SyntaxNode[]): void {
+function propagateTaint(tainted: Set<string>, assignmentLikeNodes: SyntaxNode[], callTaint?: CallTaint): void {
   let changed = true;
   let iterations = 0;
   const MAX_ITERATIONS = 25; // functions are small; this bounds pathological cases
@@ -129,25 +147,21 @@ function propagateTaint(tainted: Set<string>, assignmentLikeNodes: SyntaxNode[])
       const names = declaredNames(node);
       const rhs = valueNode(node);
       if (names.length === 0 || !rhs || isAllowlistGuarded(rhs) || names.every((name) => tainted.has(name))) continue;
-      for (const taintedName of tainted) {
-        const references = findNodes(rhs, (n) => isIdentifierUse(n) && n.text === taintedName);
-        if (references.some((ref) => isDirectlyWithin(ref, rhs))) {
-          for (const name of names) tainted.add(name);
-          changed = true;
-          break;
-        }
+      if (expressionCarries(rhs, { names: tainted }, callTaint)) {
+        for (const name of names) tainted.add(name);
+        changed = true;
       }
     }
   }
 }
 
 /**
- * `const ext = ALLOWED.includes(x) ? x : "jpg"`: the value that comes out has been checked against a list,
- * so it is not attacker-controlled any more.
+ * `const ext = ALLOWED.includes(x) ? x : "jpg"` or `x.startsWith("/") ? x : "/home"`: the value that comes out
+ * has been checked, so it is not attacker-controlled any more.
  */
-function isAllowlistGuarded(rhs: SyntaxNode): boolean {
+export function isAllowlistGuarded(rhs: SyntaxNode): boolean {
   if (rhs.type !== "ternary_expression") return false;
-  return /\.(includes|has)\(/.test(rhs.childForFieldName("condition")?.text ?? "");
+  return /\.(?:includes|has|startsWith|endsWith|test|match|matches|indexOf)\(/.test(rhs.childForFieldName("condition")?.text ?? "");
 }
 
 /** Every declaration / assignment inside `functionBody` (the carriers of aliasing). */
@@ -163,6 +177,7 @@ export function getAliases(
   sourceNode: SyntaxNode,
   functionBody: SyntaxNode,
   nodes: SyntaxNode[] = assignmentLike(functionBody),
+  callTaint?: CallTaint,
 ): Set<string> {
   const tainted = new Set<string>();
 
@@ -171,12 +186,12 @@ export function getAliases(
   for (const node of nodes) {
     const rhs = valueNode(node);
     if (!rhs || isAllowlistGuarded(rhs)) continue;
-    if (subtreeContainsNode(rhs, sourceNode) && isDirectlyWithin(sourceNode, rhs)) {
+    if (expressionCarries(rhs, { source: sourceNode, names: NO_NAMES }, callTaint)) {
       for (const name of declaredNames(node)) tainted.add(name);
     }
   }
 
-  propagateTaint(tainted, nodes);
+  propagateTaint(tainted, nodes, callTaint);
   return tainted;
 }
 
@@ -185,9 +200,9 @@ export function getAliases(
  * for function parameters ("if the caller passes something tainted here, which
  * local names carry it?").
  */
-export function aliasesOfNames(seed: Iterable<string>, functionBody: SyntaxNode): Set<string> {
+export function aliasesOfNames(seed: Iterable<string>, functionBody: SyntaxNode, callTaint?: CallTaint): Set<string> {
   const tainted = new Set<string>(seed);
-  propagateTaint(tainted, assignmentLike(functionBody));
+  propagateTaint(tainted, assignmentLike(functionBody), callTaint);
   return tainted;
 }
 
@@ -196,6 +211,19 @@ export function usesNamesDirectly(expression: SyntaxNode, names: Set<string>): b
   if (names.size === 0) return false;
   return findNodes(expression, (n) => isIdentifierUse(n) && names.has(n.text)).some((ref) =>
     isDirectlyWithin(ref, expression),
+  );
+}
+
+/**
+ * Does `expression` carry the value: the source itself or a tainted name used directly, or a call to a project
+ * function whose return value is built from it (`build(id)`, `"x" + build(id)`)?
+ */
+export function expressionCarries(expression: SyntaxNode, carrier: Carrier, callTaint?: CallTaint): boolean {
+  if (carrier.source && containsSourceDirectly(expression, carrier.source)) return true;
+  if (usesNamesDirectly(expression, carrier.names)) return true;
+  if (!callTaint) return false;
+  return findNodes(expression, (n) => n.type === "call_expression" && isDirectlyWithin(n, expression)).some((call) =>
+    callTaint(call, carrier),
   );
 }
 
@@ -241,6 +269,8 @@ export interface TaintHints {
   sinkArgs?: (sink: SyntaxNode) => SyntaxNode[];
   /** Request data that arrives as destructured handler parameters (`({ body }: Request, res) => ...`). */
   origins?: Array<{ node: SyntaxNode; names: string[] }>;
+  /** Follows a value through project functions that return something built from their argument. */
+  callTaint?: CallTaint;
 }
 
 /**
@@ -262,7 +292,7 @@ export function analyzeFunctionBody(
   const findings: TaintPair[] = [];
 
   for (const source of sources) {
-    const taintedVars = getAliases(source, functionBody, assignments);
+    const taintedVars = getAliases(source, functionBody, assignments, hints.callTaint);
     for (const sink of sinks) {
       if (sinkUsesTaint(sink, source, taintedVars, hints.sinkArgs)) {
         const via = [...taintedVars][0] ?? source.text.slice(0, 40);
@@ -272,7 +302,7 @@ export function analyzeFunctionBody(
   }
 
   for (const origin of origins) {
-    const taintedVars = aliasesOfNames(origin.names, functionBody);
+    const taintedVars = aliasesOfNames(origin.names, functionBody, hints.callTaint);
     for (const sink of sinks) {
       if (sinkUsesTaint(sink, origin.node, taintedVars, hints.sinkArgs)) {
         findings.push({ source: origin.node, sink, taintedVia: origin.names[0] ?? "request" });
