@@ -21,7 +21,7 @@ response bodies, `exec()` with interpolated input) because that's what's
 common in training data. This tool is a fast, local pre-commit/CI check
 tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 
-## What it detects (24 rules)
+## What it detects (25 rules)
 
 | Vulnerability | CWE | Analyzer |
 |---|---|---|
@@ -48,6 +48,7 @@ tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 | Insecure JWT use | [CWE-347](https://cwe.mitre.org/data/definitions/347.html) | `none` algorithm, `ignoreExpiration`, `jwt.decode()` trusted without `verify`, tokens that never expire |
 | Missing rate limit on sign-in | [CWE-307](https://cwe.mitre.org/data/definitions/307.html) | a login or one-time-code endpoint that checks the credential itself, in a project with no rate limiting anywhere |
 | Secrets in public folders | [CWE-538](https://cwe.mitre.org/data/definitions/538.html) | `.env`, keys, database dumps and `.git` inside `public/` or an `express.static` folder; `express.static(__dirname)` at the project root |
+| Vulnerable dependencies (optional, `--audit`) | [CWE-1395](https://cwe.mitre.org/data/definitions/1395.html) | known advisories for the packages in your lock file, from `npm audit` (the one feature that uses the network) |
 | Hard-coded secrets | [CWE-798](https://cwe.mitre.org/data/definitions/798.html) | provider token formats (AWS, GitHub, Stripe, OpenAI/Anthropic, Slack, Supabase `service_role`, private keys, DB URLs), guessable `jwt.sign` / `session` secrets, credentials by name, secrets behind `NEXT_PUBLIC_`-style prefixes, committed `.env` files |
 
 See [docs/rules.md](docs/rules.md) for how each rule works and its known
@@ -169,6 +170,7 @@ npm run scan -- scan ./my-express-app --format html
 npm run scan -- scan ./my-express-app --fail-on high
 npm run scan -- scan ./my-express-app --changed-since origin/main   # report only files changed vs. a branch
 npm run scan -- scan ./my-express-app --format markdown             # PR-comment style report (also: github = annotations)
+npm run scan -- scan ./my-express-app --audit                       # also known-vulnerable dependencies (runs `npm audit`: the one network call)
 ```
 
 Every format includes a **0-100 score** (also shown as a colored line at the

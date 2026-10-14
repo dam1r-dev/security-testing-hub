@@ -43,6 +43,7 @@ export function run(argv: string[]): void {
     .option("--ignore <pattern>", "skip files/folders matching this pattern (repeatable; also reads .security-hub-ignore)", collect, [])
     .option("--changed-since <ref>", "report only findings in files changed since this git ref, e.g. origin/main (the whole project is still scanned)")
     .option("--include-tests", "also scan test folders and *.test.* / *.spec.* files (skipped by default)")
+    .option("--audit", "also check your dependencies for known vulnerabilities (runs `npm audit`; sends dependency names and versions to the npm registry)")
     .action((targetPath: string, opts) => {
       const format = opts.format;
       if (!["text", "json", "sarif", "html", "markdown", "github", "prompt"].includes(format)) {
@@ -58,6 +59,7 @@ export function run(argv: string[]): void {
         ignore: opts.ignore.length > 0 ? opts.ignore : undefined,
         includeTests: opts.includeTests,
         changedSince: opts.changedSince,
+        audit: opts.audit ? true : undefined,
       });
       process.exitCode = exitCode;
     });

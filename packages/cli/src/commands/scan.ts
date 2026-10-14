@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import chalk from "chalk";
+import { auditResults } from "./audit";
 import {
   scanPath,
   toSarifString,
@@ -29,6 +30,8 @@ export interface ScanCommandOptions {
   includeTests?: boolean;
   /** Report only findings in files changed since this git ref (the whole project is still scanned). */
   changedSince?: string;
+  /** Also check the dependencies against npm's advisory database (runs `npm audit`: this is the one network call). */
+  audit?: boolean;
 }
 
 const SCORE_COLOR_CHALK: Record<ScoreColor, (text: string) => string> = {
@@ -115,6 +118,13 @@ export function runScan(targetPath: string, options: ScanCommandOptions): number
   // The scan always covers the whole project (a call in a changed file can reach a query in
   // an untouched one); --changed-since only narrows what is reported.
   const rawSummary = scanPath(targetPath, { ignore: options.ignore, includeTests: options.includeTests });
+  if (options.audit) {
+    const audit = auditResults(path.resolve(fs.statSync(targetPath).isDirectory() ? targetPath : path.dirname(targetPath)));
+    if (audit.warning) process.stderr.write(chalk.yellow(`${audit.warning}\n`));
+    rawSummary.results.push(...audit.results);
+    rawSummary.filesScanned += audit.results.length;
+    rawSummary.findingsCount += audit.results.reduce((sum, r) => sum + r.findings.length, 0);
+  }
   const summary = filterSummary(rawSummary, { minSeverity: options.severity, files: changed });
 
   let output: string;
