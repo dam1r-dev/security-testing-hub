@@ -1,6 +1,8 @@
 import { SyntaxNode, findNodes } from "../parsers/utils";
+import { callArguments } from "./args";
 import { FileInfo, FunctionInfo, ProjectContext } from "./project";
-import { aliasesOfNames, containsSourceDirectly, getAliases, usesNamesDirectly } from "./simple-taint";
+import { callTaintFor } from "./returns";
+import { aliasesOfNames, expressionCarries, getAliases } from "./simple-taint";
 
 /**
  * Cross-function (and cross-file) taint.
@@ -13,11 +15,13 @@ import { aliasesOfNames, containsSourceDirectly, getAliases, usesNamesDirectly }
  *   routes/users.js     userService.findByName(req.query.name)      <- reported here
  *   services/users.js   findByName(name) { return db.query("... " + name) }
  *
- * Deliberately NOT modelled: taint coming back through return values, callbacks,
- * and objects stored in fields. Each of those would need to tell "returns something
- * derived from the input" apart from "returns a sanitised value", which a
- * name-based analysis can't, so we under-report rather than guess.
+ * Taint coming back through RETURN values is followed too (returns.ts), with the same precision rule: only a
+ * value used directly in the returned expression counts, never one that went through another call.
+ * Deliberately NOT modelled: callbacks and objects stored in fields. Each would need to tell "derived from the
+ * input" apart from "sanitised", which a name-based analysis can't, so we under-report rather than guess.
  */
+
+export { callArguments };
 
 export interface SinkSpec {
   ruleId: string;
@@ -45,19 +49,6 @@ export interface CrossFileFlow {
 const MAX_CALL_DEPTH = 6;
 const NO_SINKS: Map<number, SinkTrace> = new Map();
 
-/** Positional arguments of a call / `new`; stops at the first spread, after which positions are unknown. */
-export function callArguments(call: SyntaxNode): SyntaxNode[] {
-  const args = call.childForFieldName("arguments");
-  if (!args) return [];
-  const result: SyntaxNode[] = [];
-  for (const arg of args.namedChildren) {
-    if (arg.type === "comment") continue;
-    if (arg.type === "spread_element") break;
-    result.push(arg);
-  }
-  return result;
-}
-
 export function firstArgument(call: SyntaxNode): SyntaxNode[] {
   const first = callArguments(call)[0];
   return first ? [first] : [];
@@ -82,14 +73,15 @@ export function sinkParams(fn: FunctionInfo, spec: SinkSpec, project: ProjectCon
   try {
     const sinks = findNodes(body, spec.isSink);
     const calls = findNodes(body, (n) => isCall(n) && !spec.isSink(n));
+    const callTaint = callTaintFor(fn.info);
 
     fn.params.forEach((names, index) => {
       if (names.length === 0) return;
-      const tainted = aliasesOfNames(names, body);
+      const tainted = aliasesOfNames(names, body, callTaint);
 
       for (const sink of sinks) {
         const args = spec.sinkArgs ? spec.sinkArgs(sink) : callArguments(sink);
-        if (args.some((arg) => usesNamesDirectly(arg, tainted))) {
+        if (args.some((arg) => expressionCarries(arg, { names: tainted }, callTaint))) {
           result.set(index, { file: fn.file, line: sink.startPosition.row + 1, path: [fn.name] });
           return;
         }
@@ -97,12 +89,12 @@ export function sinkParams(fn: FunctionInfo, spec: SinkSpec, project: ProjectCon
 
       for (const call of calls) {
         const args = callArguments(call);
-        if (!args.some((arg) => usesNamesDirectly(arg, tainted))) continue;
+        if (!args.some((arg) => expressionCarries(arg, { names: tainted }, callTaint))) continue;
         const callee = project.resolveCallee(call, fn.info);
         if (!callee) continue;
         for (const [calleeIndex, trace] of sinkParams(callee, spec, project, depth + 1)) {
           const arg = args[calleeIndex];
-          if (arg && usesNamesDirectly(arg, tainted)) {
+          if (arg && expressionCarries(arg, { names: tainted }, callTaint)) {
             result.set(index, { ...trace, path: [fn.name, ...trace.path] });
             return;
           }
@@ -129,9 +121,10 @@ export function findCrossFileFlows(
 ): CrossFileFlow[] {
   if (sources.length === 0 && origins.length === 0) return [];
   const assignments = info.assignmentsIn(scope);
+  const callTaint = callTaintFor(info);
   const tracked = [
-    ...sources.map((source) => ({ source, names: getAliases(source, scope, assignments) })),
-    ...origins.map((origin) => ({ source: origin.node, names: aliasesOfNames(origin.names, scope) })),
+    ...sources.map((source) => ({ source, names: getAliases(source, scope, assignments, callTaint) })),
+    ...origins.map((origin) => ({ source: origin.node, names: aliasesOfNames(origin.names, scope, callTaint) })),
   ];
 
   const flows: CrossFileFlow[] = [];
@@ -144,14 +137,11 @@ export function findCrossFileFlows(
     const carriers = new Map<number, { source: SyntaxNode; via: string }>();
     args.forEach((arg, index) => {
       for (const { source, names } of tracked) {
-        if (containsSourceDirectly(arg, source)) {
-          carriers.set(index, { source, via: source.text.slice(0, 40) });
-          return;
-        }
-        if (usesNamesDirectly(arg, names)) {
-          carriers.set(index, { source, via: [...names][0] ?? source.text.slice(0, 40) });
-          return;
-        }
+        if (!expressionCarries(arg, { source, names }, callTaint)) continue;
+        // the source itself sits in the argument, or only a name / a call result derived from it does
+        const direct = arg.startIndex <= source.startIndex && arg.endIndex >= source.endIndex;
+        carriers.set(index, { source, via: direct ? source.text.slice(0, 40) : ([...names][0] ?? source.text.slice(0, 40)) });
+        return;
       }
     });
     if (carriers.size === 0) continue;
