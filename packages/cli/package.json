@@ -17,7 +17,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "chalk": "^4.1.2",
+    "chalk": "^6.0.1",
     "commander": "^12.1.0",
     "security-hub-scanner": "0.5.0"
   },
