@@ -1,18 +1,27 @@
 # Keeps dependencies and workflow actions current. Updates arrive as pull requests that run the normal CI, so a bad
 # update is visible before it is merged.
+#
+# npm: only minor and patch updates, in one grouped pull request. A MAJOR bump of the parser (tree-sitter), of chalk
+# (ESM only), of typescript or of js-yaml changes the build or the native binary: those are done by hand, on purpose,
+# and a security fix for any of them still arrives as a Dependabot security update.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
-      development-tools:
-        dependency-type: development
+      minor-and-patch:
         update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
