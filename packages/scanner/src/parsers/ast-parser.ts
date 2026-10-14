@@ -1,11 +1,37 @@
 import { collectGarbageToAvoidTreeSitterCorruption } from "./gc-workaround";
-import Parser = require("tree-sitter");
-import JavaScript = require("tree-sitter-javascript");
-// tree-sitter-typescript exposes two grammars: typescript and tsx
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const TypeScript = require("tree-sitter-typescript").typescript;
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const TSX = require("tree-sitter-typescript").tsx;
+import type Parser = require("tree-sitter");
+
+// The native parser (tree-sitter and its grammars) has to be loaded ONCE per process. A second module registry that
+// loads the same native addon again (a test runner gives every test file its own registry, a host application may load
+// two copies of this package) ends up with a parser whose trees come back empty or corrupted. So the loaded parser is
+// kept on a core module object, which every registry of the process shares, and a later load reuses it instead of
+// requiring the addon again. In an ordinary program there is one registry and this changes nothing.
+interface Native {
+  Parser: typeof Parser;
+  javascript: unknown;
+  typescript: unknown;
+  tsx: unknown;
+}
+
+function loadNative(): Native {
+  // `require`, not `import * as v8`: the compiled namespace import is a COPY of the module, and writing to a copy shares nothing
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  const shared = require("v8") as { __securityHubNative?: Native };
+  if (!shared.__securityHubNative) {
+    /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
+    const typescript = require("tree-sitter-typescript"); // exposes two grammars: typescript and tsx
+    shared.__securityHubNative = {
+      Parser: require("tree-sitter"),
+      javascript: require("tree-sitter-javascript"),
+      typescript: typescript.typescript,
+      tsx: typescript.tsx,
+    };
+    /* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
+  }
+  return shared.__securityHubNative;
+}
+
+const native = loadNative();
 
 export type SupportedLanguage = "javascript" | "typescript" | "tsx";
 
@@ -25,11 +51,11 @@ export function languageForExtension(extension: string): SupportedLanguage | und
 function grammarFor(language: SupportedLanguage) {
   switch (language) {
     case "javascript":
-      return JavaScript;
+      return native.javascript;
     case "typescript":
-      return TypeScript;
+      return native.typescript;
     case "tsx":
-      return TSX;
+      return native.tsx;
   }
 }
 
@@ -52,7 +78,9 @@ export interface ParsedFile {
 // extensive testing. So: use the safe, well-worn plain-string path by default,
 // and only fall back to the chunked reader for the files that actually need it.
 const SAFE_STRING_LIMIT = 30_000;
-const PARSE_TIMEOUT_MICROS = 5_000_000;
+// Wall-clock time, so a loaded machine (a CI runner running many jobs) needs room: real files parse in milliseconds, hostile ones
+// never finish, 20 seconds tells them apart on any machine.
+const PARSE_TIMEOUT_MICROS = 20_000_000;
 const CHUNK_SIZE = 10_000;
 
 function chunkedInput(sourceCode: string): (index: number) => string {
@@ -64,7 +92,7 @@ function chunkedInput(sourceCode: string): (index: number) => string {
  * One Parser instance per call keeps this safe to run concurrently.
  */
 export function parseSource(sourceCode: string, language: SupportedLanguage): ParsedFile {
-  const parser = new Parser();
+  const parser = new native.Parser();
   parser.setLanguage(grammarFor(language));
   // Error recovery on hostile input is not linear: a megabyte of unbalanced quotes kept the native parser busy for
   // minutes. A file the parser cannot finish in a few seconds is not hand-written code worth waiting for.

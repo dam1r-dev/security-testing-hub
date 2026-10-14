@@ -5,9 +5,11 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
 ## Unreleased
 
 ### Security (a review of the project itself, see [docs/security-audit.md](docs/security-audit.md))
-- A crafted file can no longer crash or hang a scan: iterative tree walk, a 5 s parse limit, a 15 s analysis budget per
+- A crafted file can no longer crash or hang a scan: iterative tree walk, a 20 s parse limit, a 15 s analysis budget per
   file, each check guarded on its own, a cap of 500 secret findings per file, and the quadratic behaviours found with
   hostile inputs removed. A file that cannot be finished is reported as incomplete, never as clean.
+- The native parser is loaded once per process and shared. Before, a second module registry (a test runner, or an application
+  holding two copies of the package) loaded the addon again and got trees without a root.
 - `security-hub ui`: the token is no longer inside the page (any other user of the machine could read it); it travels in
   the link's `#fragment`. The link printed in the terminal contains it.
 - "Fix with AI" prompts tell the assistant that text copied from the project is untrusted data, and strip hidden
