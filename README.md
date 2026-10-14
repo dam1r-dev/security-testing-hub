@@ -101,7 +101,7 @@ npm run build
 
 ## Website
 
-`site/` is a static page (landing, quick start, and a **report viewer**: drop the JSON from
+Live at **https://dam1r-dev.github.io/security-testing-hub/**. `site/` is a static page (landing, quick start, and a **report viewer**: drop the JSON from
 `security-hub scan . --format json` onto it and see the score, the mascot's mood and the findings; it is read in
 your browser and makes no network requests). To publish it on GitHub Pages: Settings -> Pages -> Source: *GitHub
 Actions*, then add the repository variable `PAGES_ENABLED = true`; `.github/workflows/pages.yml` deploys it on every
