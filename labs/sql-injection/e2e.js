@@ -6,7 +6,7 @@ const { execFileSync } = require("child_process");
 const path = require("path");
 
 const COMPOSE_FILE = path.join(__dirname, "docker-compose.yml");
-const BASE_URL = "http://localhost:3300";
+const BASE_URL = "http://127.0.0.1:3300";
 const SECRET = "FLAG{sql_injection_via_category_param}";
 const EXPLOIT_PAYLOAD = "nonexistent' UNION SELECT id, username, secret_token FROM users-- ";
 

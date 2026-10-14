@@ -2,7 +2,7 @@ import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import chalk from "chalk";
-import { FIXABLE_RULES, FixPlan, applyPlan, planFixes, renderPlan, scanPath } from "security-hub-scanner";
+import { FIXABLE_RULES, FixPlan, GIT_HARDENING_ARGS, applyPlan, gitEnvironment, planFixes, renderPlan, scanPath } from "security-hub-scanner";
 
 export interface FixCommandOptions {
   /** Actually change files (default: only show what would change). */
@@ -19,7 +19,7 @@ type Out = (line: string) => void;
 
 function git(cwd: string, args: string[]): { ok: boolean; out: string } {
   try {
-    return { ok: true, out: execFileSync("git", args, { cwd, stdio: ["ignore", "pipe", "ignore"], timeout: 15000 }).toString() };
+    return { ok: true, out: execFileSync("git", [...GIT_HARDENING_ARGS, ...args], { cwd, stdio: ["ignore", "pipe", "ignore"], timeout: 15000, env: gitEnvironment() }).toString() };
   } catch {
     return { ok: false, out: "" };
   }
@@ -109,7 +109,7 @@ export function runFix(targetPath: string, options: FixCommandOptions = {}, out:
     return 1;
   }
   const noGit = dirty === undefined;
-  const result = applyPlan(plan, { backup: noGit });
+  const result = applyPlan(plan, { backup: noGit, root });
   out("");
   out(chalk.green(`Changed ${result.changed.length} file(s).`));
   if (noGit) out(chalk.gray(`This folder is not a git repository, so each changed file was copied to <name>.security-hub.bak first (${result.backups.length} backup(s)).`));

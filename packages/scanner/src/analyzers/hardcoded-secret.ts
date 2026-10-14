@@ -1,3 +1,4 @@
+import { checkBudget } from "../budget";
 import { ParsedFile } from "../parsers/ast-parser";
 import { SyntaxNode, findNodes } from "../parsers/utils";
 import {
@@ -12,6 +13,8 @@ import {
 } from "../secrets/detect";
 import { Finding, Severity } from "../types";
 import { Analyzer } from "./base-analyzer";
+
+const MAX_FINDINGS_PER_FILE = 500;
 
 const ROTATE =
   "Treat it as already leaked: revoke / rotate it now (removing the line is not enough — it stays in the git history), " +
@@ -116,9 +119,27 @@ function isFirebaseWebConfig(literal: SyntaxNode): boolean {
       continue;
     }
     if (parent.type !== "pair" || parent.parent?.type !== "object") return false;
-    const keys = new Set(parent.parent.namedChildren.map((p) => p.childForFieldName("key")?.text.replace(/^["'`]|["'`]$/g, "")));
-    return keys.has("authDomain") || (keys.has("projectId") && (keys.has("appId") || keys.has("messagingSenderId") || keys.has("storageBucket")));
+    return objectLooksLikeFirebaseConfig(parent.parent);
   }
+}
+
+// An object with 40 000 properties asks this once per property: remember the answer per object (reading the keys of a
+// big object each time made the scan quadratic).
+const firebaseConfigCache = new WeakMap<object, Map<number, boolean>>();
+
+function objectLooksLikeFirebaseConfig(object: SyntaxNode): boolean {
+  const tree = object.tree as unknown as object;
+  let perTree = firebaseConfigCache.get(tree);
+  if (!perTree) {
+    perTree = new Map();
+    firebaseConfigCache.set(tree, perTree);
+  }
+  const cached = perTree.get(object.id);
+  if (cached !== undefined) return cached;
+  const keys = new Set(object.namedChildren.map((p) => p.childForFieldName("key")?.text.replace(/^["'`]|["'`]$/g, "")));
+  const answer = keys.has("authDomain") || (keys.has("projectId") && (keys.has("appId") || keys.has("messagingSenderId") || keys.has("storageBucket")));
+  perTree.set(object.id, answer);
+  return answer;
 }
 
 const PUBLIC_ENV_USE =/(?:process\.env|import\.meta\.env)\.([A-Z][A-Z0-9_]*)/g;
@@ -136,6 +157,9 @@ export class HardcodedSecretAnalyzer implements Analyzer {
     const index = new LineIndex(text);
     const findings: Finding[] = [];
     const covered: Array<[number, number]> = [];
+    // Only the ranges of the first two passes are "covered": the third pass checks every string against them, and a file
+    // with 40 000 secrets (a hostile one) would make that check quadratic if its own findings were added too.
+    let collecting = true;
     const reportedKeys = new Set<string>();
 
     const add = (
@@ -150,7 +174,7 @@ export class HardcodedSecretAnalyzer implements Analyzer {
       const key = `${start}:${end}`;
       if (reportedKeys.has(key)) return;
       reportedKeys.add(key);
-      covered.push([start, end]);
+      if (collecting) covered.push([start, end]);
       const from = index.position(start);
       const to = index.position(Math.max(start, end - 1));
       const lineText = index.lineText(from.line).trim();
@@ -205,7 +229,10 @@ export class HardcodedSecretAnalyzer implements Analyzer {
 
     // 3. String literals: signing secrets, credentials by name.
     const strings = findNodes(parsed.tree.rootNode, (n) => n.type === "string" || n.type === "template_string");
+    collecting = false;
     for (const node of strings) {
+      checkBudget();
+      if (findings.length >= MAX_FINDINGS_PER_FILE) break; // a file with this many "secrets" is data, not code
       if (isCovered(node)) continue;
       const value = literalValue(node);
       if (value === undefined || value === "") continue;

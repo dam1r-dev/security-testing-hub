@@ -1,3 +1,4 @@
+import { checkBudget } from "../budget";
 import { SyntaxNode, findNodes } from "../parsers/utils";
 
 /**
@@ -144,6 +145,7 @@ function propagateTaint(tainted: Set<string>, assignmentLikeNodes: SyntaxNode[],
     changed = false;
     iterations += 1;
     for (const node of assignmentLikeNodes) {
+      checkBudget();
       const names = declaredNames(node);
       const rhs = valueNode(node);
       if (names.length === 0 || !rhs || isAllowlistGuarded(rhs) || names.every((name) => tainted.has(name))) continue;

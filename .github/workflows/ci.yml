@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Read-only by default: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     name: build-and-test (${{ matrix.os }}, node ${{ matrix.node-version }})

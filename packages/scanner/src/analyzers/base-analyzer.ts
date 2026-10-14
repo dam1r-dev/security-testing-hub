@@ -1,3 +1,4 @@
+import { checkBudgetNow } from "../budget";
 import { ParsedFile } from "../parsers/ast-parser";
 import { SyntaxNode, findFunctionBodies, findNodes, snippet, toLocation } from "../parsers/utils";
 import { CrossFileFlow, findCrossFileFlows, firstArgument } from "../taint/interprocedural";
@@ -69,6 +70,7 @@ export abstract class BaseAnalyzer implements Analyzer {
     const nodeKey = (node: SyntaxNode): string => `${node.startIndex}:${node.endIndex}`;
 
     for (const scope of scopes) {
+      checkBudgetNow(); // one iteration per function: a file of 300 000 functions must not hold the scan
       const ownSources = info ? info.sourcesIn(scope, cfg.isSource) : findNodes(scope, cfg.isSource);
       // `getId(req)` where getId returns request input is as much a source as `req.params.id`
       const returned = info ? sourceReturningCalls(scope, info) : [];

@@ -4,6 +4,20 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
 
 ## Unreleased
 
+### Security (a review of the project itself, see [docs/security-audit.md](docs/security-audit.md))
+- A crafted file can no longer crash or hang a scan: iterative tree walk, a 5 s parse limit, a 15 s analysis budget per
+  file, each check guarded on its own, a cap of 500 secret findings per file, and the quadratic behaviours found with
+  hostile inputs removed. A file that cannot be finished is reported as incomplete, never as clean.
+- `security-hub ui`: the token is no longer inside the page (any other user of the machine could read it); it travels in
+  the link's `#fragment`. The link printed in the terminal contains it.
+- "Fix with AI" prompts tell the assistant that text copied from the project is untrusted data, and strip hidden
+  characters (zero-width, bidirectional, Unicode tags) from it.
+- git is run with `core.fsmonitor` off inside scanned folders; `fix --write` refuses symbolic links, creates `.env` as
+  `0600` and git-ignores its `.security-hub.bak` backups.
+- The SQL-injection lab is published on `127.0.0.1` only and runs as a non-root user; the site allows its one inline script
+  by hash; CI runs with read-only permissions; test tooling moved to jest 30 (0 vulnerabilities in the published
+  packages, 0 critical or high anywhere); `SECURITY.md` and Dependabot added.
+
 ### Added
 - **`scan --audit`** (optional, 25th rule `vulnerable-dependency`): known vulnerabilities in your dependencies from npm's
   advisory database, one finding per vulnerable direct dependency on its line in `package.json` (installed version,

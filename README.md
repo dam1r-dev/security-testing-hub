@@ -336,6 +336,11 @@ docs/        rule docs, dev plan, attack playbook (EN/RU/KK)
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). This project
 follows a [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## Security
+
+Security Testing Hub reads code written by somebody else, so its own security is reviewed: see [SECURITY.md](SECURITY.md) to report a problem
+and [docs/security-audit.md](docs/security-audit.md) for what was found and fixed.
+
 ## Disclaimer
 
 This tool is for **defensive** use: finding and fixing vulnerabilities in

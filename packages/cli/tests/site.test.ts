@@ -49,3 +49,15 @@ describe("GitHub Pages site (site/)", () => {
     expect(workflow.permissions).toMatchObject({ pages: "write", "id-token": "write", contents: "read" });
   });
 });
+
+describe("the site's script policy", () => {
+  it("allows exactly one inline script, by hash, and the hash is current (node scripts/update-site-csp.js)", () => {
+    const csp = /Content-Security-Policy"[^>]*content="([^"]*)"/.exec(html)?.[1] ?? "";
+    expect(csp).toMatch(/script-src 'sha256-[A-Za-z0-9+/=]+';/);
+    // style-src may keep 'unsafe-inline' (inline CSS), script-src may not
+    expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { execFileSync } = require("child_process");
+    expect(() => execFileSync(process.execPath, [path.join(root, "scripts", "update-site-csp.js"), "--check"], { stdio: "pipe" })).not.toThrow();
+  });
+});

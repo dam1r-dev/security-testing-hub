@@ -207,3 +207,21 @@ describe("exposed-files", () => {
     expect(names(dir)).toEqual([]);
   });
 });
+
+describe("exposed-files: found by scanning this project with itself", () => {
+  it("the words express.static('.') in a message, a comment or documentation are not a call", () => {
+    const dir = project({
+      "docs.js": `// do not write express.static(".") or express.static(__dirname)\nconst advice = 'never call express.static(".")';\nconst other = "serveStatic(__dirname)";\n`,
+    });
+    expect(found(dir, "exposed-files")).toHaveLength(0);
+  });
+
+  it("a source file named after secrets is code, not a file of credentials", () => {
+    const dir = project(
+      { "public/secrets.ts": `export const note = "the password and the secret live in the vault";\n`, "public/credentials.json": JSON.stringify({ password: "x" }) },
+      { next: "15" },
+    );
+    const names = found(dir, "exposed-files").map((f) => path.basename(f.location.file));
+    expect(names).toEqual(["credentials.json"]);
+  });
+});

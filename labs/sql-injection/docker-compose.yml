@@ -2,7 +2,9 @@ services:
   app:
     build: ./app
     ports:
-      - "3300:3000"
+      # 127.0.0.1 only: this app is vulnerable on purpose and must not be reachable from the network ("3300:3000" would
+      # publish it on every interface, including the Wi-Fi of whatever café you are in)
+      - "127.0.0.1:3300:3000"
     environment:
       - SAFE_MODE=${SAFE_MODE:-0}
     healthcheck:

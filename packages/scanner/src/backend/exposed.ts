@@ -1,5 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
+import { parseFile } from "../parsers/ast-parser";
+import { findNodes } from "../parsers/utils";
 import { gitState } from "../secrets/env-files";
 import { applyInlineSuppressions } from "../suppress";
 import { Finding, ScanResult, Severity } from "../types";
@@ -26,7 +28,8 @@ const KEY_FILE = /\.(?:pem|key|p12|pfx|jks|keystore|ppk)$|^id_(?:rsa|dsa|ecdsa|e
 const DATABASE_FILE = /\.(?:sqlite3?|db|mdb)$/i;
 const SQL_FILE = /\.sql$/i;
 const CREDENTIAL_NAME = /(?:^|[-_.])(?:credentials?|secrets?|service-?account|adminsdk|client[-_]secret)(?:[-_.]|$)/i;
-const CREDENTIAL_EXT = /\.(?:json|ya?ml|env|txt|ini|toml|js|ts|php)$/i;
+// data formats only: a source file named secrets.ts that MENTIONS passwords is code, not a file of credentials
+const CREDENTIAL_EXT = /\.(?:json|ya?ml|env|txt|ini|toml)$/i;
 const AUTH_FILE = /^(?:\.htpasswd|\.netrc|\.pgpass|wp-config\.php)$/i;
 const NPMRC = /^\.npmrc$/i;
 const BACKUP_FILE = /(?:backup|dump|export|database|site|www)[^/\\]*\.(?:zip|tar|tgz|gz|7z|rar|bak|sql)$|\.(?:bak|backup|old|orig|swp)$|~$/i;
@@ -170,7 +173,8 @@ function staticCalls(root: string, skipDirs: Set<string>): StaticCall[] {
       } else if (entry.isFile() && /\.(?:[cm]?[jt]sx?)$/.test(entry.name)) files.push(full);
     }
   }
-  const call = /\b(?:express\.static|serveStatic|static)\s*\(\s*([^)]*?(?:\([^)]*\)[^)]*?)?)\s*[,)]/g;
+  // Real calls only: the words `express.static(".")` also appear in comments, messages and documentation strings (this
+  // very scanner has them), and a regular expression over the text cannot tell the difference. Read the syntax tree.
   for (const file of files) {
     let text: string;
     try {
@@ -179,15 +183,21 @@ function staticCalls(root: string, skipDirs: Set<string>): StaticCall[] {
     } catch {
       continue;
     }
-    if (!/express\.static|serveStatic|serve-static/.test(text)) continue;
-    for (const m of text.matchAll(call)) {
-      if (!/express\.static|serveStatic/.test(m[0])) continue;
-      const argument = (m[1] ?? "").trim();
-      const directory = resolveStaticArgument(argument, path.dirname(file), root);
-      if (directory !== undefined) {
-        const line = text.slice(0, m.index ?? 0).split("\n").length;
-        calls.push({ file, line, directory, text: m[0].replace(/\s+/g, " ").slice(0, 80) });
-      }
+    if (!/express\.static|serveStatic/.test(text)) continue;
+    let parsed;
+    try {
+      parsed = parseFile(file, text);
+    } catch {
+      continue;
+    }
+    if (!parsed) continue;
+    for (const node of findNodes(parsed.tree.rootNode, (n) => n.type === "call_expression")) {
+      const callee = node.childForFieldName("function")?.text ?? "";
+      if (callee !== "express.static" && callee !== "serveStatic") continue;
+      const argument = node.childForFieldName("arguments")?.namedChildren.find((a) => a.type !== "comment");
+      if (!argument) continue;
+      const directory = resolveStaticArgument(argument.text.trim(), path.dirname(file), root);
+      if (directory !== undefined) calls.push({ file, line: node.startPosition.row + 1, directory, text: node.text.replace(/\s+/g, " ").slice(0, 80) });
     }
   }
   return calls;

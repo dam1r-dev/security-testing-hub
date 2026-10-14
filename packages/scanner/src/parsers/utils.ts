@@ -1,13 +1,22 @@
 import Parser = require("tree-sitter");
+import { checkBudget } from "../budget";
 import { SourceLocation } from "../types";
 
 export type SyntaxNode = Parser.SyntaxNode;
 
-/** Depth-first walk over every node in the tree, calling `visit` on each. */
+/**
+ * Depth-first (pre-order) walk over every node in the tree, calling `visit` on each. Iterative on purpose: a file with
+ * a 200 000-term `1+1+1+...` has a 200 000-deep tree, and recursion would overflow the stack. Also the place where the
+ * per-file time budget is checked (see budget.ts).
+ */
 export function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
-  visit(node);
-  for (const child of node.namedChildren) {
-    walk(child, visit);
+  const stack: SyntaxNode[] = [node];
+  while (stack.length > 0) {
+    const current = stack.pop() as SyntaxNode;
+    checkBudget();
+    visit(current);
+    const children = current.namedChildren;
+    for (let i = children.length - 1; i >= 0; i--) stack.push(children[i] as SyntaxNode);
   }
 }
 

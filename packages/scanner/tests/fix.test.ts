@@ -275,3 +275,37 @@ describe("fix: Sequelize, promise chains and browser projects", () => {
     expect(fixedText(dir, "a.ts", ["hardcoded-secret"])).toContain("const apiKey: string = process.env.NEWS_KEY!;");
   });
 });
+
+describe("fix: writing safely", () => {
+  it("backups are never committed by accident: .gitignore gets a line for them", () => {
+    const dir = project({ "a.js": route("`SELECT * FROM t WHERE a = ${name}`") });
+    applyPlan(plan(dir, ["sql-injection"]), { backup: true, root: dir });
+    expect(read(dir, ".gitignore")).toMatch(/^\*\.security-hub\.bak$/m);
+    // and a second run does not add the line twice
+    applyPlan(plan(dir, ["sql-injection"]), { backup: true, root: dir });
+    expect(read(dir, ".gitignore").split("\n").filter((l) => l === "*.security-hub.bak")).toHaveLength(1);
+  });
+
+  it("a new .env is readable by its owner only (where the platform has permissions)", () => {
+    const dir = project({ "config.js": `const apiKey = "sup3r-s3cret-v4lue-9f2a1c7e5b";\n` });
+    applyPlan(plan(dir, ["hardcoded-secret"]));
+    if (process.platform !== "win32") expect(fs.statSync(path.join(dir, ".env")).mode & 0o077).toBe(0);
+    expect(read(dir, ".env")).toContain("API_KEY=");
+  });
+
+  it("refuses to write through a symbolic link, and changes nothing at all in that case", () => {
+    const dir = project({ "config.js": `const apiKey = "sup3r-s3cret-v4lue-9f2a1c7e5b";\n` });
+    const outside = path.join(dir, "..", `outside-${path.basename(dir)}.txt`);
+    fs.writeFileSync(outside, "do not touch\n");
+    dirs.push(outside);
+    try {
+      fs.symlinkSync(outside, path.join(dir, ".env"));
+    } catch {
+      return; // creating symbolic links needs a privilege on some systems (Windows without developer mode): nothing to test
+    }
+    const p = plan(dir, ["hardcoded-secret"]);
+    expect(() => applyPlan(p)).toThrow(/symbolic link/);
+    expect(fs.readFileSync(outside, "utf8")).toBe("do not touch\n");
+    expect(read(dir, "config.js")).toContain("sup3r-s3cret"); // the source file was not changed either
+  });
+});
