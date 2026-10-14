@@ -9,14 +9,18 @@ describe("GitHub Pages site (site/)", () => {
   it("every local image the page references exists (the three mascot states)", () => {
     const references = [...html.matchAll(/(?:src|href)="(assets\/[^"]+)"/g)].map((m) => m[1] as string);
     for (const state of ["safe", "warn", "danger"]) {
-      expect(html).toContain(`assets/mascot-${state}.svg`);
+      expect(html).toContain(`assets/mascot-${state}.png`);
     }
     for (const ref of new Set(references)) expect(fs.existsSync(path.join(site, ref))).toBe(true);
     for (const state of ["safe", "warn", "danger"]) {
-      const svg = fs.readFileSync(path.join(site, "assets", `mascot-${state}.svg`), "utf8");
-      expect(svg).toContain("<svg");
-      expect(svg).toContain("aria-label"); // readable by screen readers
+      const png = fs.readFileSync(path.join(site, "assets", `mascot-${state}.png`));
+      expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a"); // a real PNG
+      expect(png.length).toBeLessThan(150 * 1024); // it is embedded in every report
     }
+  });
+
+  it("the hero image has a text alternative for screen readers", () => {
+    expect(html).toMatch(/<img id="heroMascot"[^>]*alt="Armo/);
   });
 
   it("makes no network request: a CSP forbids everything but itself, and no external script or image is used", () => {
