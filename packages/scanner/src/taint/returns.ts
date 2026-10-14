@@ -121,12 +121,17 @@ export function returnSummary(fn: FunctionInfo, project: ProjectContext, depth =
  * from an argument that carries it.
  */
 export function callTaintFor(info: FileInfo, depth = 0): CallTaint {
-  const resolved = new Map<number, FunctionInfo | null>();
+  let resolved = resolvedCallees.get(info);
+  if (!resolved) {
+    resolved = new Map();
+    resolvedCallees.set(info, resolved);
+  }
+  const cache = resolved;
   const calleeOf = (call: SyntaxNode): FunctionInfo | null => {
-    let found = resolved.get(call.id);
+    let found = cache.get(call.id);
     if (found === undefined) {
       found = info.project.resolveCallee(call, info) ?? null;
-      resolved.set(call.id, found);
+      cache.set(call.id, found);
     }
     return found;
   };
@@ -148,6 +153,9 @@ export function callTaintFor(info: FileInfo, depth = 0): CallTaint {
 }
 
 const sourceCallCache = new WeakMap<FileInfo, Map<string, SyntaxNode[]>>();
+const REQUEST_HOLDER_NAMES = new Set(["req", "request", "ctx", "context", "event", "c"]);
+// Every rule, scope and iteration asks about the same calls: resolve each call once per file.
+const resolvedCallees = new WeakMap<FileInfo, Map<number, FunctionInfo | null>>();
 
 /**
  * Calls in `scope` that run a project function returning request input by itself (`getId(req)`): they act as
@@ -165,6 +173,8 @@ export function sourceReturningCalls(scope: SyntaxNode, info: FileInfo): SyntaxN
     found = [];
     for (const call of info.callsIn(scope)) {
       if (call.type !== "call_expression") continue;
+      // `getId(req)`: a helper that returns request input is handed the request (or its context) to read it from
+      if (!(call.childForFieldName("arguments")?.namedChildren ?? []).some((a) => a.type === "identifier" && REQUEST_HOLDER_NAMES.has(a.text))) continue;
       const callee = info.project.resolveCallee(call, info);
       if (callee && returnSummary(callee, info.project).source) found.push(call);
     }

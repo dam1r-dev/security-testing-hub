@@ -222,10 +222,45 @@ export function expressionCarries(expression: SyntaxNode, carrier: Carrier, call
   if (carrier.source && containsSourceDirectly(expression, carrier.source)) return true;
   if (usesNamesDirectly(expression, carrier.names)) return true;
   if (!callTaint) return false;
-  return findNodes(expression, (n) => n.type === "call_expression" && isDirectlyWithin(n, expression)).some((call) =>
-    callTaint(call, carrier),
-  );
+  return directCalls(expression).some((call) => callTaint(call, carrier));
 }
+
+// The calls an expression evaluates to or builds on directly (not inside another call's arguments): one downward walk,
+// remembered per tree, because the same expression is asked about again for every source and every iteration.
+const directCallCache = new WeakMap<object, Map<number, SyntaxNode[]>>();
+
+function directCalls(expression: SyntaxNode): SyntaxNode[] {
+  if (!expression.text.includes("(")) return NO_CALLS;
+  const tree = expression.tree as unknown as object;
+  let perTree = directCallCache.get(tree);
+  if (!perTree) {
+    perTree = new Map();
+    directCallCache.set(tree, perTree);
+  }
+  const cached = perTree.get(expression.id);
+  if (cached) return cached;
+
+  const calls: SyntaxNode[] = [];
+  const visit = (node: SyntaxNode): void => {
+    if (node.type === "call_expression") calls.push(node);
+    for (const child of node.namedChildren) {
+      // the same boundaries as isDirectlyWithin: a value passed as an argument, used as a key, tested by a condition
+      // or compared is not part of the value of the expression
+      if (node.type === "call_expression" && child.type === "arguments") continue;
+      if (node.type === "new_expression" && child.type === "arguments") continue;
+      if (node.type === "subscript_expression" && node.childForFieldName("index")?.id === child.id) continue;
+      if (node.type === "ternary_expression" && node.childForFieldName("condition")?.id === child.id) continue;
+      if (node.type === "binary_expression" && COMPARISON_OPERATORS.has(node.childForFieldName("operator")?.text ?? "")) continue;
+      if (node.type === "unary_expression" && /^(?:!|typeof|void)$/.test(node.childForFieldName("operator")?.text ?? "")) continue;
+      visit(child);
+    }
+  };
+  visit(expression);
+  perTree.set(expression.id, calls);
+  return calls;
+}
+
+const NO_CALLS: SyntaxNode[] = [];
 
 /** True if `source` sits directly inside `expression` (not wrapped in a call's arguments). */
 export function containsSourceDirectly(expression: SyntaxNode, source: SyntaxNode): boolean {

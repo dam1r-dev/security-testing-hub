@@ -19,6 +19,7 @@ import { dependsOnRateLimiter, sourceFacts } from "./project-info";
  */
 
 const GUARDED_PATH = /(?:^|\/)(?:log-?in|sign-?in|signin|authenticate|auth|session|sessions|token|otp|2fa|mfa|totp|verify-?(?:code|otp|2fa|pin)|pin|admin-?login)(?:\/|$|\?|["'`])/i;
+const GUARDED_PATH_LITERAL = /["'`][^"'`\n]*\/(?:log-?in|sign-?in|signin|authenticate|auth|session|sessions|token|otp|2fa|mfa|totp|verify-?(?:code|otp|2fa|pin)|pin|admin-?login)\b/i;
 const GUARDED_NAME = /^(?:log-?in|sign-?in|signin|authenticate|verify-?(?:code|otp|2fa|pin|totp)|check-?(?:code|otp|pin|password))/i;
 
 // The app compares the secret itself.
@@ -84,8 +85,9 @@ function handlerNodes(route: SyntaxNode, info: FileInfo | undefined, project: Pr
 export class MissingRateLimitAnalyzer implements Analyzer {
   analyze(parsed: ParsedFile, filePath: string, context?: ProjectContext): Finding[] {
     const text = parsed.sourceCode;
-    // cheap exit: a file that never mentions sign-in, codes or sessions (and is not a Next route file) has nothing to report
-    if (!isNextRouteFile(filePath) && !/login|signin|sign-in|authenticate|authorize|otp|2fa|mfa|totp|verify|pin|session|token|Credentials/i.test(text)) return [];
+    // cheap exit: a target is a route whose path is written out in the file (a string such as "/login"), a Next route file,
+    // a Server Action or an Auth.js Credentials provider
+    if (!isNextRouteFile(filePath) && !GUARDED_PATH_LITERAL.test(text) && !/["']use server["']/.test(text) && !/Credentials/.test(text)) return [];
     const root = parsed.tree.rootNode;
     const project = context ?? ProjectContext.forSingleFile(filePath, parsed);
     const info = project.fileInfo(filePath, parsed);
