@@ -1,7 +1,6 @@
 // Runs ONE hostile input through the built scanner (dist/) in its own process and prints what happened as JSON.
-// Used by tests/hostile-input.test.ts: a 60 000-deep tree is exactly the kind of input that must not share a process with
-// the other tests (inside a jest worker it leaves node-tree-sitter's shared state in a bad way for the suites that run
-// after it; in a plain process it does not, which is how the scanner itself runs).
+// Used by tests/hostile-input.test.ts: inputs that need hundreds of megabytes and many seconds are kept out of the test
+// runner's own processes, and this is how the scanner really runs: a fresh process, built code.
 const path = require("path");
 
 const dist = path.resolve(__dirname, "..", "..", "dist", "index.js");
