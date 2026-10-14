@@ -124,15 +124,30 @@ export function hasNearbyMiddlewareWithAuthHint(filePath: string): boolean {
 // the first statement of a function body makes just that function one. A Server Action is a public POST endpoint:
 // its arguments come from the browser, and nothing but the code in the action decides who may call it.
 
+// Reading a node's children through the native binding is the dominant cost of a scan, and every rule asks every function
+// whether it is a Server Action: read the directive once per file, and only as far as the first real statement.
+const fileDirectiveCache = new WeakMap<object, boolean>();
+
 function hasUseServerDirective(container: SyntaxNode): boolean {
-  for (const child of container.namedChildren) {
+  for (let i = 0; ; i++) {
+    const child = container.namedChild(i);
+    if (!child) return false;
     if (child.type === "comment") continue;
     if (child.type !== "expression_statement") return false;
     const first = child.namedChild(0);
     if (first?.type !== "string") return false;
     if (/^["']use server["']$/.test(first.text)) return true;
   }
-  return false;
+}
+
+function fileHasUseServer(fn: SyntaxNode): boolean {
+  const tree = fn.tree as unknown as object;
+  let known = fileDirectiveCache.get(tree);
+  if (known === undefined) {
+    known = hasUseServerDirective(fn.tree.rootNode);
+    fileDirectiveCache.set(tree, known);
+  }
+  return known;
 }
 
 function isExportedTopLevel(fn: SyntaxNode): boolean {
@@ -145,9 +160,8 @@ function isExportedTopLevel(fn: SyntaxNode): boolean {
 
 /** The function is a Server Action: an exported function of a `"use server"` file, or one with the directive inside. */
 export function isServerActionFunction(fn: SyntaxNode): boolean {
+  // inline directive: the first statement of the body
   const body = fn.childForFieldName("body");
-  if (body?.type === "statement_block" && hasUseServerDirective(body)) return true;
-  let root: SyntaxNode = fn;
-  while (root.parent) root = root.parent;
-  return hasUseServerDirective(root) && isExportedTopLevel(fn);
+  if (body?.type === "statement_block" && body.namedChild(0)?.type === "expression_statement" && hasUseServerDirective(body)) return true;
+  return fileHasUseServer(fn) && isExportedTopLevel(fn);
 }
