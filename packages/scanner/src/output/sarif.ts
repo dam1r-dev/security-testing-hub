@@ -125,6 +125,11 @@ const RULE_DESCRIPTIONS: Record<VulnerabilityType, { name: string; description: 
     description: "A login or code-check endpoint checks the credential itself and nothing limits the number of attempts.",
     helpUri: "https://cwe.mitre.org/data/definitions/307.html",
   },
+  "vulnerable-dependency": {
+    name: "Vulnerable dependency",
+    description: "A package your project depends on has a known security vulnerability (from npm's advisory database).",
+    helpUri: "https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities",
+  },
   "exposed-files": {
     name: "Sensitive file in a public folder",
     description: "A secret, key, database dump or .git folder sits in a folder the web server serves to everyone.",

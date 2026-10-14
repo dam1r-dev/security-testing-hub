@@ -34,6 +34,7 @@ export const RULE_IDS: readonly VulnerabilityType[] = [
   "insecure-jwt",
   "missing-rate-limit",
   "exposed-files",
+  "vulnerable-dependency",
 ];
 
 // `// security-hub-ignore`, `/* security-hub-ignore */`, `// security-hub-ignore sql-injection, xss -- reason`

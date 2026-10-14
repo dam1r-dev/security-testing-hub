@@ -22,7 +22,8 @@ export type VulnerabilityType =
   | "insecure-cors"
   | "insecure-jwt"
   | "missing-rate-limit"
-  | "exposed-files";
+  | "exposed-files"
+  | "vulnerable-dependency";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 

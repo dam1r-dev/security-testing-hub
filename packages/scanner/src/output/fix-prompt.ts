@@ -91,6 +91,10 @@ const HOW_TO_FIX: Record<VulnerabilityType, string> = {
     "Add rate limiting to the sign-in / code-check endpoint: per IP and per account, for example express-rate-limit " +
     "(5 attempts per 15 minutes on /login) or @upstash/ratelimit in Next.js, plus a short lockout after repeated failures. " +
     "Return the same message for every failure. Keep the limiter in one shared module so every auth route uses it.",
+  "vulnerable-dependency":
+    "Update the named package to a fixed version (npm install <package>@<fixed version>, or npm audit fix for the safe updates). " +
+    "Read the changelog before a major upgrade and run the tests afterwards. Do not use npm audit fix --force without checking " +
+    "what it changes. If no fixed version exists, tell me the options: a replacement package or a pinned safe version.",
   "exposed-files":
     "Delete the file from the public folder (or stop serving the folder that contains it), move it somewhere the web server " +
     "does not hand out, and remind me to rotate every secret it held because it may already have been downloaded or committed. " +

@@ -279,6 +279,20 @@ Never prints a secret: the message names the file and the URL it can be download
 skipped (Vercel, Netlify and GitHub Pages deploy from the repository, so an ignored file is not part of the deploy);
 a `.git` folder is always reported. Confidence is high when `package.json` shows a framework that serves `public/`.
 
+## `vulnerable-dependency` (critical / high / medium / low) — optional, `scan --audit`
+
+Known vulnerabilities in the packages your project depends on, from npm's advisory database. This is **the only feature
+that uses the network**: `npm audit` sends the names and versions of your dependencies to the npm registry, so it runs
+**only** when you pass `--audit`, never installs anything, and needs a `package-lock.json` (create one without installing:
+`npm install --package-lock-only`). Without the flag the scan stays fully offline.
+
+One finding per vulnerable **direct** dependency, placed on its line in `package.json`: the installed version, up to three
+advisory titles, a link, and the fix (`npm install pkg@fixed`, marked when it is a major upgrade). The vulnerable packages
+your dependencies pull in (transitive) are summed up in one finding with the worst severity, because listing hundreds of
+them would bury the ones you can act on. npm's `moderate` is reported as `medium`. If npm cannot run (offline, no lock
+file) you get a warning, never a clean bill of health. Not covered: advisories npm does not know, vulnerable code that
+is vendored into your repository, and packages installed outside `package.json`.
+
 ## `ssrf` (high)
 
 - **Sinks:** `fetch(url)`, `request(url)`, `got(url)`, and

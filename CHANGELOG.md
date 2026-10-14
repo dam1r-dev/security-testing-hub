@@ -5,6 +5,10 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
 ## Unreleased
 
 ### Added
+- **`scan --audit`** (optional, 25th rule `vulnerable-dependency`): known vulnerabilities in your dependencies from npm's
+  advisory database, one finding per vulnerable direct dependency on its line in `package.json` (installed version,
+  advisories, the fix) and one summary for the transitive ones. It is the only feature that uses the network (`npm audit`
+  sends dependency names and versions to the registry), so it runs only with the flag.
 - **`security-hub fix`**: fixes what can be fixed mechanically and safely: SQL values become bound parameters (`$1`,
   `?`, Sequelize `replacements`), JWTs get an expiry and lose `none` / `ignoreExpiration`, hard-coded secrets move to
   `.env` (value) / `.env.example` (name) / `.gitignore`, permissive CORS reads `ALLOWED_ORIGINS`, and Supabase tables
