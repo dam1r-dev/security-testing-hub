@@ -21,7 +21,7 @@ response bodies, `exec()` with interpolated input) because that's what's
 common in training data. This tool is a fast, local pre-commit/CI check
 tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 
-## What it detects (20 rules)
+## What it detects (24 rules)
 
 | Vulnerability | CWE | Analyzer |
 |---|---|---|
@@ -44,6 +44,10 @@ tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 | Supabase Row Level Security | [CWE-862](https://cwe.mitre.org/data/definitions/862.html) | SQL migrations: tables served by the API without RLS, `USING (true)` policies, "signed in" as ownership, `user_metadata` in policies, views without `security_invoker`, `SECURITY DEFINER` functions, open storage buckets |
 | Supabase auth misuse | [CWE-863](https://cwe.mitre.org/data/definitions/863.html) | `getSession()` trusted on the server, roles read from `user_metadata` |
 | Firebase security rules | [CWE-284](https://cwe.mitre.org/data/definitions/284.html) | `firestore.rules`, `storage.rules`, `database.rules.json`: `if true`, test-mode rules, signed-in-only writes, open private paths |
+| Insecure CORS | [CWE-942](https://cwe.mitre.org/data/definitions/942.html) | `cors({ origin: true, credentials: true })`, a reflected `Origin` header with credentials |
+| Insecure JWT use | [CWE-347](https://cwe.mitre.org/data/definitions/347.html) | `none` algorithm, `ignoreExpiration`, `jwt.decode()` trusted without `verify`, tokens that never expire |
+| Missing rate limit on sign-in | [CWE-307](https://cwe.mitre.org/data/definitions/307.html) | a login or one-time-code endpoint that checks the credential itself, in a project with no rate limiting anywhere |
+| Secrets in public folders | [CWE-538](https://cwe.mitre.org/data/definitions/538.html) | `.env`, keys, database dumps and `.git` inside `public/` or an `express.static` folder; `express.static(__dirname)` at the project root |
 | Hard-coded secrets | [CWE-798](https://cwe.mitre.org/data/definitions/798.html) | provider token formats (AWS, GitHub, Stripe, OpenAI/Anthropic, Slack, Supabase `service_role`, private keys, DB URLs), guessable `jwt.sign` / `session` secrets, credentials by name, secrets behind `NEXT_PUBLIC_`-style prefixes, committed `.env` files |
 
 See [docs/rules.md](docs/rules.md) for how each rule works and its known

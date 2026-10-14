@@ -29,7 +29,7 @@ function git(cwd: string, args: string[]): { ok: boolean; stderr: string } {
 }
 
 /** Is this file committed, safely ignored, or sitting there one `git add .` away from being committed? */
-function gitState(file: string, root: string): GitState {
+export function gitState(file: string, root: string): GitState {
   const dir = path.dirname(file);
   const name = path.basename(file);
   const inside = git(dir, ["rev-parse", "--is-inside-work-tree"]);

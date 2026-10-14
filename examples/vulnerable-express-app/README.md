@@ -24,6 +24,18 @@ is intentionally vulnerable.
 | `GET /reports/mine?owner=` | Safe: the service uses a bound parameter — should **not** be flagged |
 | `config.js` | Hard-coded secrets: a JWT signing secret, an admin password and a database URL with a password in the source |
 | `upload.js` (`multer` config, no route) | Insecure File Upload (filter checks `file.mimetype` only) |
+| `app.js` (`cors(...)`) | Insecure CORS: `origin: true` together with `credentials: true` |
+| `app.js` (`express.static(__dirname)`) | Exposed files: the whole project folder is served |
+| `public/backup.sql` | Exposed files: a database dump in the folder the server hands out |
+| `POST /token`, `GET /me` | Insecure JWT: a token with no expiry; `verify` that allows the `none` algorithm |
+| `GET /profile` | Insecure JWT: `jwt.decode()` trusted as if it verified (the file never calls `verify`) |
+| `POST /login` (second finding) | Missing rate limit: password checked with no limit on attempts anywhere in the project |
+| `app.js` (`cors(...)`) | Insecure CORS: `origin: true` together with `credentials: true` |
+| `app.js` (`express.static(__dirname)`) | Exposed files: the whole project folder is served |
+| `public/backup.sql` | Exposed files: a database dump in the folder the server hands out |
+| `POST /token`, `GET /me` | Insecure JWT: a token with no expiry; `verify` that allows the `none` algorithm |
+| `GET /profile` | Insecure JWT: `jwt.decode()` trusted as if it verified (the file never calls `verify`) |
+| `POST /login` (second finding) | Missing rate limit: password checked with no limit on attempts anywhere in the project |
 
 Run the scanner against it from the repo root:
 

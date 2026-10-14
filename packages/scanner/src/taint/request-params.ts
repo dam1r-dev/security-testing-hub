@@ -1,3 +1,4 @@
+import { isServerActionFunction } from "../analyzers/nextjs-routes";
 import { SyntaxNode, isFunctionNode } from "../parsers/utils";
 import { boundNames } from "./simple-taint";
 
@@ -75,6 +76,15 @@ export function requestParamOrigins(fn: SyntaxNode, keys: readonly string[] = RE
     if (REQUEST_TYPE.test(first.type) || secondIsResponse || remixStyle) {
       const names = pick(first.pattern, keys);
       if (names.length > 0) origins.push({ node: first.pattern, names });
+    }
+  }
+
+  // Server Actions: every argument comes from the browser (the form data, an id, `prevState`).
+  if (isServerActionFunction(fn)) {
+    for (const param of params) {
+      const pattern = describeParam(param).pattern;
+      const names = pattern ? boundNames(pattern) : [];
+      if (pattern && names.length > 0) origins.push({ node: pattern, names });
     }
   }
 

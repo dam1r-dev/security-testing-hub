@@ -7,7 +7,7 @@ const FIXTURE_APP = path.resolve(__dirname, "../../../examples/vulnerable-expres
 const NEXTJS_FIXTURE_APP = path.resolve(__dirname, "../../../examples/vulnerable-nextjs-app");
 
 describe("runScan against the vulnerable-express-app fixture", () => {
-  it("finds all seventeen vulnerability classes, none in the safe routes", () => {
+  it("finds all twenty-one vulnerability classes, none in the safe routes", () => {
     const outFile = path.join(os.tmpdir(), `security-hub-test-${Date.now()}.json`);
     const exitCode = runScan(FIXTURE_APP, { format: "json", out: outFile });
     const summary = JSON.parse(fs.readFileSync(outFile, "utf8"));
@@ -36,6 +36,10 @@ describe("runScan against the vulnerable-express-app fixture", () => {
         "insecure-deserialization",
         "xxe",
         "hardcoded-secret",
+        "insecure-cors",
+        "insecure-jwt",
+        "missing-rate-limit",
+        "exposed-files",
       ]),
     );
     // Safe, parameterized query in users.js (the /user-safe/:id route) must not be
@@ -223,6 +227,10 @@ describe("runScan against the vulnerable-nextjs-app fixture", () => {
         "hardcoded-secret",
       ]),
     );
+
+    // Server Actions: the arguments are request input, and an action that deletes without a session check is reported.
+    const actions = summary.results.find((r: { file: string }) => /app[/\\]actions\.ts$/.test(r.file));
+    expect(actions.findings.map((f: { ruleId: string }) => f.ruleId).sort()).toEqual(["broken-access-control", "sql-injection"]);
 
     // Across files: the route forwards ?status= to lib/orders.ts, which interpolates it.
     const orders = summary.results.find((r: { file: string }) => /orders[/\\]route\.ts$/.test(r.file));

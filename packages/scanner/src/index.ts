@@ -20,6 +20,11 @@ import { InsecureDeserializationAnalyzer } from "./analyzers/insecure-deserializ
 import { XxeAnalyzer } from "./analyzers/xxe";
 import { HardcodedSecretAnalyzer } from "./analyzers/hardcoded-secret";
 import { SupabaseAuthAnalyzer } from "./analyzers/supabase-auth";
+import { ServerActionAnalyzer } from "./analyzers/server-actions";
+import { InsecureCorsAnalyzer } from "./analyzers/cors";
+import { InsecureJwtAnalyzer } from "./analyzers/jwt";
+import { MissingRateLimitAnalyzer } from "./analyzers/rate-limit";
+import { scanExposedFiles } from "./backend/exposed";
 import { scanBackendConfigs } from "./backend/discover";
 import { scanEnvFiles } from "./secrets/env-files";
 import { applyInlineSuppressions, compileIgnorePatterns, parseIgnoreFile } from "./suppress";
@@ -95,6 +100,10 @@ export function defaultAnalyzers(): Analyzer[] {
     new XxeAnalyzer(),
     new HardcodedSecretAnalyzer(),
     new SupabaseAuthAnalyzer(),
+    new ServerActionAnalyzer(),
+    new InsecureCorsAnalyzer(),
+    new InsecureJwtAnalyzer(),
+    new MissingRateLimitAnalyzer(),
   ];
 }
 
@@ -220,8 +229,12 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
   const backendResults = stat.isDirectory() ? scanBackendConfigs(targetPath, skipDirs, isIgnored) : [];
   results.push(...backendResults);
 
+  // Secrets, keys, dumps and .git folders inside the folders the web server hands out (public/, static/, express.static).
+  const exposedResults = stat.isDirectory() ? scanExposedFiles(targetPath, skipDirs, isIgnored) : [];
+  results.push(...exposedResults);
+
   return {
-    filesScanned: files.length + envResults.length + backendResults.length,
+    filesScanned: files.length + envResults.length + backendResults.length + exposedResults.length,
     findingsCount: results.reduce((sum, r) => sum + r.findings.length, 0),
     results,
     durationMs: Date.now() - start,

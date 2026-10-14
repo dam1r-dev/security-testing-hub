@@ -108,7 +108,7 @@
 
   <section id="rules">
     <h2>What it finds</h2>
-    <p class="sub">20 rules, built around what actually goes wrong in AI-generated projects.</p>
+    <p class="sub">24 rules, built around what actually goes wrong in AI-generated projects, including Next.js Server Actions.</p>
     <div class="rules" id="ruleList"></div>
   </section>
 
@@ -152,7 +152,8 @@
 (function () {
   var RULES = ['SQL injection', 'XSS', 'Command injection', 'Path traversal', 'SSRF', 'CSRF', 'IDOR', 'Broken access control',
     'Insecure role assignment', 'Insecure file upload', 'Username enumeration', 'Code injection', 'Open redirect', 'NoSQL injection',
-    'Insecure deserialization', 'XXE', 'Hard-coded secrets (keys, .env, service accounts)', 'Supabase Row Level Security', 'Supabase auth misuse', 'Firebase rules'];
+    'Insecure deserialization', 'XXE', 'Hard-coded secrets (keys, .env, service accounts)', 'Supabase Row Level Security', 'Supabase auth misuse', 'Firebase rules',
+    'Insecure CORS', 'Insecure JWT use', 'No rate limit on sign-in', 'Secrets in public folders'];
   var SEVERITIES = ['critical', 'high', 'medium', 'low'];
   var SEV_COLOR = { critical: '#7f1d1d', high: '#dc2626', medium: '#ca8a04', low: '#6b7280' };
   var MOODS = {

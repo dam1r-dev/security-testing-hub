@@ -118,3 +118,36 @@ export function hasNearbyMiddlewareWithAuthHint(filePath: string): boolean {
 
   return false;
 }
+
+// ---- Server Actions ---------------------------------------------------------
+// `"use server"` at the top of a file makes every exported async function in it a Server Action; the same directive as
+// the first statement of a function body makes just that function one. A Server Action is a public POST endpoint:
+// its arguments come from the browser, and nothing but the code in the action decides who may call it.
+
+function hasUseServerDirective(container: SyntaxNode): boolean {
+  for (const child of container.namedChildren) {
+    if (child.type === "comment") continue;
+    if (child.type !== "expression_statement") return false;
+    const first = child.namedChild(0);
+    if (first?.type !== "string") return false;
+    if (/^["']use server["']$/.test(first.text)) return true;
+  }
+  return false;
+}
+
+function isExportedTopLevel(fn: SyntaxNode): boolean {
+  let node: SyntaxNode | null = fn.parent;
+  if (node?.type === "variable_declarator") node = node.parent?.parent ?? null; // lexical_declaration -> its parent
+  else if (node?.type === "export_statement") return true;
+  else return false;
+  return node?.type === "export_statement";
+}
+
+/** The function is a Server Action: an exported function of a `"use server"` file, or one with the directive inside. */
+export function isServerActionFunction(fn: SyntaxNode): boolean {
+  const body = fn.childForFieldName("body");
+  if (body?.type === "statement_block" && hasUseServerDirective(body)) return true;
+  let root: SyntaxNode = fn;
+  while (root.parent) root = root.parent;
+  return hasUseServerDirective(root) && isExportedTopLevel(fn);
+}

@@ -19,6 +19,8 @@ but in Next.js App Router style (`route.ts` handlers, `NextRequest`/`Request`,
 | `GET /api/orders-safe?status=` | Safe: `lib/orders.ts` uses a bound parameter — should **not** be flagged |
 | `lib/supabase-client.ts` | Hard-coded secret exposure: a service-role key read through the browser-exposed `NEXT_PUBLIC_` prefix |
 | `GET /admin/users` | Broken Access Control (no auth check, no `middleware.ts` guarding it) |
+| `app/actions.ts` `deletePost` | Server Action that deletes a record and never checks the caller (broken access control) |
+| `app/actions.ts` `searchPosts` | Server Action argument flows into a SQL string (SQL injection) |
 
 Run the scanner against it from the repo root:
 

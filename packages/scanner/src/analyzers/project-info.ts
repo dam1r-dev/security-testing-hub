@@ -140,6 +140,24 @@ export interface SourceFacts {
   authHeader: boolean;
   /** The code reads or sets cookies / sessions (a library merely being installed does not count). */
   cookieUse: boolean;
+  /** Some source file limits how often a client may call (a rate limiter, a throttle, a lockout counter). */
+  rateLimit: boolean;
+}
+
+// Rate limiting by library, in package.json.
+const RATE_LIMIT_DEPS = /rate-?limit|limiter|throttl|slow-?down|@upstash\/ratelimit|arcjet|@nestjs\/throttler|bottleneck|express-brute|hono-rate-limiter/i;
+
+/** Does package.json list a rate-limiting library? */
+export function dependsOnRateLimiter(filePath: string): boolean {
+  let dir = path.dirname(path.resolve(filePath));
+  for (let depth = 0; depth < 10; depth++) {
+    const candidate = path.join(dir, "package.json");
+    if (fs.existsSync(candidate)) return (readDependencyNames(candidate) ?? []).some((d) => RATE_LIMIT_DEPS.test(d));
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return false;
 }
 
 const SOURCE_EXT = /\.(?:[cm]?[jt]sx?)$/;
@@ -176,7 +194,7 @@ export function sourceFacts(filePath: string): SourceFacts | undefined {
   const cached = factsCache.get(root);
   if (cached && Date.now() - cached.at < FACTS_TTL_MS) return cached.facts;
 
-  const facts: SourceFacts = { csrf: false, authHeader: false, cookieUse: false };
+  const facts: SourceFacts = { csrf: false, authHeader: false, cookieUse: false, rateLimit: false };
   let seen = 0;
   const walk = (dir: string): void => {
     let entries: fs.Dirent[];
@@ -197,7 +215,8 @@ export function sourceFacts(filePath: string): SourceFacts | undefined {
           const code = stripComments(fs.readFileSync(full, "utf8"));
           facts.csrf ||= /csrf|xsrf/i.test(code);
           facts.authHeader ||= /headers\??\.authorization|headers\[\s*['"]authorization['"]\s*\]|\.get\(\s*['"]authorization['"]\s*\)|\bBearer\b/i.test(code);
-          facts.cookieUse ||= /\b(?:req|request|ctx)\.(?:cookies|session)\b|\b(?:res|response)\.cookie\s*\(|\bcookies\s*\(\s*\)|\bcookieSession\s*\(|\bsession\s*\(\s*\{|\bsetCookie\b|\bcookieParser\s*\(/.test(code);
+          facts.rateLimit ||= /rate[-_ ]?limit|ratelimit|limiter|throttl|slowDown|arcjet|failedAttempts|loginAttempts|lockout|too many (?:requests|attempts)|status\(\s*429\s*\)|status:\s*429/i.test(code);
+          facts.cookieUse ||=/\b(?:req|request|ctx)\.(?:cookies|session)\b|\b(?:res|response)\.cookie\s*\(|\bcookies\s*\(\s*\)|\bcookieSession\s*\(|\bsession\s*\(\s*\{|\bsetCookie\b|\bcookieParser\s*\(/.test(code);
         } catch {
           // an unreadable file adds nothing
         }
