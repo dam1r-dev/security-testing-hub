@@ -79,6 +79,22 @@ const HOW_TO_FIX: Record<VulnerabilityType, string> = {
     "request.auth.uid == resource.data.ownerId (or the {userId} segment of the path). Never use `if true`, a test-mode date, or a " +
     "bare `request.auth != null` for writes. For the Realtime Database use \"auth != null && auth.uid === $uid\". Deploy with " +
     "`firebase deploy --only firestore:rules` (or storage / database) and test with the Rules Playground or the emulator.",
+  "insecure-cors":
+    "Replace the permissive CORS setup with an explicit allowlist of the origins that really need access (for example " +
+    "origin: [process.env.APP_ORIGIN]) and keep credentials: true only together with that list. Never echo the request's " +
+    "Origin header back, never use origin: true or a catch-all regex together with credentials.",
+  "insecure-jwt":
+    "Verify every token with jwt.verify(token, secret, { algorithms: [\"HS256\"] }) and use only what it returns (never jwt.decode " +
+    "for authorization). Never allow the \"none\" algorithm or ignoreExpiration. Issue tokens with an expiry " +
+    "(jwt.sign(payload, secret, { expiresIn: \"1h\" })) and a long random secret from an environment variable.",
+  "missing-rate-limit":
+    "Add rate limiting to the sign-in / code-check endpoint: per IP and per account, for example express-rate-limit " +
+    "(5 attempts per 15 minutes on /login) or @upstash/ratelimit in Next.js, plus a short lockout after repeated failures. " +
+    "Return the same message for every failure. Keep the limiter in one shared module so every auth route uses it.",
+  "exposed-files":
+    "Delete the file from the public folder (or stop serving the folder that contains it), move it somewhere the web server " +
+    "does not hand out, and remind me to rotate every secret it held because it may already have been downloaded or committed. " +
+    "Serve only a dedicated public/ folder; never express.static('.') or __dirname at the project root.",
 };
 
 const REQUIREMENTS = [

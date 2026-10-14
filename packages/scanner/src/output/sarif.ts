@@ -110,6 +110,26 @@ const RULE_DESCRIPTIONS: Record<VulnerabilityType, { name: string; description: 
     description: "Firestore, Cloud Storage or Realtime Database rules let anyone (or any signed-in user) read or write other people's data.",
     helpUri: "https://firebase.google.com/docs/rules/insecure-rules",
   },
+  "insecure-cors": {
+    name: "Insecure CORS",
+    description: "CORS accepts any origin (or reflects the request's Origin) while allowing credentials, so any website can act as the logged-in user.",
+    helpUri: "https://portswigger.net/web-security/cors",
+  },
+  "insecure-jwt": {
+    name: "Insecure JSON Web Token use",
+    description: "Tokens are accepted without a signature (alg none), never expire, or are decoded without being verified.",
+    helpUri: "https://cwe.mitre.org/data/definitions/347.html",
+  },
+  "missing-rate-limit": {
+    name: "Missing rate limiting on sign-in",
+    description: "A login or code-check endpoint checks the credential itself and nothing limits the number of attempts.",
+    helpUri: "https://cwe.mitre.org/data/definitions/307.html",
+  },
+  "exposed-files": {
+    name: "Sensitive file in a public folder",
+    description: "A secret, key, database dump or .git folder sits in a folder the web server serves to everyone.",
+    helpUri: "https://cwe.mitre.org/data/definitions/538.html",
+  },
 };
 
 function levelFor(severity: Severity): "error" | "warning" | "note" {

@@ -18,7 +18,11 @@ export type VulnerabilityType =
   | "hardcoded-secret"
   | "supabase-rls"
   | "supabase-auth"
-  | "firebase-rules";
+  | "firebase-rules"
+  | "insecure-cors"
+  | "insecure-jwt"
+  | "missing-rate-limit"
+  | "exposed-files";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 

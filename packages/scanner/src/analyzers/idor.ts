@@ -20,7 +20,7 @@ const ID_PARAM_PATTERN = /:((?:[A-Za-z0-9_]*(?:Id|ID|_id))|id)(?![A-Za-z0-9_])/;
 // Also by NAME: projects wrap the check in a helper (`verifyCurrentUserHasAccessToPost(id)`,
 // `security.appendUserId()`, `checkOwnership(...)`), and a route that a "deny" middleware switches
 // off (`security.denyAll()`) has no object to reach at all.
-const OWNERSHIP_CHECK_HINT = new RegExp(
+export const OWNERSHIP_CHECK_HINT = new RegExp(
   [
     String.raw`req\.(user|session|auth|currentUser)\b`,
     "getServerSession",

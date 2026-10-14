@@ -30,6 +30,10 @@ export const RULE_IDS: readonly VulnerabilityType[] = [
   "supabase-rls",
   "supabase-auth",
   "firebase-rules",
+  "insecure-cors",
+  "insecure-jwt",
+  "missing-rate-limit",
+  "exposed-files",
 ];
 
 // `// security-hub-ignore`, `/* security-hub-ignore */`, `// security-hub-ignore sql-injection, xss -- reason`

@@ -53,6 +53,9 @@ interface ModuleExports {
   stars: string[];
 }
 
+// Wrappers that return the function they are given (memoisation, async error handling): the result is that function.
+const FUNCTION_WRAPPER = /^(?:React\.)?(?:cache|memoize|once|unstable_cache|asyncHandler|catchAsync|wrapAsync|tryCatch)$/;
+
 const MAX_CACHED_FILES = 400;
 const MAX_RESOLVE_DEPTH = 12;
 const EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
@@ -385,7 +388,15 @@ export class FileInfo {
       }
       case "call_expression": {
         const spec = requireSpecifier(node);
-        return spec ? { kind: "import", spec, name: "*", info: this } : undefined;
+        if (spec) return { kind: "import", spec, name: "*", info: this };
+        // `export const getUser = asyncHandler(async (req, res) => { ... })`, `const load = cache(async () => ...)`:
+        // a wrapper that hands the function back unchanged is the function.
+        const callee = node.childForFieldName("function")?.text ?? "";
+        if (FUNCTION_WRAPPER.test(callee)) {
+          const wrapped = node.childForFieldName("arguments")?.namedChildren.find((a) => a.type === "arrow_function" || a.type === "function_expression" || a.type === "function");
+          if (wrapped) return { kind: "fn", fn: this.functionInfo(wrapped, name) };
+        }
+        return undefined;
       }
       default:
         return undefined;
