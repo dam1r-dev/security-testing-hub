@@ -77,6 +77,7 @@ describe("security-hub fix", () => {
     expect(code).toBe(0);
     expect(fs.readFileSync(path.join(dir, "token.js.security-hub.bak"), "utf8")).toBe(APP);
     expect(text).toContain("not a git repository");
+    expect(fs.readFileSync(path.join(dir, ".gitignore"), "utf8")).toContain("*.security-hub.bak"); // a backup holds the old secrets
   });
 
   it("--only limits the fix and rejects a rule that has none", () => {

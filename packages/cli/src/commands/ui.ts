@@ -29,6 +29,8 @@ export interface UiServer {
   port: number;
   url: string;
   token: string;
+  /** The link to open: the page address plus the token in the fragment (the page itself never contains the token). */
+  launchUrl: string;
 }
 
 class HttpError extends Error {
@@ -190,7 +192,6 @@ function handle(
   if (req.method === "GET" && url.pathname === "/") {
     const nonce = crypto.randomBytes(16).toString("base64");
     const html = renderUiPage({
-      token: state.token,
       nonce,
       initialPath: path.resolve(state.options.path ?? process.cwd()),
       explicitPath: state.options.path !== undefined,
@@ -259,7 +260,13 @@ export async function startUiServer(options: UiOptions = {}): Promise<UiServer> 
   for (let i = 0; i < attempts; i++) {
     try {
       state.port = await listen(server, first === 0 ? 0 : first + i);
-      return { server, port: state.port, url: `http://127.0.0.1:${state.port}/`, token: state.token };
+      return {
+        server,
+        port: state.port,
+        url: `http://127.0.0.1:${state.port}/`,
+        token: state.token,
+        launchUrl: `http://127.0.0.1:${state.port}/#token=${state.token}`,
+      };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "EADDRINUSE" || i === attempts - 1) throw err;
     }
@@ -296,8 +303,8 @@ export async function runUi(options: UiOptions): Promise<number> {
     process.stderr.write(chalk.red(`Could not start the UI server: ${(err as Error).message}\n`));
     return 1;
   }
-  process.stdout.write(`${chalk.green("Security Testing Hub is running:")} ${chalk.bold(ui.url)}\n`);
+  process.stdout.write(`${chalk.green("Security Testing Hub is running:")} ${chalk.bold(ui.launchUrl)}\n`);
   process.stdout.write(chalk.dim("Local only — your code never leaves this computer. Press Ctrl+C to stop.\n"));
-  if (options.open !== false) openInBrowser(ui.url);
+  if (options.open !== false) openInBrowser(ui.launchUrl);
   return 0;
 }

@@ -52,11 +52,14 @@ describe("security-hub ui (local web interface)", () => {
     expect(address.address).toBe("127.0.0.1");
   });
 
-  it("serves the page with a strict CSP and the run token", async () => {
+  it("serves the page with a strict CSP, and the run token is NOT in the page (it travels in the link's #fragment)", async () => {
     const reply = await request(ui, "GET", "/");
     expect(reply.status).toBe(200);
     expect(reply.body).toContain("Security Testing Hub");
-    expect(reply.body).toContain(ui.token);
+    // anyone on this machine can fetch the page: it must not hand them the key to the API
+    expect(reply.body).not.toContain(ui.token);
+    expect(ui.launchUrl).toBe(`${ui.url}#token=${ui.token}`);
+    expect(reply.body).toContain("location.hash");
     const csp = String(reply.headers["content-security-policy"]);
     expect(csp).toMatch(/script-src 'nonce-[^']+'/);
     expect(csp).toContain("frame-ancestors 'none'");

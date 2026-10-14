@@ -1,10 +1,12 @@
 import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { GIT_HARDENING_ARGS, gitEnvironment } from "./git-safe";
 
 function git(cwd: string, args: string[]): string {
-  return execFileSync("git", args, {
+  return execFileSync("git", [...GIT_HARDENING_ARGS, ...args], {
     cwd,
+    env: gitEnvironment(),
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: 64 * 1024 * 1024,

@@ -1,6 +1,7 @@
 import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { GIT_HARDENING_ARGS, gitEnvironment } from "../git-safe";
 import { applyInlineSuppressions, compileIgnorePatterns, parseIgnoreFile } from "../suppress";
 import { Finding, ScanResult } from "../types";
 import { findKnownSecrets, isSensitiveName, looksLikeSecret, normalizeName, redact } from "./detect";
@@ -20,7 +21,7 @@ type GitState = "tracked" | "not-ignored" | "ignored" | "unknown";
 
 function git(cwd: string, args: string[]): { ok: boolean; stderr: string } {
   try {
-    execFileSync("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    execFileSync("git", [...GIT_HARDENING_ARGS, ...args], { cwd, stdio: ["ignore", "pipe", "pipe"], env: gitEnvironment() });
     return { ok: true, stderr: "" };
   } catch (err) {
     const stderr = (err as { stderr?: Buffer }).stderr?.toString() ?? "";

@@ -1,3 +1,4 @@
+import { checkBudget } from "../budget";
 import { SyntaxNode, findNodes } from "../parsers/utils";
 import { callArguments } from "./args";
 import { FileInfo, FunctionInfo, ProjectContext } from "./project";
@@ -129,6 +130,7 @@ export function findCrossFileFlows(
 
   const flows: CrossFileFlow[] = [];
   for (const call of info.callsIn(scope)) {
+    checkBudget();
     if (spec.isSink(call)) continue;
     const args = callArguments(call);
     if (args.length === 0) continue;

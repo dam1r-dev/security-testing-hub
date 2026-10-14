@@ -1,8 +1,6 @@
 import { mascotDataUri } from "security-hub-scanner";
 
 export interface UiPageOptions {
-  /** Per-run secret the page must send back with every API call. */
-  token: string;
   /** CSP nonce for the single inline <script>. */
   nonce: string;
   /** Folder shown in the input when the page opens. */
@@ -31,7 +29,6 @@ export function renderUiPage(options: UiPageOptions): string {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="token" content="${escapeAttr(options.token)}" />
 <meta name="initial-path" content="${escapeAttr(options.initialPath)}" data-explicit="${options.explicitPath ? "1" : "0"}" />
 <title>Security Testing Hub</title>
 <style>
@@ -181,7 +178,15 @@ export function renderUiPage(options: UiPageOptions): string {
 
 <script nonce="${escapeAttr(options.nonce)}">
 (function () {
-  var TOKEN = document.querySelector('meta[name="token"]').content;
+  // The per-run token is NOT in this page: it travels in the link's #fragment, which the browser never sends to a server,
+  // so another user or program on this machine that fetches the page cannot read it (and so cannot drive the API).
+  var TOKEN = (function () {
+    var match = /(?:^#|&)token=([0-9a-f]+)/.exec(location.hash);
+    return match ? match[1] : '';
+  })();
+  if (location.hash) {
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* the token stays in memory anyway */ }
+  }
   var INITIAL = document.querySelector('meta[name="initial-path"]');
   var SEVERITIES = ['critical', 'high', 'medium', 'low'];
   var SEVERITY_COLOR = { critical: '#7f1d1d', high: '#dc2626', medium: '#ca8a04', low: '#6b7280' };
@@ -512,6 +517,7 @@ export function renderUiPage(options: UiPageOptions): string {
     });
   });
 
+  if (!TOKEN) showError('Open the full link printed in the terminal (it ends with #token=...): the page needs it to talk to the local server.');
   var explicit = INITIAL.getAttribute('data-explicit') === '1';
   $('path').value = (!explicit && store('sh-last-path')) || INITIAL.content;
   applyLang();

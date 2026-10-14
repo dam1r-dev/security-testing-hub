@@ -14,5 +14,10 @@ RUN npm install --omit=dev
 COPY . .
 RUN node seed.js
 
+# The app has no reason to run as root: if the deliberate SQL injection is ever turned into more, it stays in a
+# container user that owns nothing but /app.
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3000
 CMD ["node", "server.js"]

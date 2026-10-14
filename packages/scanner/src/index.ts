@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { BudgetExceeded, FILE_BUDGET_MS, startBudget } from "./budget";
 import { parseFile } from "./parsers/ast-parser";
 import { Analyzer } from "./analyzers/base-analyzer";
 import { SqlInjectionAnalyzer } from "./analyzers/sql-injection";
@@ -29,7 +30,7 @@ import { scanBackendConfigs } from "./backend/discover";
 import { scanEnvFiles } from "./secrets/env-files";
 import { applyInlineSuppressions, compileIgnorePatterns, parseIgnoreFile } from "./suppress";
 import { ProjectContext } from "./taint/project";
-import { ScanResult, ScanSummary } from "./types";
+import { Finding, ScanResult, ScanSummary } from "./types";
 
 export * from "./types";
 export { toSarif, toSarifString, SarifOptions } from "./output/sarif";
@@ -41,6 +42,7 @@ export { toGithubAnnotations, annotationFor } from "./output/github";
 export { fixPromptFor, toFixPrompt, fenced, FixPromptOptions } from "./output/fix-prompt";
 export { filterSummary, FilterOptions, SEVERITY_RANK } from "./filter";
 export { changedFiles } from "./changed";
+export { GIT_HARDENING_ARGS, gitEnvironment } from "./git-safe";
 export { parseFile, parseSource, languageForExtension } from "./parsers/ast-parser";
 export { ProjectContext } from "./taint/project";
 export { RULE_IDS } from "./suppress";
@@ -126,16 +128,35 @@ export function scanSource(
   if (!parsed) {
     return { file: filePath, findings: [], parseError: `Unsupported file extension: ${filePath}` };
   }
-  const { kept, suppressed } = applyInlineSuppressions(
-    analyzers.flatMap((a) => a.analyze(parsed, filePath, context)),
-    sourceCode,
-  );
+  // One analyzer failing (or one hostile file wearing out the time budget) must not take down the scan: the file is
+  // reported with a note, the other checks keep their findings, and the next file is scanned normally.
+  const found: Finding[] = [];
+  const notes: string[] = [];
+  const endBudget = startBudget();
+  try {
+    for (const analyzer of analyzers) {
+      try {
+        found.push(...analyzer.analyze(parsed, filePath, context));
+      } catch (err) {
+        if (err instanceof BudgetExceeded) {
+          notes.push(`Analysis stopped after ${FILE_BUDGET_MS / 1000} s: the file is too large or too complex to finish, so results for it may be incomplete.`);
+          break;
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        notes.push(`One check (${analyzer.constructor.name}) could not finish: ${message.split("\n")[0]}.`);
+      }
+    }
+  } finally {
+    endBudget();
+  }
+  const { kept, suppressed } = applyInlineSuppressions(found, sourceCode);
   const result: ScanResult = { file: filePath, findings: kept };
   if (suppressed > 0) result.suppressed = suppressed;
   if (parsed.tree.rootNode.hasError) {
     // The analyzers still ran on the best-effort tree, but surface that parsing wasn't clean.
-    result.parseError = "Source has syntax errors; results may be incomplete.";
+    notes.unshift("Source has syntax errors; results may be incomplete.");
   }
+  if (notes.length > 0) result.parseError = notes.join(" ");
   return result;
 }
 

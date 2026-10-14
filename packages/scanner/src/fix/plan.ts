@@ -297,6 +297,30 @@ export function renderPlan(plan: FixPlan, root: string): string {
 export interface ApplyOptions {
   /** Copy each existing file to `<file>.security-hub.bak` before changing it (for projects without git). */
   backup?: boolean;
+  /** The project folder: where `.gitignore` gets a line for the backups, so they are never committed. */
+  root?: string;
+}
+
+const BACKUP_PATTERN = "*.security-hub.bak";
+
+/** A backup holds the OLD file, secrets included: it must not be committed by the next `git add .`. */
+function ignoreBackups(root: string): void {
+  const gitignore = path.join(root, ".gitignore");
+  const current = readOrEmpty(gitignore);
+  if (current.split(/\r?\n/).some((line) => line.trim() === BACKUP_PATTERN)) return;
+  const separator = current === "" || current.endsWith("\n") ? "" : "\n";
+  fs.writeFileSync(gitignore, `${current}${separator}${BACKUP_PATTERN}\n`);
+}
+
+/** Writing through a symbolic link would change a file outside the project (a link planted in someone else's repository). */
+function refuseSymbolicLinks(files: string[]): void {
+  for (const file of files) {
+    try {
+      if (fs.lstatSync(file).isSymbolicLink()) throw new Error(`Refusing to write through a symbolic link: ${file}`);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+  }
 }
 
 /** Writes the plan to disk. Returns the files it changed and the backups it made. */
@@ -306,15 +330,17 @@ export function applyPlan(plan: FixPlan, options: ApplyOptions = {}): { changed:
   const editsByFile = new Map<string, TextEdit[]>();
   for (const edit of plan.edits) editsByFile.set(edit.file, [...(editsByFile.get(edit.file) ?? []), edit]);
 
+  // compute and check everything first so a failure (an overlap, a symbolic link) changes nothing
+  const results = new Map<string, string>();
+  for (const [file, edits] of editsByFile) results.set(file, applyEdits(plan.originals[file] ?? readOrEmpty(file), edits));
+  refuseSymbolicLinks([...results.keys(), ...plan.writes.map((w) => w.file)]);
+
   const backup = (file: string): void => {
     if (options.backup && fs.existsSync(file)) {
       fs.copyFileSync(file, `${file}.security-hub.bak`);
       backups.push(`${file}.security-hub.bak`);
     }
   };
-  // compute everything first so a failure (an overlap) changes nothing
-  const results = new Map<string, string>();
-  for (const [file, edits] of editsByFile) results.set(file, applyEdits(plan.originals[file] ?? readOrEmpty(file), edits));
   for (const [file, text] of results) {
     backup(file);
     fs.writeFileSync(file, text);
@@ -323,9 +349,10 @@ export function applyPlan(plan: FixPlan, options: ApplyOptions = {}): { changed:
   for (const write of plan.writes) {
     backup(write.file);
     fs.mkdirSync(path.dirname(write.file), { recursive: true });
-    fs.writeFileSync(write.file, write.content);
+    // a new .env holds secrets: readable by its owner only (an existing file keeps the permissions it has)
+    fs.writeFileSync(write.file, write.content, /^\.env(\.|$)/.test(path.basename(write.file)) ? { mode: 0o600 } : undefined);
     changed.push(write.file);
   }
+  if (backups.length > 0 && options.root) ignoreBackups(options.root);
   return { changed, backups };
 }
-

@@ -52,6 +52,7 @@ export interface ParsedFile {
 // extensive testing. So: use the safe, well-worn plain-string path by default,
 // and only fall back to the chunked reader for the files that actually need it.
 const SAFE_STRING_LIMIT = 30_000;
+const PARSE_TIMEOUT_MICROS = 5_000_000;
 const CHUNK_SIZE = 10_000;
 
 function chunkedInput(sourceCode: string): (index: number) => string {
@@ -65,8 +66,12 @@ function chunkedInput(sourceCode: string): (index: number) => string {
 export function parseSource(sourceCode: string, language: SupportedLanguage): ParsedFile {
   const parser = new Parser();
   parser.setLanguage(grammarFor(language));
+  // Error recovery on hostile input is not linear: a megabyte of unbalanced quotes kept the native parser busy for
+  // minutes. A file the parser cannot finish in a few seconds is not hand-written code worth waiting for.
+  parser.setTimeoutMicros(PARSE_TIMEOUT_MICROS);
   const input = sourceCode.length > SAFE_STRING_LIMIT ? chunkedInput(sourceCode) : sourceCode;
   const tree = parser.parse(input);
+  if (!tree) throw new Error(`parsing took longer than ${PARSE_TIMEOUT_MICROS / 1_000_000} seconds (a machine-generated or deliberately hostile file); it was skipped`);
   // See gc-workaround.ts: without this, a later parse() call in the same
   // process can silently return a corrupted tree. This applies to *every*
   // call site (scanPath's multi-file loop, but just as much a single test
