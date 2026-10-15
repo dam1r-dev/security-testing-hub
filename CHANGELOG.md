@@ -2,7 +2,7 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
-## Unreleased
+## 0.6.0 - 2026-10-15
 
 ### Security (a review of the project itself, see [docs/security-audit.md](docs/security-audit.md))
 - A crafted file can no longer crash or hang a scan: iterative tree walk, a 20 s parse limit, a 15 s analysis budget per
