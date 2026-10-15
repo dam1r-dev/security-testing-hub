@@ -293,6 +293,75 @@ them would bury the ones you can act on. npm's `moderate` is reported as `medium
 file) you get a warning, never a clean bill of health. Not covered: advisories npm does not know, vulnerable code that
 is vendored into your repository, and packages installed outside `package.json`.
 
+## Other frameworks: SvelteKit, Remix, Nuxt, tRPC, Hono
+
+The data-flow rules start from "where does request data come from", and that differs per framework. All of these count as request input
+for every data-flow rule (SQL injection, XSS, command injection, path traversal, SSRF, code injection, open redirect, ...):
+
+| Framework | Request input |
+|---|---|
+| SvelteKit | `url.searchParams.get(...)`, `await request.json()` / `request.formData()`, `event.params.x`, and `params` destructured from the first argument of an exported `GET` / `POST` / `load` / form `actions` function |
+| Remix / React Router | `params` and `request` of an exported `loader` / `action`, `new URL(request.url).searchParams.get(...)`, `await request.formData()` |
+| Nuxt / Nitro (h3) | `getQuery(event)`, `readBody(event)`, `getRouterParam(event, "id")`, `getHeader(event, ...)`, `getCookie(event, ...)`, `readFormData(event)` |
+| tRPC | `input` of a `.query(...)` / `.mutation(...)` resolver ({ input } or `opts.input`). It is the caller's even though a schema validated it: a validated string is still a string that can carry SQL. It is not used by the NoSQL rule (a schema-typed value cannot be an operator object) |
+| Hono | `c.req.query()`, `c.req.param()`, `c.req.json()`, `c.req.header()`, `c.req.valid()` |
+
+`request.headers.get(...)` of the incoming request is input in all of them (the headers of a `fetch` response are not).
+
+**Access control** for the handlers of these frameworks reuses the two rules of the Server Actions section:
+
+- `broken-access-control` (high): a handler that changes data and never checks who is calling. Handlers looked at: SvelteKit `+server`
+  `POST`/`PUT`/`PATCH`/`DELETE` and form `actions`; a Remix `action`; a Nuxt `defineEventHandler` under `server/api` or `server/routes`;
+  a tRPC `.mutation(...)` on a `publicProcedure` (a `protectedProcedure` is taken as checked by its name; a procedure with `.use(...)` is
+  not judged).
+- `idor` (high, low confidence): the caller is checked, but the record named by an id from the request is changed without the caller's id
+  in the query or a comparison.
+
+What counts as "checks the caller": `locals.user` / `locals.session`, `ctx.session` / `ctx.user`, `requireUserSession`, `getServerSession`,
+`requireUserId`, `authenticator.isAuthenticated`, a 401 / redirect to a login page, any of the helpers named in the Server Actions section,
+or a SvelteKit `hooks.server.ts` / Nuxt `server/middleware` file that stops anonymous requests for the whole project. Public-on-purpose
+names (login, signup, contact, webhook, newsletter, ...) and Supabase calls through the caller's own cookie-bound client (Row Level Security
+decides) are left alone. Role gates (`role === "admin"`) are not an ownership question and are not reported as `idor`.
+
+**Prisma:** `prisma.$queryRawUnsafe(...)` and `$executeRawUnsafe(...)` are SQL sinks. `$queryRaw` / `$executeRaw` as a tagged template
+(`$queryRaw\`... ${id}\``) bind their values and are not reported; called with a string built by hand they are.
+
+## `mass-assignment` (medium) — pattern match
+
+The WHOLE request body (`req.body`, `await request.json()`, `readBody(event)`, a variable holding one, `{ ...body }`, `Object.fromEntries(formData)`)
+is passed to a database write: `Model.create(...)`, `prisma.x.update({ data: body })`, `new Model(body)`, `Object.assign(record, body)`,
+`.findByIdAndUpdate(id, body)`, `supabase.from(...).update(body)`, Drizzle `.values(body)`. Anything the caller adds is written too:
+`role: "admin"`, `isAdmin`, `balance`, `price`, `ownerId`, `emailVerified`.
+
+- Not reported: picked fields (`const { name, email } = req.body`), a value that went through `schema.parse` / `.validate` / `pick` / `omit`,
+  a function that `delete`s fields from the body first, a body used only in a `where` filter.
+- Medium because it is only a hole when the model has a field the caller must not set, which the scanner cannot see.
+
+## `prototype-pollution` (high) — taint-based
+
+Request data reaches a deep merge (`_.merge`, `_.defaultsDeep`, `_.set` with a request-controlled path, `deepmerge(...)`, `$.extend(true, ...)`)
+or is the key of a nested assignment (`target[req.body.a][req.body.b] = v`). A body of `{"__proto__": {"isAdmin": true}}` then adds `isAdmin` to
+every object in the process.
+
+- A bare `merge(...)` counts only when the file imports lodash / deepmerge / a similar library: a project's own `merge` helper is not flagged.
+- `Object.assign` and spread are shallow and cannot pollute (they belong to `mass-assignment`).
+- Also found through helpers in other files, like every data-flow rule.
+
+## `webhook-signature` (high) — pattern match
+
+A handler that acts on a payment provider's event names (Stripe `checkout.session.completed`, `payment_intent.succeeded`, `invoice.paid`,
+`customer.subscription.*`; Lemon Squeezy `order_created`, `subscription_created`; Paddle `transaction.completed`) and shows no sign of verifying
+the caller: no `constructEvent`, signature header, `svix`, HMAC / `timingSafeEqual` or a function with "verify" in its name (which may live in
+another file). The URL of a webhook is public; without the check anyone can post `checkout.session.completed` and get a paid plan for free.
+Comments are ignored (a "TODO: check the signature" is not a check); a file that only lists event names, with no handler in it, is not reported.
+
+## `insecure-token-storage` (medium) — pattern match
+
+A credential kept where any script can read it: `localStorage.setItem("token", ...)` (also `sessionStorage`, `localStorage.token = ...`,
+`localStorage["jwt"] = ...`), `document.cookie = "token=..."` and `Cookies.set("token", ...)` (a cookie written from JavaScript cannot be HttpOnly).
+Keys count when they name a credential (`token`, `jwt`, `bearer`, `secret`, `session_id`, `api_key`, `password`). UI state (`theme`, `authMode`), CSRF
+tokens and flags (`hasToken`) do not. The fix is a server-set cookie with `HttpOnly`, `Secure` and `SameSite`.
+
 ## `ssrf` (high)
 
 - **Sinks:** `fetch(url)`, `request(url)`, `got(url)`, and

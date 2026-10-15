@@ -23,7 +23,11 @@ export type VulnerabilityType =
   | "insecure-jwt"
   | "missing-rate-limit"
   | "exposed-files"
-  | "vulnerable-dependency";
+  | "vulnerable-dependency"
+  | "mass-assignment"
+  | "prototype-pollution"
+  | "webhook-signature"
+  | "insecure-token-storage";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 

@@ -23,6 +23,10 @@ import { HardcodedSecretAnalyzer } from "./analyzers/hardcoded-secret";
 import { SupabaseAuthAnalyzer } from "./analyzers/supabase-auth";
 import { ServerActionAnalyzer } from "./analyzers/server-actions";
 import { FrameworkAccessAnalyzer } from "./analyzers/framework-access";
+import { MassAssignmentAnalyzer } from "./analyzers/mass-assignment";
+import { PrototypePollutionAnalyzer } from "./analyzers/prototype-pollution";
+import { WebhookSignatureAnalyzer } from "./analyzers/webhook-signature";
+import { InsecureTokenStorageAnalyzer } from "./analyzers/token-storage";
 import { InsecureCorsAnalyzer } from "./analyzers/cors";
 import { InsecureJwtAnalyzer } from "./analyzers/jwt";
 import { MissingRateLimitAnalyzer } from "./analyzers/rate-limit";
@@ -112,6 +116,10 @@ export function defaultAnalyzers(): Analyzer[] {
     new InsecureCorsAnalyzer(),
     new InsecureJwtAnalyzer(),
     new MissingRateLimitAnalyzer(),
+    new MassAssignmentAnalyzer(),
+    new PrototypePollutionAnalyzer(),
+    new WebhookSignatureAnalyzer(),
+    new InsecureTokenStorageAnalyzer(),
   ];
 }
 

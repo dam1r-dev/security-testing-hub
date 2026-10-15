@@ -21,7 +21,7 @@ response bodies, `exec()` with interpolated input) because that's what's
 common in training data. This tool is a fast, local pre-commit/CI check
 tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 
-## What it detects (25 rules)
+## What it detects (29 rules)
 
 | Vulnerability | CWE | Analyzer |
 |---|---|---|
@@ -49,7 +49,16 @@ tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 | Missing rate limit on sign-in | [CWE-307](https://cwe.mitre.org/data/definitions/307.html) | a login or one-time-code endpoint that checks the credential itself, in a project with no rate limiting anywhere |
 | Secrets in public folders | [CWE-538](https://cwe.mitre.org/data/definitions/538.html) | `.env`, keys, database dumps and `.git` inside `public/` or an `express.static` folder; `express.static(__dirname)` at the project root |
 | Vulnerable dependencies (optional, `--audit`) | [CWE-1395](https://cwe.mitre.org/data/definitions/1395.html) | known advisories for the packages in your lock file, from `npm audit` (the one feature that uses the network) |
+| Mass assignment | [CWE-915](https://cwe.mitre.org/data/definitions/915.html) | the whole request body written to the database (`User.create(req.body)`, `data: body`, `new User(req.body)`) |
+| Prototype pollution | [CWE-1321](https://cwe.mitre.org/data/definitions/1321.html) | request data deep-merged (`_.merge`, `deepmerge`, `$.extend(true, ...)`) or used as the keys of `a[k1][k2] = v` |
+| Webhook without signature check | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) | Stripe / Lemon Squeezy / Paddle handlers that act on payment events without verifying the signature |
+| Token in browser storage | [CWE-922](https://cwe.mitre.org/data/definitions/922.html) | `localStorage.setItem("token", ...)`, `sessionStorage`, a login cookie written from JavaScript |
 | Hard-coded secrets | [CWE-798](https://cwe.mitre.org/data/definitions/798.html) | provider token formats (AWS, GitHub, Stripe, OpenAI/Anthropic, Slack, Supabase `service_role`, private keys, DB URLs), guessable `jwt.sign` / `session` secrets, credentials by name, secrets behind `NEXT_PUBLIC_`-style prefixes, committed `.env` files |
+
+**Frameworks:** Express, Fastify, Koa, Next.js (App Router, Pages API, Server Actions), **SvelteKit** (`+server`, form actions, `load`),
+**Remix / React Router** (`loader`, `action`), **Nuxt / Nitro** (`server/api`, h3 readers), **tRPC** (`input` of `publicProcedure` /
+`protectedProcedure`) and **Hono**: request data is followed from each framework's way of reading it, and handlers that change data
+without checking the caller (or change someone else's record) are reported. Prisma `$queryRawUnsafe` / `$executeRawUnsafe` are SQL sinks.
 
 See [docs/rules.md](docs/rules.md) for how each rule works and its known
 false-positive/false-negative tradeoffs, and

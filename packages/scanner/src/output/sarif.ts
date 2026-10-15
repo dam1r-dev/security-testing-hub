@@ -125,6 +125,26 @@ const RULE_DESCRIPTIONS: Record<VulnerabilityType, { name: string; description: 
     description: "A login or code-check endpoint checks the credential itself and nothing limits the number of attempts.",
     helpUri: "https://cwe.mitre.org/data/definitions/307.html",
   },
+  "mass-assignment": {
+    name: "Mass assignment",
+    description: "The whole request body is written to the database, so the caller can set fields such as role, isAdmin or price.",
+    helpUri: "https://cwe.mitre.org/data/definitions/915.html",
+  },
+  "prototype-pollution": {
+    name: "Prototype pollution",
+    description: "Request data is deep-merged or used as a key of a nested assignment, so a body with __proto__ changes every object.",
+    helpUri: "https://cwe.mitre.org/data/definitions/1321.html",
+  },
+  "webhook-signature": {
+    name: "Webhook without signature verification",
+    description: "A payment webhook handler acts on events without verifying the provider's signature, so anyone can forge them.",
+    helpUri: "https://cwe.mitre.org/data/definitions/345.html",
+  },
+  "insecure-token-storage": {
+    name: "Token kept in browser storage",
+    description: "A login token is stored in localStorage, sessionStorage or a script-set cookie, where any script on the page can read it.",
+    helpUri: "https://cwe.mitre.org/data/definitions/922.html",
+  },
   "vulnerable-dependency": {
     name: "Vulnerable dependency",
     description: "A package your project depends on has a known security vulnerability (from npm's advisory database).",

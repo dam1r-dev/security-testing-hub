@@ -91,6 +91,22 @@ const HOW_TO_FIX: Record<VulnerabilityType, string> = {
     "Add rate limiting to the sign-in / code-check endpoint: per IP and per account, for example express-rate-limit " +
     "(5 attempts per 15 minutes on /login) or @upstash/ratelimit in Next.js, plus a short lockout after repeated failures. " +
     "Return the same message for every failure. Keep the limiter in one shared module so every auth route uses it.",
+  "mass-assignment":
+    "Do not pass the whole request body to the database. Pick the fields this endpoint accepts (const { name, email } = req.body) " +
+    "or validate the body with a schema that lists them (zod .pick / .strict), and set sensitive fields (role, isAdmin, balance, " +
+    "price, ownerId, emailVerified) only on the server from trusted data.",
+  "prototype-pollution":
+    "Do not deep-merge request data into an object, and do not use request data as a key of a nested assignment. Pick the fields you " +
+    "accept; if a merge is needed, reject the keys __proto__, constructor and prototype first, or merge into Object.create(null) / a Map, " +
+    "and use a library version that is not affected (lodash 4.17.21 or newer).",
+  "webhook-signature":
+    "Verify the provider's signature before acting on a webhook. For Stripe: read the RAW body (req.text() in Next.js, express.raw in Express) " +
+    "and call stripe.webhooks.constructEvent(rawBody, signatureHeader, process.env.STRIPE_WEBHOOK_SECRET); respond 400 if it throws. " +
+    "Never trust event.type or the amounts from a body that was not verified.",
+  "insecure-token-storage":
+    "Do not keep the login token in localStorage, sessionStorage or a cookie set from JavaScript. Let the server set it as a cookie with " +
+    "HttpOnly, Secure and SameSite=Lax (or Strict), and read the user from a /me endpoint. Remove the token from the client code and " +
+    "from places such as Redux state that are persisted to storage.",
   "vulnerable-dependency":
     "Update the named package to a fixed version (npm install <package>@<fixed version>, or npm audit fix for the safe updates). " +
     "Read the changelog before a major upgrade and run the tests afterwards. Do not use npm audit fix --force without checking " +
