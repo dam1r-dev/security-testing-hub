@@ -37,6 +37,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The scanner that runs on the web page is the same source built for the browser: it has to type-check and bundle.
+      - name: Type-check and bundle the in-browser scanner
+        run: npm run typecheck:web -w security-hub-scanner && npm run site:scanner
+
       - name: Test
         run: npm test
 

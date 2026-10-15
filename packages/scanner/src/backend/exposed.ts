@@ -44,9 +44,9 @@ function readHead(file: string): string | undefined {
   try {
     const fd = fs.openSync(file, "r");
     try {
-      const buffer = Buffer.alloc(MAX_CONTENT_BYTES);
+      const buffer = new Uint8Array(MAX_CONTENT_BYTES);
       const read = fs.readSync(fd, buffer, 0, MAX_CONTENT_BYTES, 0);
-      return buffer.subarray(0, read).toString("utf8");
+      return new TextDecoder("utf-8").decode(buffer.subarray(0, read));
     } finally {
       fs.closeSync(fd);
     }

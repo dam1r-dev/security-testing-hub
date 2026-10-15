@@ -23,11 +23,23 @@ describe("GitHub Pages site (site/)", () => {
     expect(html).toMatch(/<img id="heroMascot"[^>]*alt="Armo/);
   });
 
-  it("makes no network request: a CSP forbids everything but itself, and no external script or image is used", () => {
+  it("the page itself makes no network request: a CSP forbids everything but itself, and no external script or image is used", () => {
     expect(html).toMatch(/Content-Security-Policy[^>]*default-src 'none'/);
     expect(html).not.toMatch(/<script[^>]+src=/i);
     expect(html).not.toMatch(/<(img|link)[^>]+(src|href)="https?:/i);
     expect(html).not.toMatch(/\b(fetch|XMLHttpRequest|WebSocket|sendBeacon)\b/);
+  });
+
+  it("scans folders in a Web Worker from this site, and the policy allows exactly that", () => {
+    expect(html).toMatch(/Content-Security-Policy[^>]*worker-src 'self'/);
+    expect(html).toContain("new Worker('scanner/worker.js')");
+    // the worker and its WebAssembly files are built by `npm run site:scanner` (not committed), in the Pages workflow
+    const workflow = fs.readFileSync(path.join(root, ".github/workflows/pages.yml"), "utf8");
+    expect(workflow).toContain("npm run site:scanner");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { WASM_FILES } = require(path.join(root, "scripts", "build-site-scanner.js"));
+    expect((WASM_FILES as [string, string][]).map(([, name]) => name).sort()).toEqual(["tree-sitter-javascript.wasm", "tree-sitter-tsx.wasm", "tree-sitter-typescript.wasm", "tree-sitter.wasm"]);
+    for (const [source] of WASM_FILES as [string, string][]) expect(fs.existsSync(source)).toBe(true);
   });
 
   it("shows findings with textContent only, never innerHTML (a report holds code from the scanned project)", () => {

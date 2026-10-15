@@ -9,6 +9,10 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      # the page runs the real scanner in the browser, so a scanner change is a site change
+      - "packages/scanner/**"
+      - "scripts/build-site-scanner.js"
+      - "package-lock.json"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -30,6 +34,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "npm"
+      # site/scanner/ (worker.js and the WebAssembly files) is built, not committed
+      - run: npm ci
+      - run: npm run site:scanner
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

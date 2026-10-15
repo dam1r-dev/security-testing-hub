@@ -17,18 +17,22 @@
     "scan": "node packages/cli/bin/security-hub.js",
     "lab:sql-injection:up": "docker compose -f labs/sql-injection/docker-compose.yml up -d --build",
     "lab:sql-injection:down": "docker compose -f labs/sql-injection/docker-compose.yml down -v",
-    "lab:sql-injection:e2e": "node labs/sql-injection/e2e.js"
+    "lab:sql-injection:e2e": "node labs/sql-injection/e2e.js",
+    "site:scanner": "node scripts/build-site-scanner.js",
+    "site:serve": "node scripts/serve-site.js"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.2",
     "@typescript-eslint/eslint-plugin": "^8.19.0",
     "@typescript-eslint/parser": "^8.19.0",
+    "esbuild": "0.28.2",
     "eslint": "^8.57.1",
     "jest": "^30.5.2",
     "prettier": "^3.4.2",
     "ts-jest": "^29.4.14",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "web-tree-sitter": "0.24.7"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -11,7 +11,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "jest"
+    "test": "jest",
+    "typecheck:web": "tsc -p web/tsconfig.json"
   },
   "dependencies": {
     "tree-sitter": "^0.21.1",
