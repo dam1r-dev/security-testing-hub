@@ -1,0 +1,63 @@
+{
+  "name": "security-hub-vscode",
+  "displayName": "Security Testing Hub",
+  "description": "Shows the findings of Security Testing Hub (SQL injection, XSS, secrets, access control, Supabase / Firebase rules...) in the Problems panel, with a score and a ready-to-paste fix prompt for your AI assistant.",
+  "version": "0.1.0",
+  "publisher": "dam1r-dev",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Linters", "Other"],
+  "keywords": ["security", "sast", "vulnerability", "supabase", "nextjs"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dam1r-dev/security-testing-hub.git",
+    "directory": "packages/vscode"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Scanning runs the security-hub command in the workspace folder; a project you do not trust could provide its own copy of it."
+    }
+  },
+  "contributes": {
+    "commands": [
+      { "command": "securityHub.scan", "title": "Security Hub: Scan the workspace" },
+      { "command": "securityHub.clear", "title": "Security Hub: Clear findings" },
+      { "command": "securityHub.copyFixPrompt", "title": "Security Hub: Copy the fix prompt for this finding" }
+    ],
+    "configuration": {
+      "title": "Security Testing Hub",
+      "properties": {
+        "securityHub.command": {
+          "type": "string",
+          "default": "npx --yes security-hub@latest",
+          "scope": "machine",
+          "markdownDescription": "The command that runs the scanner (`scan <folder> --format json --prompts` is appended). Machine-wide on purpose: a workspace cannot change it, so a project cannot make the extension run something else. Use `security-hub` if you installed it globally, or pin a version such as `npx --yes security-hub@0.6.0`."
+        },
+        "securityHub.scanOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Scan again whenever a JavaScript or TypeScript file is saved (the whole project is scanned, so a call into another file is still followed)."
+        },
+        "securityHub.minSeverity": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "default": "low",
+          "description": "Show only findings at or above this severity."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@types/vscode": "1.90.0"
+  }
+}

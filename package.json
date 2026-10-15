@@ -7,9 +7,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w security-hub-scanner && npm run build -w security-hub",
+    "build": "npm run build -w security-hub-scanner && npm run build -w security-hub && npm run build -w security-hub-vscode",
     "pretest": "npm run build",
-    "test": "npm run test -w security-hub-scanner && npm run test -w security-hub",
+    "test": "npm run test -w security-hub-scanner && npm run test -w security-hub && npm run test -w security-hub-vscode",
     "test:coverage": "npm run build && npx --workspace=security-hub-scanner jest --coverage --coverageReporters=text-summary && npx --workspace=security-hub jest --coverage --coverageReporters=text-summary",
     "lint": "eslint . --ext .ts",
     "mascot": "node scripts/build-mascot.js",

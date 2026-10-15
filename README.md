@@ -138,6 +138,12 @@ on `127.0.0.1` only, requires a per-run token on every request, and your code is
 never uploaded anywhere. `--port <n>` changes the port, `--no-open` skips opening
 the browser.
 
+## VS Code
+
+[packages/vscode](packages/vscode) is an extension that shows the findings in the Problems panel with a quick fix that copies the fix
+prompt for your AI assistant. It is early: built and tested here, not yet run in an editor by its author, and not on the Marketplace.
+See its README to try it (F5 in VS Code).
+
 ## GitHub Action (scan every pull request)
 
 ```yaml

@@ -49,6 +49,7 @@ export function run(argv: string[]): void {
     .option("--no-config", "ignore .security-hub.json")
     .option("--baseline <file>", "hide the findings listed in this baseline file (default: .security-hub-baseline.json in the project, when there is one)")
     .option("--no-baseline", "report existing findings too, even if the project has a baseline")
+    .option("--prompts", "with --format json: add the \"fix with AI\" prompt to every finding")
     .action((targetPath: string, opts) => {
       const format = opts.format;
       if (!["text", "json", "sarif", "html", "markdown", "github", "prompt"].includes(format)) {
@@ -67,6 +68,7 @@ export function run(argv: string[]): void {
         audit: opts.audit ? true : undefined,
         config: opts.config,
         baseline: opts.baseline,
+        prompts: opts.prompts ? true : undefined,
       });
       process.exitCode = exitCode;
     });
