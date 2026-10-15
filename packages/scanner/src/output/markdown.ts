@@ -1,6 +1,7 @@
 import * as path from "path";
 import { Finding, ScanSummary, Severity } from "../types";
 import { fenced, toFixPrompt } from "./fix-prompt";
+import { mascotAlt, mascotImageUrl, mascotSay } from "./mascot";
 import { computeScore } from "./score";
 
 /** Hidden marker so a bot can find and update its own comment instead of posting a new one each push. */
@@ -17,6 +18,8 @@ export interface MarkdownOptions {
   scopeNote?: string;
   /** Add a collapsed "prompt for your AI assistant" block (default true). */
   fixPrompt?: boolean;
+  /** Show Armo, the mascot, beside the score (default true). The picture is loaded from the project website. */
+  mascot?: boolean;
 }
 
 const SEVERITY_ICON: Record<Severity, string> = { critical: "🟥", high: "🟧", medium: "🟨", low: "⬜" };
@@ -56,7 +59,12 @@ export function toMarkdown(summary: ScanSummary, options: MarkdownOptions = {}):
   const score = computeScore(summary);
   const findings = summary.results.flatMap((r) => r.findings);
   const maxRows = options.maxRows ?? 25;
-  const lines: string[] = [MARKDOWN_MARKER, "", `## 🛡️ Security Testing Hub: ${SCORE_ICON[score.color]} ${score.value}/100 (${score.label})`, ""];
+  const lines: string[] = [MARKDOWN_MARKER, ""];
+  if (options.mascot !== false) {
+    lines.push(`<img src="${mascotImageUrl(score.color)}" alt="${mascotAlt(score.color)}" width="88" align="right" />`, "");
+  }
+  lines.push(`## 🛡️ Security Testing Hub: ${SCORE_ICON[score.color]} ${score.value}/100 (${score.label})`, "");
+  if (options.mascot !== false) lines.push(`*${mascotSay(score.color)}*`, "");
 
   const counts =
     `critical **${score.bySeverity.critical}** · high **${score.bySeverity.high}** · ` +
@@ -67,6 +75,11 @@ export function toMarkdown(summary: ScanSummary, options: MarkdownOptions = {}):
   if (options.scopeNote) notes.push(options.scopeNote);
   if (summary.filteredOutCount) notes.push(`${summary.filteredOutCount} more finding(s) in files this change does not touch are not listed.`);
   if (summary.suppressedCount) notes.push(`${summary.suppressedCount} finding(s) hidden by \`security-hub-ignore\` comments.`);
+  if (summary.disabledCount) notes.push(`${summary.disabledCount} finding(s) are not listed: their rules are disabled in \`.security-hub.json\`.`);
+  if (summary.baselinedCount) notes.push(`${summary.baselinedCount} existing finding(s) are in the baseline and not listed: only new ones are.`);
+  if (summary.staleBaselineCount) {
+    notes.push(`${summary.staleBaselineCount} baseline entr${summary.staleBaselineCount === 1 ? "y" : "ies"} no longer match anything (fixed or changed): refresh with \`security-hub baseline\`.`);
+  }
   for (const note of notes) lines.push(`> ${note}`);
   if (notes.length > 0) lines.push("");
 

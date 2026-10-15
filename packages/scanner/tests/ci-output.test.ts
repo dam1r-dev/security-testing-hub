@@ -92,7 +92,10 @@ describe("toMarkdown (pull request comment)", () => {
       // The table is what must neutralise text; the AI-prompt block holds raw text inside a code fence (see fix-prompt.test.ts).
       { fixPrompt: false },
     );
-    expect(md).not.toContain("<img");
+    // the only image is Armo's, which is ours (a fixed address on the project website); the one in the finding is text
+    expect(md.match(/<img/g)).toHaveLength(1);
+    expect(md).toContain('<img src="https://dam1r-dev.github.io/security-testing-hub/assets/mascot-');
+    expect(md).not.toContain("<img src=x");
     expect(md).toContain("&lt;img");
     expect(md).not.toMatch(/(^|[^\\])\[click\]/);
     expect(md).toContain("\\@everyone");

@@ -4,6 +4,7 @@ import { runScan } from "./commands/scan";
 import { runLab } from "./commands/lab";
 import { runUi } from "./commands/ui";
 import { runFix } from "./commands/fix";
+import { runBaseline } from "./commands/baseline";
 import { Severity } from "security-hub-scanner";
 
 // Read at runtime so `--version` can never drift from the published package.json
@@ -44,6 +45,10 @@ export function run(argv: string[]): void {
     .option("--changed-since <ref>", "report only findings in files changed since this git ref, e.g. origin/main (the whole project is still scanned)")
     .option("--include-tests", "also scan test folders and *.test.* / *.spec.* files (skipped by default)")
     .option("--audit", "also check your dependencies for known vulnerabilities (runs `npm audit`; sends dependency names and versions to the npm registry)")
+    .option("--config <file>", "read settings from this file instead of .security-hub.json in the project")
+    .option("--no-config", "ignore .security-hub.json")
+    .option("--baseline <file>", "hide the findings listed in this baseline file (default: .security-hub-baseline.json in the project, when there is one)")
+    .option("--no-baseline", "report existing findings too, even if the project has a baseline")
     .action((targetPath: string, opts) => {
       const format = opts.format;
       if (!["text", "json", "sarif", "html", "markdown", "github", "prompt"].includes(format)) {
@@ -60,8 +65,27 @@ export function run(argv: string[]): void {
         includeTests: opts.includeTests,
         changedSince: opts.changedSince,
         audit: opts.audit ? true : undefined,
+        config: opts.config,
+        baseline: opts.baseline,
       });
       process.exitCode = exitCode;
+    });
+
+  program
+    .command("baseline [path]")
+    .description("Record the findings that exist today in .security-hub-baseline.json, so later scans report only new ones (to adopt the scanner in an old project)")
+    .option("-o, --out <file>", "write the baseline here instead of .security-hub-baseline.json in the project")
+    .option("--ignore <pattern>", "skip files/folders matching this pattern (repeatable)", collect, [])
+    .option("--include-tests", "also record findings in test folders")
+    .option("--config <file>", "read settings from this file instead of .security-hub.json in the project")
+    .option("--no-config", "ignore .security-hub.json")
+    .action((targetPath: string | undefined, opts) => {
+      process.exitCode = runBaseline(targetPath ?? ".", {
+        out: opts.out,
+        ignore: opts.ignore.length > 0 ? opts.ignore : undefined,
+        includeTests: opts.includeTests ? true : undefined,
+        config: opts.config,
+      });
     });
 
   program

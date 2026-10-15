@@ -142,8 +142,11 @@ async function run(env, overrides = {}) {
   const target = path.resolve(workspace, env.INPUT_PATH || ".");
   if (!fs.existsSync(target)) throw new Error(`Input "path" does not exist: ${env.INPUT_PATH}`);
 
-  const failOn = parseSeverity(env.INPUT_FAIL_ON, "fail-on");
-  const minSeverity = parseSeverity(env.INPUT_SEVERITY, "severity");
+  // The project's own settings (.security-hub.json); the action's inputs win over them. A scanner too old to know the file ignores it.
+  const scanRoot = fs.statSync(target).isDirectory() ? target : path.dirname(target);
+  const config = typeof scanner.loadConfig === "function" ? scanner.loadConfig(scanRoot).config : undefined;
+  const failOn = parseSeverity(env.INPUT_FAIL_ON, "fail-on") || (config && config.failOn) || undefined;
+  const minSeverity = parseSeverity(env.INPUT_SEVERITY, "severity") || (config && config.severity) || undefined;
   const event = readEvent(env);
   const isPullRequest = /^pull_request(_target)?$/.test(env.GITHUB_EVENT_NAME || "") && Boolean(event.pull_request);
 
@@ -157,7 +160,14 @@ async function run(env, overrides = {}) {
   }
 
   // 2. Scan everything, then narrow the report.
-  const raw = scanner.scanPath(target, { ignore: parseList(env.INPUT_IGNORE), includeTests: parseBool(env.INPUT_INCLUDE_TESTS, false) });
+  // `true` from the input wins; otherwise the project's setting decides (an input left at its default `false` cannot say "no").
+  const includeTests = parseBool(env.INPUT_INCLUDE_TESTS, false) ? true : undefined;
+  let raw = scanner.scanPath(target, { ignore: parseList(env.INPUT_IGNORE), includeTests, config });
+  // Findings the project already knew about when it adopted the scanner (.security-hub-baseline.json) are not reported again.
+  if (parseBool(env.INPUT_BASELINE, true) && typeof scanner.loadBaseline === "function") {
+    const known = scanner.loadBaseline(scanRoot);
+    if (known) raw = scanner.applyBaseline(raw, known.baseline, scanRoot);
+  }
   const summary = scanner.filterSummary(raw, { minSeverity, files: changed });
   const score = scanner.computeScore(summary);
   const findings = summary.results.flatMap((r) => r.findings);
@@ -172,6 +182,7 @@ async function run(env, overrides = {}) {
   const markdown = scanner.toMarkdown(summary, {
     relativeTo: workspace,
     scopeNote,
+    mascot: parseBool(env.INPUT_MASCOT, true),
     linkBase: env.GITHUB_REPOSITORY && sha ? `${server}/${env.GITHUB_REPOSITORY}/blob/${sha}` : undefined,
   });
   appendFile(env.GITHUB_STEP_SUMMARY, markdown + "\n");

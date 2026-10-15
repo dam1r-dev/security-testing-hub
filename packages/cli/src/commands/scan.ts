@@ -3,6 +3,12 @@ import * as path from "path";
 import chalk from "chalk";
 import { auditResults } from "./audit";
 import {
+  applyBaseline,
+  BaselineError,
+  ConfigError,
+  emptyConfig,
+  loadBaseline,
+  loadConfig,
   scanPath,
   toSarifString,
   toHtml,
@@ -32,6 +38,10 @@ export interface ScanCommandOptions {
   changedSince?: string;
   /** Also check the dependencies against npm's advisory database (runs `npm audit`: this is the one network call). */
   audit?: boolean;
+  /** A settings file other than `.security-hub.json`, or `false` to ignore the one in the project. */
+  config?: string | false;
+  /** A baseline file other than `.security-hub-baseline.json`, or `false` to report existing findings too. */
+  baseline?: string | false;
 }
 
 const SCORE_COLOR_CHALK: Record<ScoreColor, (text: string) => string> = {
@@ -65,6 +75,12 @@ function renderText(summary: ScanSummary): string {
       `Scanned ${summary.filesScanned} file(s) in ${summary.durationMs}ms — ${summary.findingsCount} finding(s)${outside}${hidden}.`,
     ),
   );
+  if (summary.disabledCount) lines.push(chalk.dim(`${summary.disabledCount} finding(s) not shown: their rules are disabled in .security-hub.json.`));
+  if (summary.baselinedCount) lines.push(chalk.dim(`${summary.baselinedCount} existing finding(s) hidden by the baseline: only new ones are shown.`));
+  if (summary.staleBaselineCount) {
+    const entries = summary.staleBaselineCount === 1 ? "entry" : "entries";
+    lines.push(chalk.dim(`${summary.staleBaselineCount} baseline ${entries} no longer match anything (fixed or changed): run \`security-hub baseline\` to refresh.`));
+  }
 
   const score = computeScore(summary);
   const badge = SCORE_COLOR_CHALK[score.color](` ${score.value}/100 — ${score.label} `);
@@ -115,9 +131,25 @@ export function runScan(targetPath: string, options: ScanCommandOptions): number
     }
   }
 
+  const scanRoot = path.resolve(fs.statSync(targetPath).isDirectory() ? targetPath : path.dirname(targetPath));
+  let config;
+  let baseline;
+  try {
+    config = options.config === false ? emptyConfig() : loadConfig(scanRoot, options.config).config;
+    baseline = options.baseline === false ? undefined : loadBaseline(scanRoot, options.baseline)?.baseline;
+  } catch (err) {
+    if (err instanceof ConfigError || err instanceof BaselineError) {
+      process.stderr.write(chalk.red(`${err.message}\n`));
+      return 2;
+    }
+    throw err;
+  }
+  const severity = options.severity ?? config.severity;
+  const failOn = options.failOn ?? config.failOn;
+
   // The scan always covers the whole project (a call in a changed file can reach a query in
   // an untouched one); --changed-since only narrows what is reported.
-  const rawSummary = scanPath(targetPath, { ignore: options.ignore, includeTests: options.includeTests });
+  let rawSummary = scanPath(targetPath, { ignore: options.ignore, includeTests: options.includeTests, config });
   if (options.audit) {
     const audit = auditResults(path.resolve(fs.statSync(targetPath).isDirectory() ? targetPath : path.dirname(targetPath)));
     if (audit.warning) process.stderr.write(chalk.yellow(`${audit.warning}\n`));
@@ -125,7 +157,8 @@ export function runScan(targetPath: string, options: ScanCommandOptions): number
     rawSummary.filesScanned += audit.results.length;
     rawSummary.findingsCount += audit.results.reduce((sum, r) => sum + r.findings.length, 0);
   }
-  const summary = filterSummary(rawSummary, { minSeverity: options.severity, files: changed });
+  if (baseline) rawSummary = applyBaseline(rawSummary, baseline, scanRoot);
+  const summary = filterSummary(rawSummary, { minSeverity: severity, files: changed });
 
   let output: string;
   let outFile = options.out;
@@ -149,8 +182,8 @@ export function runScan(targetPath: string, options: ScanCommandOptions): number
 
   writeOutput(output, outFile);
 
-  if (options.failOn) {
-    const threshold = SEVERITY_RANK[options.failOn];
+  if (failOn) {
+    const threshold = SEVERITY_RANK[failOn];
     const hasBlockingFinding = summary.results.some((r) =>
       r.findings.some((f) => SEVERITY_RANK[f.severity] >= threshold),
     );

@@ -1,6 +1,7 @@
 import { execFileSync } from "child_process";
+import * as fs from "fs";
 import * as path from "path";
-import { MASCOT_NAME, mascotAlt, mascotDataUri, mascotSay, toHtml } from "../src/index";
+import { MASCOT_IMAGE_BASE, MASCOT_NAME, mascotAlt, mascotDataUri, mascotImageUrl, mascotSay, toHtml, toMarkdown } from "../src/index";
 import { Finding, ScanSummary } from "../src/types";
 
 const root = path.resolve(__dirname, "../../..");
@@ -17,6 +18,28 @@ function summaryWith(severities: Finding["severity"][]): ScanSummary {
   }));
   return { filesScanned: 1, findingsCount: findings.length, durationMs: 1, results: [{ file: "app.js", findings }] };
 }
+
+describe("Armo in the pull request comment", () => {
+  it("sits beside the score, in the mood of the score, and the picture is one the website serves", () => {
+    const calm = toMarkdown(summaryWith([]));
+    const alarmed = toMarkdown(summaryWith(["critical", "critical", "critical", "critical", "critical"]));
+    expect(calm).toContain(`<img src="${MASCOT_IMAGE_BASE}/mascot-safe.png"`);
+    expect(alarmed).toContain(`<img src="${MASCOT_IMAGE_BASE}/mascot-danger.png"`);
+    expect(alarmed).toContain(mascotSay("red"));
+    expect(mascotImageUrl("yellow")).toBe(`${MASCOT_IMAGE_BASE}/mascot-warn.png`);
+    for (const state of ["safe", "warn", "danger"]) {
+      expect(fs.existsSync(path.join(root, "site", "assets", `mascot-${state}.png`))).toBe(true); // the URL points at a real file
+    }
+    expect(calm).toContain('width="88" align="right"');
+  });
+
+  it("can be left out, and the marker the bot finds its comment by stays first", () => {
+    const plain = toMarkdown(summaryWith(["high"]), { mascot: false });
+    expect(plain).not.toContain("<img");
+    expect(plain).not.toContain(mascotSay("yellow"));
+    expect(toMarkdown(summaryWith(["high"])).startsWith("<!-- security-testing-hub-report -->")).toBe(true);
+  });
+});
 
 describe("mascot (Armo)", () => {
   it("is named Armo and has a different image and line for each mood", () => {

@@ -28,6 +28,7 @@ import { MissingRateLimitAnalyzer } from "./analyzers/rate-limit";
 import { scanExposedFiles } from "./backend/exposed";
 import { scanBackendConfigs } from "./backend/discover";
 import { scanEnvFiles } from "./secrets/env-files";
+import { emptyConfig, HubConfig, loadConfig } from "./config";
 import { applyInlineSuppressions, compileIgnorePatterns, parseIgnoreFile } from "./suppress";
 import { ProjectContext } from "./taint/project";
 import { Finding, ScanResult, ScanSummary } from "./types";
@@ -36,7 +37,7 @@ export * from "./types";
 export { toSarif, toSarifString, SarifOptions } from "./output/sarif";
 export { computeScore, SecurityScore, ScoreColor } from "./output/score";
 export { toHtml } from "./output/html";
-export { MASCOT_NAME, mascotDataUri, mascotSay, mascotAlt } from "./output/mascot";
+export { MASCOT_NAME, MASCOT_IMAGE_BASE, mascotDataUri, mascotImageUrl, mascotSay, mascotAlt } from "./output/mascot";
 export { toMarkdown, MARKDOWN_MARKER, MarkdownOptions } from "./output/markdown";
 export { toGithubAnnotations, annotationFor } from "./output/github";
 export { fixPromptFor, toFixPrompt, fenced, FixPromptOptions } from "./output/fix-prompt";
@@ -46,6 +47,8 @@ export { GIT_HARDENING_ARGS, gitEnvironment } from "./git-safe";
 export { parseFile, parseSource, languageForExtension } from "./parsers/ast-parser";
 export { ProjectContext } from "./taint/project";
 export { RULE_IDS } from "./suppress";
+export { CONFIG_FILE_NAME, ConfigError, HubConfig, emptyConfig, loadConfig, parseConfig } from "./config";
+export { BASELINE_FILE_NAME, Baseline, BaselineError, applyBaseline, createBaseline, loadBaseline, parseBaseline, serializeBaseline } from "./baseline";
 export { planFixes, renderPlan, applyPlan, FIXABLE_RULES, FixPlan, FixOptions, ApplyOptions } from "./fix/plan";
 
 // Directories that aren't the project's own hand-written server code:
@@ -200,6 +203,11 @@ export interface ScanOptions {
    * `*`, `**`, `?`, leading `/`, trailing `/`). Added to the patterns in `.security-hub-ignore`.
    */
   ignore?: string[];
+  /**
+   * The project's settings (`.security-hub.json`). Default: read from the scanned folder. Pass your own to use those instead,
+   * or `false` to ignore any file there. Flags given in `ignore` / `includeTests` win over the file.
+   */
+  config?: HubConfig | false;
   /** Called after every scanned file: how many are done of how many (the web page shows a progress bar). */
   onProgress?: (done: number, total: number) => void;
 }
@@ -217,8 +225,9 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
   const analyzers = options.analyzers ?? defaultAnalyzers();
   const start = Date.now();
   const stat = fs.statSync(targetPath);
-  const includeTests = options.includeTests ?? false;
-  const isIgnored = compileIgnorePatterns([...readIgnoreFile(targetPath), ...(options.ignore ?? [])]);
+  const config = options.config === false ? emptyConfig() : (options.config ?? loadConfig(stat.isDirectory() ? targetPath : path.dirname(targetPath)).config);
+  const includeTests = options.includeTests ?? config.includeTests ?? false;
+  const isIgnored = compileIgnorePatterns([...config.ignore, ...readIgnoreFile(targetPath), ...(options.ignore ?? [])]);
   const files = stat.isDirectory() ? walkDirectory(targetPath, { includeTests, isIgnored }) : [targetPath];
   // Shared by every file of this scan so a call can be followed into another file.
   const context = new ProjectContext(stat.isDirectory() ? targetPath : path.dirname(targetPath));
@@ -258,11 +267,23 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
   const exposedResults = stat.isDirectory() ? scanExposedFiles(targetPath, skipDirs, isIgnored) : [];
   results.push(...exposedResults);
 
+  // Rules the project switched off: dropped here, but counted so the report can say so.
+  let disabledCount = 0;
+  if (config.disable.length > 0) {
+    const off = new Set<string>(config.disable);
+    for (const result of results) {
+      const kept = result.findings.filter((f) => !off.has(f.ruleId));
+      disabledCount += result.findings.length - kept.length;
+      result.findings = kept;
+    }
+  }
+
   return {
     filesScanned: files.length + envResults.length + backendResults.length + exposedResults.length,
     findingsCount: results.reduce((sum, r) => sum + r.findings.length, 0),
     results,
     durationMs: Date.now() - start,
     suppressedCount: results.reduce((sum, r) => sum + (r.suppressed ?? 0), 0),
+    ...(disabledCount > 0 ? { disabledCount } : {}),
   };
 }

@@ -1,7 +1,7 @@
 // Builds the scanner that runs on the web page (site/scanner/): the real scanner sources bundled for the browser, with
 //  - `fs`   -> an in-memory file system holding the dropped files       (packages/scanner/web/shims/fs.ts)
 //  - `path` -> a POSIX path                                              (packages/scanner/web/shims/path.ts)
-//  - `child_process` -> a stub (no git in a browser; the scanner falls back to .gitignore)
+//  - `child_process` -> a stub (no git in a browser; the scanner falls back to .gitignore); `crypto` -> a stub (only baselines hash)
 //  - the native tree-sitter parser -> web-tree-sitter, tree-sitter compiled to WebAssembly (web/browser-parser.ts)
 // plus the four .wasm files it loads. Used by `npm run site:scanner` and by the Pages workflow; the same bundle can be
 // built for Node (target "node") so a test can run the browser pipeline and compare it with the native scanner.
@@ -28,6 +28,7 @@ const SHIMS = {
   fs: path.join(web, "shims", "fs.ts"),
   path: path.join(web, "shims", "path.ts"),
   child_process: path.join(web, "shims", "child-process.ts"),
+  crypto: path.join(web, "shims", "crypto.ts"),
   "tree-sitter": path.join(web, "shims", "empty.ts"),
 };
 

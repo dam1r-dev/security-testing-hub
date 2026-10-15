@@ -62,4 +62,10 @@ export interface ScanSummary {
   suppressedCount?: number;
   /** Findings left out of the report because they are in files outside the requested scope (e.g. unchanged files). */
   filteredOutCount?: number;
+  /** Findings left out because the project's `.security-hub.json` disables their rule (reported, never silent). */
+  disabledCount?: number;
+  /** Findings the project's baseline already knows (see baseline.ts): they existed before and are not reported again. */
+  baselinedCount?: number;
+  /** Baseline entries that no longer match any finding: the problem was fixed, or its line was rewritten. */
+  staleBaselineCount?: number;
 }

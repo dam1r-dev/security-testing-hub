@@ -267,6 +267,43 @@ db.query(sql); // security-hub-ignore sql-injection
 - Test folders (`test`, `tests`, `__tests__`, `e2e`, ...) and `*.test.*` / `*.spec.*` files are skipped
   by default because they are full of fake credentials and requests; `--include-tests` scans them.
 
+## Project settings and adopting the scanner in an old project
+
+**`.security-hub.json`** in the scanned folder keeps a team's choices in one place instead of in every script and workflow
+(a schema for editors: [docs/security-hub.schema.json](docs/security-hub.schema.json)):
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/dam1r-dev/security-testing-hub/main/docs/security-hub.schema.json",
+  "ignore": ["legacy/", "scripts/**"],
+  "disable": ["csrf", "missing-rate-limit"],
+  "severity": "medium",
+  "failOn": "high",
+  "includeTests": false
+}
+```
+
+`ignore` adds path patterns (same syntax as `.security-hub-ignore`), `disable` switches rules off (the report says how many
+findings that hid), `severity` is the lowest severity reported, `failOn` makes `scan` exit 1. Flags (`--severity`,
+`--fail-on`, `--include-tests`, `--ignore`) and Action inputs win over the file; `--config <file>` reads another file and
+`--no-config` ignores it. A typo is an error, never silently ignored (a setting that does nothing is how a project
+believes a rule is off when it is not).
+
+**`security-hub baseline`** is for a project that already has findings. It records them in
+`.security-hub-baseline.json`; commit that file, and from then on `security-hub scan` and the GitHub Action report **only
+new findings** (so `--fail-on` and the pull request check stay useful from day one) and say how many old ones are hidden:
+
+```bash
+npx security-hub baseline .          # once: record what is there today
+npx security-hub scan . --fail-on high   # now fails only on NEW findings
+npx security-hub scan . --no-baseline    # see everything again
+npx security-hub baseline .          # refresh after fixing old ones (the scan tells you when entries went stale)
+```
+
+A finding is matched by its rule, its file and the text of the flagged line, not by its line number, so edits elsewhere in
+the file do not make old findings look new; the same line flagged a second time is a new finding. A hard-coded secret is
+matched by the name it is assigned to and never by its value, so the file holds no secret and no hash of one.
+
 ## Scope & limitations
 
 This is a v1 MVP, built to a **realistic** plan (see
