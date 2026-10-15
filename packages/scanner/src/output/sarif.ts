@@ -145,6 +145,11 @@ const RULE_DESCRIPTIONS: Record<VulnerabilityType, { name: string; description: 
     description: "A login token is stored in localStorage, sessionStorage or a script-set cookie, where any script on the page can read it.",
     helpUri: "https://cwe.mitre.org/data/definitions/922.html",
   },
+  "debug-mode": {
+    name: "Debug mode enabled",
+    description: "The development server or framework debug mode is on, which exposes an interactive debugger or detailed errors to visitors.",
+    helpUri: "https://cwe.mitre.org/data/definitions/489.html",
+  },
   "vulnerable-dependency": {
     name: "Vulnerable dependency",
     description: "A package your project depends on has a known security vulnerability (from npm's advisory database).",

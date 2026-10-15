@@ -26,6 +26,8 @@ const GRAMMAR_FILES: Record<SupportedLanguage, string> = {
   javascript: "tree-sitter-javascript.wasm",
   typescript: "tree-sitter-typescript.wasm",
   tsx: "tree-sitter-tsx.wasm",
+  python: "tree-sitter-python.wasm",
+  php: "tree-sitter-php.wasm",
 };
 
 /** The runtime and only the grammars the dropped project needs: a plain JavaScript project never downloads the 1.4 MB TypeScript ones. */

@@ -1,0 +1,1 @@
+{ "name": "vulnerable-python-app", "private": true, "description": "Deliberately vulnerable Flask / FastAPI / Django code: a fixture for the scanner's tests. Do not deploy." }

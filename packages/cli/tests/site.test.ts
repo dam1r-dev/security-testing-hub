@@ -38,7 +38,7 @@ describe("GitHub Pages site (site/)", () => {
     expect(workflow).toContain("npm run site:scanner");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { WASM_FILES } = require(path.join(root, "scripts", "build-site-scanner.js"));
-    expect((WASM_FILES as [string, string][]).map(([, name]) => name).sort()).toEqual(["tree-sitter-javascript.wasm", "tree-sitter-tsx.wasm", "tree-sitter-typescript.wasm", "tree-sitter.wasm"]);
+    expect((WASM_FILES as [string, string][]).map(([, name]) => name).sort()).toEqual(["tree-sitter-javascript.wasm", "tree-sitter-php.wasm", "tree-sitter-python.wasm", "tree-sitter-tsx.wasm", "tree-sitter-typescript.wasm", "tree-sitter.wasm"]);
     for (const [source] of WASM_FILES as [string, string][]) expect(fs.existsSync(source)).toBe(true);
   });
 

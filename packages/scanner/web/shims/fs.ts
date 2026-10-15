@@ -22,6 +22,10 @@ let files = new Map<string, Entry>();
 let directories = new Map<string, Set<string>>();
 const openFiles = new Map<number, Uint8Array>();
 let nextDescriptor = 3;
+// Caches inside the scanner (which package.json lists which libraries) are keyed by path and checked by modification time. Every
+// mount is a different project at the same virtual paths, so every mount gets its own time, or the second project would see the
+// first one's cached answers.
+let generation = 0;
 
 function fail(code: string, syscall: string, target: string): never {
   const error = new Error(`${code}: no such file or directory, ${syscall} '${target}'`) as Error & { code: string };
@@ -33,6 +37,7 @@ function fail(code: string, syscall: string, target: string): never {
 export function mount(root: string, list: MountedFile[]): void {
   files = new Map();
   directories = new Map();
+  generation += 1;
   const addChild = (dir: string, name: string): void => {
     let children = directories.get(dir);
     if (!children) directories.set(dir, (children = new Set()));
@@ -41,7 +46,7 @@ export function mount(root: string, list: MountedFile[]): void {
   directories.set(root, new Set());
   for (const file of list) {
     const absolute = path.join(root, file.path);
-    files.set(absolute, { size: file.size, text: file.text ?? "", mtimeMs: 0 });
+    files.set(absolute, { size: file.size, text: file.text ?? "", mtimeMs: generation });
     let current = absolute;
     while (current !== root && current !== "/") {
       const parent = path.dirname(current);

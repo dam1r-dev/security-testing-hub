@@ -102,7 +102,7 @@ describe("insecure-token-storage", () => {
 describe("rule ids", () => {
   it("the four new rules are known to the ignore list and the settings file", () => {
     for (const id of ["mass-assignment", "prototype-pollution", "webhook-signature", "insecure-token-storage"]) expect(RULE_IDS).toContain(id);
-    expect(RULE_IDS).toHaveLength(29);
+    expect(RULE_IDS).toHaveLength(30);
   });
 
   it("// security-hub-ignore works for them", () => {

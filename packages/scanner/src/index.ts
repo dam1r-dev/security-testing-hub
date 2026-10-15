@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { BudgetExceeded, FILE_BUDGET_MS, startBudget } from "./budget";
-import { parseFile } from "./parsers/ast-parser";
+import { JS_LANGUAGES, parseFile } from "./parsers/ast-parser";
 import { Analyzer } from "./analyzers/base-analyzer";
 import { SqlInjectionAnalyzer } from "./analyzers/sql-injection";
 import { XssAnalyzer } from "./analyzers/xss";
@@ -27,6 +27,8 @@ import { MassAssignmentAnalyzer } from "./analyzers/mass-assignment";
 import { PrototypePollutionAnalyzer } from "./analyzers/prototype-pollution";
 import { WebhookSignatureAnalyzer } from "./analyzers/webhook-signature";
 import { InsecureTokenStorageAnalyzer } from "./analyzers/token-storage";
+import { PythonAnalyzer } from "./python/analyzer";
+import { PhpAnalyzer } from "./php/analyzer";
 import { InsecureCorsAnalyzer } from "./analyzers/cors";
 import { InsecureJwtAnalyzer } from "./analyzers/jwt";
 import { MissingRateLimitAnalyzer } from "./analyzers/rate-limit";
@@ -75,6 +77,9 @@ const DEFAULT_IGNORED_DIRS = new Set([
   "__generated__",
   "vendor",
   "vendors",
+  "venv",
+  "__pycache__",
+  "site-packages",
 ]);
 // Skipped unless `includeTests` is set (see ScanOptions).
 const TEST_DIRS = new Set(["test", "tests", "__tests__", "__mocks__", "e2e", "cypress"]);
@@ -82,14 +87,16 @@ const TEST_DIRS = new Set(["test", "tests", "__tests__", "__mocks__", "e2e", "cy
 const MINIFIED_FILE_PATTERN = /\.min\.[cm]?js$/i;
 // Also `test-suite.ts`, `test_users.js`, `login-test.ts`: a test script kept next to the code (seen in a real project:
 // its fake sign-up passwords were reported as leaked credentials).
-const TEST_FILE_PATTERN = /(?:\.(?:test|spec)|[-_](?:test|tests|spec)|^(?:test|tests|spec)[-_][^.]*)\.[cm]?[jt]sx?$/i;
+const TEST_FILE_PATTERN = /(?:\.(?:test|spec)|[-_](?:test|tests|spec)|^(?:test|tests|spec)[-_][^.]*|^conftest)\.(?:[cm]?[jt]sx?|py|php)$/i;
+// PHPUnit: UserControllerTest.php (case matters: "latest.php" is not a test)
+const PHPUNIT_FILE_PATTERN = /[a-z0-9]Test\.php$/;
 /** Optional project-level ignore list, one path pattern per line (see docs/rules.md). */
 export const IGNORE_FILE_NAME = ".security-hub-ignore";
 // Hand-written source is far below this. A multi-megabyte file is a bundle or generated
 // output: it can take minutes to analyse (a 9 MB typescript.js took 52 s) and holds no
 // code a person wrote. Skipped with a visible warning rather than silently.
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
-const SUPPORTED_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"]);
+const SUPPORTED_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".py", ".php"]);
 
 export function defaultAnalyzers(): Analyzer[] {
   return [
@@ -120,6 +127,8 @@ export function defaultAnalyzers(): Analyzer[] {
     new PrototypePollutionAnalyzer(),
     new WebhookSignatureAnalyzer(),
     new InsecureTokenStorageAnalyzer(),
+    new PythonAnalyzer(),
+    new PhpAnalyzer(),
   ];
 }
 
@@ -148,6 +157,7 @@ export function scanSource(
   const endBudget = startBudget();
   try {
     for (const analyzer of analyzers) {
+      if (!(analyzer.languages ?? JS_LANGUAGES).includes(parsed.language)) continue; // a rule for another language
       try {
         found.push(...analyzer.analyze(parsed, filePath, context));
       } catch (err) {
@@ -195,7 +205,7 @@ function walkDirectory(rootDir: string, options: WalkOptions): string[] {
         entry.isFile() &&
         SUPPORTED_EXTENSIONS.has(path.extname(entry.name)) &&
         !MINIFIED_FILE_PATTERN.test(entry.name) &&
-        (options.includeTests || !TEST_FILE_PATTERN.test(entry.name))
+        (options.includeTests || (!TEST_FILE_PATTERN.test(entry.name) && !PHPUNIT_FILE_PATTERN.test(entry.name)))
       ) {
         files.push(fullPath);
       }

@@ -1,0 +1,1 @@
+{ "name": "vulnerable-php-app", "private": true, "description": "Deliberately vulnerable PHP code (a script and a Laravel controller): a fixture for the scanner's tests. Do not deploy." }
