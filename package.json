@@ -19,7 +19,8 @@
     "lab:sql-injection:down": "docker compose -f labs/sql-injection/docker-compose.yml down -v",
     "lab:sql-injection:e2e": "node labs/sql-injection/e2e.js",
     "site:scanner": "node scripts/build-site-scanner.js",
-    "site:serve": "node scripts/serve-site.js"
+    "site:serve": "node scripts/serve-site.js",
+    "demo": "node scripts/build-demo.js"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

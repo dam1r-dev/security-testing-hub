@@ -10,6 +10,8 @@ Point it at your project (Express **or** Next.js App Router); it parses the
 real AST (via [Tree-sitter](https://tree-sitter.github.io/tree-sitter/)) and
 flags untrusted input flowing into dangerous sinks.
 
+<p align="center"><img src="docs/demo.svg" alt="A terminal: security-hub scan finds SQL injection, command injection and a hard-coded secret in a deliberately broken app, score 0 of 100, with Armo the armadillo alarmed" width="860"></p>
+
 > 🇷🇺 Русская документация: [docs/README.ru.md](docs/README.ru.md) ·
 > 🇰🇿 Қазақша: [attack playbook](docs/attack-playbook.kk.md)
 
@@ -59,6 +61,8 @@ tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 **Remix / React Router** (`loader`, `action`), **Nuxt / Nitro** (`server/api`, h3 readers), **tRPC** (`input` of `publicProcedure` /
 `protectedProcedure`) and **Hono**: request data is followed from each framework's way of reading it, and handlers that change data
 without checking the caller (or change someone else's record) are reported. Prisma `$queryRawUnsafe` / `$executeRawUnsafe` are SQL sinks.
+
+[docs/what-it-catches.md](docs/what-it-catches.md) shows each headline rule on a few lines of code: the mistake, what the scanner says, the fix.
 
 See [docs/rules.md](docs/rules.md) for how each rule works and its known
 false-positive/false-negative tradeoffs, and

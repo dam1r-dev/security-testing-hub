@@ -60,3 +60,16 @@ just declares `permissions: id-token: write` and npm handles the rest.
 If the workflow fails partway (e.g. scanner published but cli's tests then
 fail), the scanner version is already live — don't reuse that version number
 for a fix; bump again and re-release.
+
+## Listing the Action in the GitHub Marketplace (owner only)
+
+`action.yml` at the repository root already has what the Marketplace asks for (a name, a description, an author, an icon and a
+colour). The listing itself is a choice made on GitHub by an owner:
+
+1. Make sure the Action's name is not taken: GitHub refuses a name that another listing, a user or an organisation already uses
+   (it says so on the release form). The name in `action.yml` is "Security Testing Hub"; change it there first if GitHub objects.
+2. Releases -> Draft a new release (or edit the latest) -> tick **Publish this Action to the GitHub Marketplace**, choose the
+   categories (Security, Code quality), accept the Marketplace developer agreement, publish.
+3. The release is what is listed; `v0` (moved after every release, see above) keeps working for people who wrote `@v0`.
+
+The release that triggers `publish.yml` is the same release, so tick the box when creating the release for a version.
