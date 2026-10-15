@@ -101,9 +101,11 @@ npm run build
 
 ## Website
 
-Live at **https://dam1r-dev.github.io/security-testing-hub/**. `site/` is a static page (landing, quick start, and a **report viewer**: drop the JSON from
-`security-hub scan . --format json` onto it and see the score, the mascot's mood and the findings; it is read in
-your browser and makes no network requests). To publish it on GitHub Pages: Settings -> Pages -> Source: *GitHub
+Live at **https://dam1r-dev.github.io/security-testing-hub/**. `site/` is a static page: a landing, the quick start, and a **scanner that runs
+in the browser**: drop your project folder on it and the same scanner as the command line (tree-sitter compiled to
+WebAssembly, in a Web Worker) shows the score, the mascot's mood, the findings and a fix prompt for each, on your
+computer; nothing is uploaded (see [docs/web-scanner.md](docs/web-scanner.md) for how it works and what it does
+not do). It also opens the JSON from `security-hub scan . --format json`. To publish it on GitHub Pages: Settings -> Pages -> Source: *GitHub
 Actions*, then add the repository variable `PAGES_ENABLED = true`; `.github/workflows/pages.yml` deploys it on every
 change under `site/`. The mascot images are three files in `site/assets/` (see the README there).
 

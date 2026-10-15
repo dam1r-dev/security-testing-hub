@@ -200,6 +200,8 @@ export interface ScanOptions {
    * `*`, `**`, `?`, leading `/`, trailing `/`). Added to the patterns in `.security-hub-ignore`.
    */
   ignore?: string[];
+  /** Called after every scanned file: how many are done of how many (the web page shows a progress bar). */
+  onProgress?: (done: number, total: number) => void;
 }
 
 function readIgnoreFile(rootDir: string): string[] {
@@ -221,7 +223,8 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
   // Shared by every file of this scan so a call can be followed into another file.
   const context = new ProjectContext(stat.isDirectory() ? targetPath : path.dirname(targetPath));
 
-  const results: ScanResult[] = files.map((file) => {
+  const results: ScanResult[] = files.map((file, index) => {
+    options.onProgress?.(index, files.length);
     let sourceCode: string;
     try {
       const size = fs.statSync(file).size;

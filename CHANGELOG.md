@@ -2,6 +2,22 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
+## Unreleased
+
+### Added
+- **The scanner runs in the browser.** On the website, drop a project folder and it is scanned on your computer, with no
+  install and no upload: the real scanner sources bundled for the browser, tree-sitter as WebAssembly in a Web Worker,
+  the dropped files in an in-memory `fs`. Same findings as the command line (compared on the four example projects and 30
+  real repositories), a fix prompt per finding, a progress bar, a downloadable JSON report, and a list of the files that
+  were skipped or only partly analysed. Only the grammars the project needs are downloaded. See
+  [docs/web-scanner.md](docs/web-scanner.md).
+- `scanPath(..., { onProgress })` reports progress file by file.
+
+### Changed
+- The scanner no longer needs Node's `Buffer` (a JWT payload is decoded with `atob`, the head of a public file is read
+  into a `Uint8Array`); the website's script policy allows a Web Worker from the same site (`worker-src 'self'`).
+- The Pages workflow builds `site/scanner/` (`npm run site:scanner`) and also runs when the scanner changes.
+
 ## 0.6.0 - 2026-10-15
 
 ### Security (a review of the project itself, see [docs/security-audit.md](docs/security-audit.md))

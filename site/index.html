@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Security Testing Hub — find the security holes in your AI-written app</title>
 <meta name="description" content="Open-source security scanner for vibe-coded Node.js, Next.js, Supabase and Firebase projects. Free, runs on your machine, shows a 0-100 score and a ready-to-paste fix prompt for your AI assistant." />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'sha256-8QZ4pYVRGmnH0XV/dGzV6uhNJr8tfJL/6Uurz7jQS6w='; base-uri 'none'; form-action 'none'" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; worker-src 'self'; script-src 'sha256-9Pee9kWVVdRTNc5JLCrxH7LHvuuKvJy82cIqHjs/TwM='; base-uri 'none'; form-action 'none'" />
 <style>
   :root {
     --bg: #f8fafc; --panel: #ffffff; --text: #0f172a; --muted: #64748b; --line: #e2e8f0; --accent: #0f172a;
@@ -41,6 +41,10 @@
   .rules { display: flex; flex-wrap: wrap; gap: 8px; }
   .rules span { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
   .privacy { font-size: 13px; color: var(--muted); }
+  progress { width: 100%; max-width: 420px; height: 10px; }
+  .notes { margin-top: 14px; font-size: 13px; color: var(--muted); }
+  .notes summary { cursor: pointer; }
+  .notes li { margin: 4px 0; word-break: break-all; }
 
   /* viewer */
   .viewer { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
@@ -78,16 +82,16 @@
 <div class="wrap">
   <header class="top">
     <b>Security Testing Hub</b>
-    <nav><a href="#start">Quick start</a><a href="#rules">What it finds</a><a href="#viewer">Report viewer</a><a href="https://github.com/dam1r-dev/security-testing-hub">GitHub</a></nav>
+    <nav><a href="#viewer">Scan in browser</a><a href="#start">Command line</a><a href="#rules">What it finds</a><a href="https://github.com/dam1r-dev/security-testing-hub">GitHub</a></nav>
   </header>
 
   <div class="hero">
     <div>
       <h1>Find the security holes in your AI-written app, before someone else does.</h1>
-      <p class="lead">A free, open-source scanner for vibe-coded Node.js, Next.js, Supabase and Firebase projects. It runs on your machine, gives your project a 0-100 score, and hands your AI assistant a ready-to-paste prompt for every fix.</p>
+      <p class="lead">A free, open-source scanner for vibe-coded Node.js, Next.js, Supabase and Firebase projects. Drop your project folder on this page, or run it in a terminal: either way your code stays on your computer. You get a 0-100 score and a ready-to-paste prompt for your AI assistant for every fix.</p>
       <div class="cta">
-        <a class="btn primary" href="#start">Scan my project</a>
-        <a class="btn" href="#viewer">See a sample report</a>
+        <a class="btn primary" href="#viewer">Scan a folder in your browser</a>
+        <a class="btn" href="#start">Use the command line</a>
       </div>
     </div>
     <img id="heroMascot" src="assets/mascot-safe.png" alt="Armo, the armadillo who guards your code" />
@@ -113,17 +117,26 @@
   </section>
 
   <section id="viewer">
-    <h2>Report viewer</h2>
-    <p class="sub">Drop a <code>security-report.json</code> (from <code>security-hub scan . --format json --out security-report.json</code>) or load the sample. It is read in your browser and goes nowhere.</p>
+    <h2>Scan a folder in your browser</h2>
+    <p class="sub">Drop your project folder below. The same scanner as the command line runs inside this page, on your computer, and your code is not uploaded anywhere. You can also open a <code>security-report.json</code> (from <code>security-hub scan . --format json --out security-report.json</code>) or look at a sample.</p>
     <div class="viewer">
       <div class="drop" id="drop">
-        Drop your JSON report here, or
-        <div class="row">
-          <label class="btn" for="file">Choose a file</label>
-          <input id="file" type="file" accept="application/json,.json" class="hidden" />
-          <button class="btn" id="sample" type="button">Load a sample report</button>
+        <div id="dropIdle">
+          Drop your project folder here, or
+          <div class="row">
+            <label class="btn primary" for="folder">Choose a folder</label>
+            <input id="folder" type="file" webkitdirectory multiple class="hidden" />
+            <label class="btn" for="file">Open a JSON report</label>
+            <input id="file" type="file" accept="application/json,.json" class="hidden" />
+            <button class="btn" id="sample" type="button">Load a sample report</button>
+          </div>
+          <div class="privacy" style="margin-top:10px">Your files are read in this page and never uploaded. The page loads its own scanner from this site (up to 3 MB, once) and nothing else. <code>node_modules</code> and <code>.git</code> are skipped.</div>
         </div>
-        <div class="privacy" style="margin-top:10px">Local only. This page makes no network requests.</div>
+        <div id="dropBusy" class="hidden">
+          <p id="busyText" style="margin:0 0 10px"></p>
+          <progress id="busyBar" max="100"></progress>
+          <div class="row"><button class="btn" id="cancel" type="button">Cancel</button></div>
+        </div>
       </div>
       <div class="err hidden" id="err"></div>
       <div class="result hidden" id="result">
@@ -134,10 +147,13 @@
             <p class="label" id="label"></p>
             <p class="say" id="say"></p>
             <div class="stats" id="stats"></div>
+            <p class="privacy" id="runInfo" style="margin:10px 0 0"></p>
           </div>
         </div>
         <div class="chips" id="chips"></div>
         <div id="findings"></div>
+        <details class="notes hidden" id="notes"><summary id="notesTitle"></summary><ul id="notesList"></ul></details>
+        <div class="row" style="justify-content:flex-start"><button class="btn" id="download" type="button">Download the report (JSON)</button></div>
       </div>
     </div>
   </section>
@@ -175,13 +191,13 @@
 
   // rule chips + copy buttons on the quick-start commands
   RULES.forEach(function (r) { $('ruleList').appendChild(el('span', '', r)); });
+  function copyText(text, btn, label) {
+    var done = function () { btn.textContent = 'Copied!'; setTimeout(function () { btn.textContent = label; }, 1400); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () {});
+  }
   document.querySelectorAll('pre.code[data-copy]').forEach(function (pre) {
     var btn = pre.querySelector('button');
-    btn.addEventListener('click', function () {
-      var text = pre.getAttribute('data-copy');
-      var done = function () { btn.textContent = 'Copied!'; setTimeout(function () { btn.textContent = 'Copy'; }, 1400); };
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () {});
-    });
+    btn.addEventListener('click', function () { copyText(pre.getAttribute('data-copy'), btn, 'Copy'); });
   });
 
   var report = null, filter = 'all';
@@ -226,6 +242,12 @@
       chip.addEventListener('click', function () { filter = f; render(); });
       chips.appendChild(chip);
     });
+    if (data.fixPromptAll) {
+      var allButton = el('button', 'chip', 'Copy one prompt for the AI (all findings)');
+      allButton.type = 'button'; allButton.style.marginLeft = 'auto';
+      allButton.addEventListener('click', function () { copyText(data.fixPromptAll, allButton, 'Copy one prompt for the AI (all findings)'); });
+      chips.appendChild(allButton);
+    }
 
     var list = $('findings'); list.textContent = '';
     var all = [];
@@ -241,9 +263,25 @@
       card2.appendChild(head); card2.appendChild(el('p', '', String(item.f.message)));
       var line = item.f.location && item.f.location.startLine ? ':' + item.f.location.startLine : '';
       card2.appendChild(el('div', 'where', String(item.file) + line));
+      if (item.f.fixPrompt) {
+        var copy = el('button', 'chip', 'Copy fix prompt'); copy.type = 'button'; copy.style.marginTop = '10px';
+        copy.addEventListener('click', function () { copyText(item.f.fixPrompt, copy, 'Copy fix prompt'); });
+        card2.appendChild(copy);
+      }
       list.appendChild(card2);
     });
     if (shown === 0) list.appendChild(el('p', '', 'No findings in this view.'));
+
+    // what the scan could not do is as important as what it found: a skipped or half-read file is not a clean one
+    var notes = (data.notes || []).slice();
+    data.results.forEach(function (r) { if (r.parseError) notes.push(String(r.file) + ': ' + String(r.parseError)); });
+    var details = $('notes'), noteList = $('notesList'); noteList.textContent = '';
+    details.classList.toggle('hidden', notes.length === 0);
+    $('notesTitle').textContent = notes.length + ' note' + (notes.length === 1 ? '' : 's') + ' about files that were skipped or only partly analysed';
+    notes.slice(0, 200).forEach(function (n) { noteList.appendChild(el('li', '', n)); });
+    var info = '';
+    if (typeof data.filesScanned === 'number') info = 'Scanned ' + data.filesScanned + ' file' + (data.filesScanned === 1 ? '' : 's') + (typeof data.durationMs === 'number' ? ' in ' + (data.durationMs / 1000).toFixed(1) + ' s' : '') + (data.folder ? ' · ' + String(data.folder) : '');
+    $('runInfo').textContent = info;
   }
 
   function load(text) {
@@ -256,7 +294,157 @@
   var drop = $('drop');
   ['dragenter', 'dragover'].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
   ['dragleave', 'drop'].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
-  drop.addEventListener('drop', function (e) { var f = e.dataTransfer.files[0]; if (f) f.text().then(load); });
+
+  // ---- scanning a dropped folder: read it here, scan it in a Web Worker (scanner/worker.js), show the same report ----
+  var SKIP_DIRS = new Set(['node_modules', '.git', '.next', '.nuxt', '.svelte-kit', 'dist', 'build', 'coverage', '.turbo', '.vercel', '.cache', '.venv', 'venv', '__pycache__', '.idea', '.vscode', '.svn', '.hg']);
+  // listed (the scanner looks at the names of files in public folders) but never read: images, fonts, archives, lock files
+  var NOT_TEXT = /\.(png|jpe?g|gif|webp|avif|ico|bmp|svgz?|woff2?|ttf|otf|eot|mp3|mp4|m4a|webm|mov|avi|wav|ogg|pdf|wasm|exe|dll|so|dylib|bin|class|jar|map|psd|zip|gz|tgz|tar|7z|rar|sqlite3?|db|min\.js)$/i;
+  var LOCK_FILES = /^(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb)$/;
+  var MAX_FILES = 30000, MAX_FILE_BYTES = 2 * 1024 * 1024, MAX_TEXT_BYTES = 200 * 1024 * 1024;
+  var NO_WORKER = 'The scanner could not start in this browser. Open this page from its web address (it does not run from a file on your disk), or scan in a terminal: npx security-hub scan .';
+  var run = null;
+
+  function busy(text, percent) {
+    $('dropIdle').classList.add('hidden'); $('dropBusy').classList.remove('hidden');
+    $('busyText').textContent = text;
+    if (percent === null || percent === undefined) $('busyBar').removeAttribute('value'); else $('busyBar').value = percent;
+  }
+  function idle() { $('dropBusy').classList.add('hidden'); $('dropIdle').classList.remove('hidden'); }
+
+  function entryFile(entry) { return new Promise(function (resolve, reject) { entry.file(resolve, reject); }); }
+  async function childrenOf(entry) {
+    var reader = entry.createReader(), all = [];
+    for (;;) {
+      var batch = await new Promise(function (resolve, reject) { reader.readEntries(resolve, reject); });
+      if (!batch.length) return all;
+      all = all.concat(batch);
+    }
+  }
+  async function walkEntry(entry, prefix, found) {
+    if (found.items.length >= MAX_FILES) { found.truncated = true; return; }
+    if (entry.isFile) { found.items.push({ path: prefix + entry.name, file: await entryFile(entry) }); return; }
+    if (!entry.isDirectory) return;
+    // a .git folder is not read, but its presence is kept: a served .git is one of the things the scanner reports
+    if (entry.name === '.git') { found.items.push({ path: prefix + '.git/HEAD', stub: true }); return; }
+    if (SKIP_DIRS.has(entry.name)) return;
+    var kids = await childrenOf(entry);
+    for (var i = 0; i < kids.length; i++) await walkEntry(kids[i], prefix + entry.name + '/', found);
+  }
+  async function collectDropped(entry) {
+    var found = { items: [], truncated: false }, kids = await childrenOf(entry);
+    for (var i = 0; i < kids.length; i++) await walkEntry(kids[i], '', found);
+    return found;
+  }
+  function collectChosen(fileList) {
+    var found = { items: [], truncated: false }, stubs = {};
+    for (var i = 0; i < fileList.length; i++) {
+      var file = fileList[i], parts = (file.webkitRelativePath || file.name).split('/').slice(1), skipped = false;
+      for (var j = 0; j < parts.length - 1; j++) {
+        if (SKIP_DIRS.has(parts[j])) {
+          if (parts[j] === '.git') stubs[parts.slice(0, j + 1).join('/') + '/HEAD'] = true;
+          skipped = true; break;
+        }
+      }
+      if (skipped) continue;
+      if (found.items.length >= MAX_FILES) { found.truncated = true; break; }
+      found.items.push({ path: parts.join('/'), file: file });
+    }
+    Object.keys(stubs).forEach(function (p) { found.items.push({ path: p, stub: true }); });
+    return found;
+  }
+
+  // Reads the text of every file the scanner may need, a few at a time. Anything it cannot read goes to the notes, never silently.
+  async function readTexts(found, current) {
+    var items = found.items, files = new Array(items.length), notes = [], bytes = 0, next = 0, done = 0, over = 0, unreadable = 0;
+    async function one() {
+      while (next < items.length && !current.cancelled) {
+        var index = next++, item = items[index], name = item.path.slice(item.path.lastIndexOf('/') + 1);
+        if (item.stub) { files[index] = { path: item.path, size: 1, text: '' }; continue; }
+        var size = item.file.size, entry = { path: item.path, size: size };
+        if (size <= MAX_FILE_BYTES && !NOT_TEXT.test(name) && !LOCK_FILES.test(name)) {
+          if (bytes + size > MAX_TEXT_BYTES) { over++; entry = null; }
+          else {
+            bytes += size;
+            try { entry.text = await item.file.text(); } catch (e) { unreadable++; entry = null; }
+          }
+        }
+        files[index] = entry;
+        done++;
+        if (done % 50 === 0 || done === items.length) busy('Reading files… ' + done + ' / ' + items.length, done * 100 / items.length);
+      }
+    }
+    var pool = []; for (var k = 0; k < 16; k++) pool.push(one());
+    await Promise.all(pool);
+    if (found.truncated) notes.push('The folder has more than ' + MAX_FILES + ' files: only the first ' + MAX_FILES + ' were read.');
+    if (over) notes.push(over + ' file' + (over === 1 ? ' was' : 's were') + ' not read because the folder holds more than ' + (MAX_TEXT_BYTES / 1024 / 1024) + ' MB of text.');
+    if (unreadable) notes.push(unreadable + ' file' + (unreadable === 1 ? ' could' : 's could') + ' not be read.');
+    return { files: files.filter(Boolean), notes: notes };
+  }
+
+  function scanInWorker(files, current) {
+    return new Promise(function (resolve, reject) {
+      var worker;
+      try { worker = new Worker('scanner/worker.js'); } catch (e) { reject(new Error(NO_WORKER)); return; }
+      current.stop = function () { worker.terminate(); reject(new Error('cancelled')); };
+      worker.onerror = function () { worker.terminate(); reject(new Error(NO_WORKER)); };
+      worker.onmessage = function (event) {
+        var m = event.data || {};
+        if (m.type === 'status') busy(m.text === 'loading' ? 'Loading the scanner…' : 'Scanning…', null);
+        else if (m.type === 'progress') busy('Scanning… ' + m.done + ' / ' + m.total, m.total ? m.done * 100 / m.total : null);
+        else if (m.type === 'result') { worker.terminate(); resolve(m.data); }
+        else if (m.type === 'error') { worker.terminate(); reject(new Error(m.message || 'The scan failed.')); }
+      };
+      worker.postMessage({ type: 'scan', files: files });
+    });
+  }
+
+  async function scanFolder(name, collect) {
+    if (run) return;
+    var current = run = { cancelled: false, stop: null };
+    showError('');
+    try {
+      busy('Looking through the folder…', null);
+      var found = await collect();
+      if (current.cancelled) return;
+      if (!found.items.length) throw new Error('That folder is empty (node_modules and .git are skipped).');
+      var read = await readTexts(found, current);
+      if (current.cancelled) return;
+      busy('Loading the scanner…', null);
+      var data = await scanInWorker(read.files, current);
+      data.notes = read.notes; data.folder = name;
+      report = data; filter = 'all'; render();
+      $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      if (!current.cancelled) showError(e && e.message ? e.message : 'The scan failed.');
+    } finally { run = null; idle(); }
+  }
+
+  $('cancel').addEventListener('click', function () { if (run) { run.cancelled = true; if (run.stop) run.stop(); } });
+  $('folder').addEventListener('change', function (e) {
+    var list = Array.prototype.slice.call(e.target.files || []);
+    e.target.value = '';
+    if (!list.length) return;
+    var first = (list[0].webkitRelativePath || '').split('/')[0] || 'folder';
+    scanFolder(first, function () { return Promise.resolve(collectChosen(list)); });
+  });
+  drop.addEventListener('drop', function (e) {
+    var item = e.dataTransfer.items && e.dataTransfer.items[0];
+    var entry = item && item.webkitGetAsEntry ? item.webkitGetAsEntry() : null; // must be taken now: it is gone after the handler returns
+    if (entry && entry.isDirectory) { scanFolder(entry.name, function () { return collectDropped(entry); }); return; }
+    var f = e.dataTransfer.files[0];
+    if (!f) return;
+    if (/\.json$/i.test(f.name) || f.type === 'application/json') f.text().then(load);
+    else showError('Drop a project folder, or a JSON report made with --format json.');
+  });
+
+  $('download').addEventListener('click', function () {
+    if (!report) return;
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
+    link.download = 'security-report.json';
+    link.click();
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+  });
 })();
 </script>
 </body>

@@ -73,7 +73,9 @@ export function redact(secret: string): string {
 function decodeJwtPayload(token: string): Record<string, unknown> | undefined {
   try {
     const payload = token.split(".")[1] ?? "";
-    const json = Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    // atob is in Node 16+ and in every browser: the scanner also runs on the web page, where there is no Buffer
+    const binary = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const json = new TextDecoder("utf-8").decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
     const parsed: unknown = JSON.parse(json);
     return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : undefined;
   } catch {
