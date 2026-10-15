@@ -30,6 +30,9 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
   `safeRedirect(...)` (only a same-site path passes), each with a small helper added to the file; the result is checked by scanning
   again. A value that passes through another call, or reaches the sink in another file, is left to you with the reason. The taint
   tracker treats `safe*`, `validate*` and `verify*` calls like `escape*` and `sanitize*`: their result is not followed.
+- **VS Code extension (early)**, `packages/vscode`: findings in the Problems panel, the score in the status bar, a quick fix that copies the
+  fix prompt. Off in untrusted workspaces; its command setting cannot be set by a workspace. `scan --format json --prompts` adds the prompt to each finding.
+  Logic tested here, not yet run inside an editor.
 - **Four new rules (29 in all):** `mass-assignment` (the whole request body written to the database), `prototype-pollution`
   (request data deep-merged or used as nested keys), `webhook-signature` (Stripe / Lemon Squeezy / Paddle handlers that never verify
   the signature), `insecure-token-storage` (a login token in `localStorage` / `sessionStorage` / a script-set cookie).

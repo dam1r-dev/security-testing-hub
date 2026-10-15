@@ -15,6 +15,7 @@ import {
   toMarkdown,
   toGithubAnnotations,
   toFixPrompt,
+  fixPromptFor,
   changedFiles,
   filterSummary,
   SEVERITY_RANK,
@@ -42,6 +43,8 @@ export interface ScanCommandOptions {
   config?: string | false;
   /** A baseline file other than `.security-hub-baseline.json`, or `false` to report existing findings too. */
   baseline?: string | false;
+  /** With `--format json`: add the "fix with AI" prompt to every finding (what the VS Code extension shows). */
+  prompts?: boolean;
 }
 
 const SCORE_COLOR_CHALK: Record<ScoreColor, (text: string) => string> = {
@@ -165,7 +168,10 @@ export function runScan(targetPath: string, options: ScanCommandOptions): number
   if (options.format === "sarif") {
     output = toSarifString(summary.results, { relativeTo: path.resolve(process.cwd()) });
   } else if (options.format === "json") {
-    output = JSON.stringify({ ...summary, score: computeScore(summary) }, null, 2);
+    const shown = options.prompts
+      ? { ...summary, results: summary.results.map((r) => ({ ...r, findings: r.findings.map((f) => ({ ...f, fixPrompt: fixPromptFor(f, { relativeTo: path.resolve(process.cwd()) }) })) })) }
+      : summary;
+    output = JSON.stringify({ ...shown, score: computeScore(summary) }, null, 2);
   } else if (options.format === "html") {
     output = toHtml(summary, targetPath);
     outFile = outFile ?? DEFAULT_HTML_REPORT_FILE; // always a file — printing raw HTML to a terminal isn't useful

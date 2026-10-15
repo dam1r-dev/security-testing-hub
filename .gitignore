@@ -14,3 +14,5 @@ coverage/
 # built by tests/web-parity.test.ts and `npm run site:scanner`
 .web-build/
 site/scanner/
+packages/vscode/out/
+*.vsix
