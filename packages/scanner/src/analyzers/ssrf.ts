@@ -10,7 +10,7 @@ const HTTP_CLIENT_METHOD_PATTERN = /^(get|post|put|delete|patch|head|request)$/;
 
 // `https://oeis.org/${id}`: the scheme and the whole host are written in the code, so the caller can change the path or the
 // query but not WHERE the request goes. (An attacker-chosen path on a fixed host is not server-side request forgery.)
-const FIXED_HOST_PREFIX = /^[`'"]https?:\/\/[A-Za-z0-9.-]+(?::\d+)?[\/?#]/;
+const FIXED_HOST_PREFIX = /^[`'"]https?:\/\/[A-Za-z0-9.-]+(?::\d+)?[/?#]/;
 
 function hasFixedHost(node: SyntaxNode): boolean {
   const first = node.childForFieldName("arguments")?.namedChild(0);
