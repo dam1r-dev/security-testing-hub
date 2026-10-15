@@ -128,7 +128,7 @@ describe("round 11 precision fixes", () => {
   });
 
   it("command injection: a regular expression's exec is not a shell", () => {
-    expect(rules("app.get('/x', (req, res) => { const m = /^(\w{64})\.(png|webp)$/.exec(req.params.file); });")).not.toContain("command-injection");
+    expect(rules("app.get('/x', (req, res) => { const m = /^(\\w{64})\\.(png|webp)$/.exec(req.params.file); });")).not.toContain("command-injection");
     expect(rules("app.get('/x', (req, res) => { const m = pattern.exec(req.query.q); });")).not.toContain("command-injection");
     expect(rules("app.get('/x', (req, res) => { exec('ls ' + req.query.dir); });")).toContain("command-injection");
     expect(rules("app.get('/x', (req, res) => { child_process.exec('ls ' + req.query.dir); });")).toContain("command-injection");
