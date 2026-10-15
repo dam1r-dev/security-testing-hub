@@ -21,6 +21,15 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
   only new ones (`--baseline <file>`, `--no-baseline`, the Action's `baseline` input); the report says how many old findings
   are hidden and how many baseline entries went stale. Findings are matched by rule, file and line text, never by a secret's value.
 
+- **Frameworks:** SvelteKit (`+server`, form actions, `load`), Remix / React Router (`loader`, `action`), Nuxt / Nitro (h3 readers,
+  `server/api`), tRPC (`input` of resolvers) and Hono are understood: their way of reading the request feeds every data-flow rule,
+  and handlers that change data without checking the caller (`broken-access-control`) or change another user's record (`idor`) are
+  reported, with SvelteKit hooks / Nuxt middleware that enforce sign-in counting as the check. Prisma `$queryRawUnsafe` /
+  `$executeRawUnsafe` are SQL sinks. Fixture: `examples/vulnerable-frameworks`.
+- **Four new rules (29 in all):** `mass-assignment` (the whole request body written to the database), `prototype-pollution`
+  (request data deep-merged or used as nested keys), `webhook-signature` (Stripe / Lemon Squeezy / Paddle handlers that never verify
+  the signature), `insecure-token-storage` (a login token in `localStorage` / `sessionStorage` / a script-set cookie).
+
 ### Changed
 - The scanner no longer needs Node's `Buffer` (a JWT payload is decoded with `atob`, the head of a public file is read
   into a `Uint8Array`); the website's script policy allows a Web Worker from the same site (`worker-src 'self'`).

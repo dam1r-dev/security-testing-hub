@@ -35,6 +35,10 @@ export const RULE_IDS: readonly VulnerabilityType[] = [
   "missing-rate-limit",
   "exposed-files",
   "vulnerable-dependency",
+  "mass-assignment",
+  "prototype-pollution",
+  "webhook-signature",
+  "insecure-token-storage",
 ];
 
 // `// security-hub-ignore`, `/* security-hub-ignore */`, `// security-hub-ignore sql-injection, xss -- reason`
