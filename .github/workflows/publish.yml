@@ -20,10 +20,10 @@ jobs:
       # Jan 2027) — OIDC is the supported path going forward, not a workaround.
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Use Node.js (npm >=11.5.1 required for trusted publishing)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22.x
           registry-url: https://registry.npmjs.org
