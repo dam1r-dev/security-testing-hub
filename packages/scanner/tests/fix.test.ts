@@ -309,3 +309,77 @@ describe("fix: writing safely", () => {
     expect(read(dir, "config.js")).toContain("sup3r-s3cret"); // the source file was not changed either
   });
 });
+
+describe("fix: reflected XSS gets escaped, open redirects get a same-site check", () => {
+  const send = (body: string) => `app.get("/hello", (req, res) => {\n  const name = req.query.name;\n  res.send(${body});\n});\n`;
+
+  it("a template: ${name} becomes ${escapeHtml(name)} and the helper is added once", () => {
+    const dir = project({ "app.js": send("`<h1>Hello ${name}</h1>`") });
+    const text = fixedText(dir, "app.js", ["xss"]);
+    expect(text).toContain("res.send(`<h1>Hello ${escapeHtml(name)}</h1>`);");
+    expect(text.match(/function escapeHtml/g)).toHaveLength(1);
+    expect(text).toContain("&amp;"); // the helper escapes what matters in HTML
+    expect(count(dir, "xss")).toBe(0);
+  });
+
+  it("a + chain, the bare value, and two uses in one response", () => {
+    expect(fixedText(project({ "app.js": send('"<p>" + name + "</p>"') }), "app.js", ["xss"])).toContain('res.send("<p>" + escapeHtml(name) + "</p>");');
+    const bare = project({ "app.js": "app.get('/x', (req, res) => { res.send(req.query.q); });\n" });
+    expect(fixedText(bare, "app.js", ["xss"])).toContain("res.send(escapeHtml(req.query.q));");
+    const twice = project({ "app.js": 'app.get("/x", (req, res) => {\n  const q = req.query.q;\n  res.send(`<b>${q}</b><i>${q}</i>`);\n});\n' });
+    const text = fixedText(twice, "app.js", ["xss"]);
+    expect(text).toContain("<b>${escapeHtml(q)}</b><i>${escapeHtml(q)}</i>");
+    expect(text.match(/function escapeHtml/g)).toHaveLength(1);
+    expect(count(twice, "xss")).toBe(0);
+  });
+
+  it("TypeScript gets a typed helper, an existing escapeHtml is reused, a Response with HTML headers is fixed", () => {
+    const ts = project({
+      "route.ts": "export async function GET(request: Request) {\n  const q = new URL(request.url).searchParams.get('q');\n  return new Response(`<p>${q}</p>`, { headers: { 'Content-Type': 'text/html' } });\n}\n",
+    });
+    const text = fixedText(ts, "route.ts", ["xss"]);
+    expect(text).toContain("`<p>${escapeHtml(q)}</p>`");
+    expect(text).toContain("function escapeHtml(value: unknown): string");
+    const reuse = project({ "app.js": `const { escapeHtml } = require("./util");\n${send("`<h1>${name}</h1>`")}` });
+    const reused = fixedText(reuse, "app.js", ["xss"]);
+    expect(reused).toContain("${escapeHtml(name)}");
+    expect(reused).not.toContain("function escapeHtml");
+  });
+
+  it("a value that goes through another call is left for a person, with the reason", () => {
+    const dir = project({ "app.js": "app.get('/x', (req, res) => { const t = req.query.t; res.send(render(t)); });\nfunction render(t) { return '<p>' + t + '</p>'; }\n" });
+    const p = plan(dir, ["xss"]);
+    expect(p.edits).toHaveLength(0);
+    expect(p.skipped.length + p.manual).toBeGreaterThan(0);
+  });
+
+  it("open redirect: the target is wrapped, a status argument is left alone, only a same-site path survives", () => {
+    const dir = project({ "app.js": 'app.get("/go", (req, res) => {\n  res.redirect(302, req.query.next);\n});\n' });
+    const text = fixedText(dir, "app.js", ["open-redirect"]);
+    expect(text).toContain("res.redirect(302, safeRedirect(req.query.next));");
+    expect(count(dir, "open-redirect")).toBe(0);
+    // the helper really does what the comment says
+    const helper = /function safeRedirect[\s\S]*?\n}\n/.exec(text)?.[0] ?? "";
+    const safeRedirect = new Function(`${helper}; return safeRedirect;`)() as (t: unknown) => string;
+    expect(safeRedirect("/dashboard?tab=2")).toBe("/dashboard?tab=2");
+    for (const bad of ["//evil.com", "https://evil.com", "/\\evil.com", "javascript:alert(1)", "@evil.com", undefined, ["/a"]]) expect(safeRedirect(bad)).toBe("/");
+  });
+
+  it("open redirect in a template: only the user's part is wrapped (the `${origin}${next}` pattern of Supabase callbacks)", () => {
+    const code =
+      "export async function GET(request: Request) {\n  const { searchParams, origin } = new URL(request.url);\n  const next = searchParams.get('next') ?? '/';\n  return NextResponse.redirect(`${origin}${next}`);\n}\n";
+    const dir = project({ "route.ts": code });
+    const text = fixedText(dir, "route.ts", ["open-redirect"]);
+    expect(text).toContain("NextResponse.redirect(`${origin}${safeRedirect(next)}`)");
+    expect(text).toContain("function safeRedirect(target: unknown");
+    expect(count(dir, "open-redirect")).toBe(0);
+  });
+
+  it("the result still parses, and a second run changes nothing", () => {
+    const dir = project({ "app.js": send("`<h1>${name}</h1>`") + 'app.get("/go", (req, res) => { res.redirect(req.query.to); });\n' });
+    applyPlan(plan(dir));
+    expect(scanPath(dir).results.every((r) => !r.parseError)).toBe(true);
+    const again = plan(dir, ["xss", "open-redirect"]);
+    expect(again.edits).toHaveLength(0);
+  });
+});

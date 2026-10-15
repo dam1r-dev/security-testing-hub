@@ -26,6 +26,10 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
   and handlers that change data without checking the caller (`broken-access-control`) or change another user's record (`idor`) are
   reported, with SvelteKit hooks / Nuxt middleware that enforce sign-in counting as the check. Prisma `$queryRawUnsafe` /
   `$executeRawUnsafe` are SQL sinks. Fixture: `examples/vulnerable-frameworks`.
+- **`fix` handles `xss` and `open-redirect`**: values that go into HTML are wrapped in `escapeHtml(...)`, redirect targets in
+  `safeRedirect(...)` (only a same-site path passes), each with a small helper added to the file; the result is checked by scanning
+  again. A value that passes through another call, or reaches the sink in another file, is left to you with the reason. The taint
+  tracker treats `safe*`, `validate*` and `verify*` calls like `escape*` and `sanitize*`: their result is not followed.
 - **Four new rules (29 in all):** `mass-assignment` (the whole request body written to the database), `prototype-pollution`
   (request data deep-merged or used as nested keys), `webhook-signature` (Stripe / Lemon Squeezy / Paddle handlers that never verify
   the signature), `insecure-token-storage` (a login token in `localStorage` / `sessionStorage` / a script-set cookie).

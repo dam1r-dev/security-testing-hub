@@ -107,7 +107,7 @@ export function run(argv: string[]): void {
     .command("fix <path>")
     .description("Fix what can be fixed safely: SQL parameters, JWT expiry, secrets into .env, CORS origins, Supabase RLS migration. Shows a diff; changes nothing without --write")
     .option("--write", "apply the changes (default: only show them)")
-    .option("--only <rule>", "fix only this rule (repeatable): sql-injection | insecure-jwt | hardcoded-secret | insecure-cors | supabase-rls", collect, [])
+    .option("--only <rule>", "fix only this rule (repeatable): sql-injection | insecure-jwt | hardcoded-secret | insecure-cors | supabase-rls | xss | open-redirect", collect, [])
     .option("--force", "change files even if git shows uncommitted edits in them")
     .option("--ignore <pattern>", "skip files/folders matching this pattern (repeatable)", collect, [])
     .option("--include-tests", "also fix test folders and *.test.* files")

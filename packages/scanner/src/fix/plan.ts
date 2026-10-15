@@ -4,6 +4,7 @@ import { languageForExtension, parseFile } from "../parsers/ast-parser";
 import { gitState } from "../secrets/env-files";
 import { Finding, ScanSummary } from "../types";
 import { appendDiff, applyEdits, newFileDiff, unifiedDiff } from "./diff";
+import { escapeEdits, redirectEdits, sinkAt, viaOf } from "./html";
 import { callAt, corsEdit, expiryEdit, jwtOptionEdits } from "./jwt";
 import { rlsMigration, tablesWithoutRls } from "./rls";
 import { envLine, offsetOf, secretFix } from "./secrets";
@@ -109,7 +110,27 @@ export function planFixes(summary: ScanSummary, scanRoot: string, options: FixOp
       };
       const { startLine, startColumn } = finding.location;
 
-      if (finding.ruleId === "sql-injection") {
+      if (finding.ruleId === "xss" || finding.ruleId === "open-redirect") {
+        const sink = sinkAt(root, startLine, startColumn);
+        const via = viaOf(finding.message);
+        if (/reaches the vulnerable call at/.test(finding.message)) {
+          skip("the unsafe call is in another file: fix it there (escape or check the value where it is used)");
+          continue;
+        }
+        if (!sink || !via) {
+          skip("the flagged call could not be found again in the file");
+          continue;
+        }
+        const key = `${finding.ruleId}:${file}:${sink.startIndex}`;
+        if (seen.has(key)) continue;
+        const fix = finding.ruleId === "xss" ? escapeEdits(sink, via, file, source, isTypeScript) : redirectEdits(sink, via, file, source, isTypeScript);
+        if ("reason" in fix) skip(fix.reason);
+        else {
+          seen.add(key);
+          for (const edit of fix.edits) addEdit(edit);
+          plan.originals[file] = source;
+        }
+      } else if (finding.ruleId === "sql-injection") {
         const call = callAt(root, startLine, startColumn);
         if (!call) {
           skip("the flagged call could not be found again in the file");
