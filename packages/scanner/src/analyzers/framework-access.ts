@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { ParsedFile } from "../parsers/ast-parser";
-import { SyntaxNode, findNodes, isFunctionNode, snippet, toLocation } from "../parsers/utils";
+import { SyntaxNode, findNodes, isFunctionNode, snippet, toLocation, withoutComments } from "../parsers/utils";
 import { ProjectContext } from "../taint/project";
 import { isTrpcResolver } from "../taint/request-params";
 import { Finding } from "../types";
@@ -257,7 +257,7 @@ export class FrameworkAccessAnalyzer implements Analyzer {
 
       const callerKnown =
         handler.authenticatedByDeclaration ||
-        FRAMEWORK_AUTH_HINT.test(fn.text) ||
+        FRAMEWORK_AUTH_HINT.test(withoutComments(fn.text)) ||
         checksCaller(fn, info, project) ||
         hasEnforcingHook(filePath, handler.framework);
       if (!callerKnown) {

@@ -6,11 +6,18 @@ import { isRequestSource } from "./sources";
 // which is what makes them command-injection sinks (unlike execFile/spawn with an argv array).
 const SINK_CALLEE_PATTERN = /(^|\.)(exec|execSync)$/;
 
+// `/^(\w+)$/.exec(file)` is a regular expression's exec, not a shell: a regex literal or a variable named like one.
+const REGEX_RECEIVER = /^(?:re|rx|regex|regexp|pattern|matcher|\w*(?:Re|Regex|RegExp|Pattern|Matcher))$/;
+
 function isSink(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;
   const callee = node.childForFieldName("function");
   if (!callee) return false;
   if (callee.type !== "member_expression" && callee.type !== "identifier") return false;
+  if (callee.type === "member_expression") {
+    const receiver = callee.childForFieldName("object");
+    if (receiver && (receiver.type === "regex" || (receiver.type === "identifier" && REGEX_RECEIVER.test(receiver.text)))) return false;
+  }
   return SINK_CALLEE_PATTERN.test(callee.text);
 }
 

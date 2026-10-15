@@ -77,6 +77,19 @@ function nameFor(literal: SyntaxNode): string | undefined {
 // to start in production without the real one).
 const NON_SECRET_CONTAINER = /placeholder|example|sample|dummy|fake|mock|fixture|forbidden|blocklist|denylist|weak|insecure|dev[-_]?only|development[-_]?only|local[-_]?only/i;
 
+// Judged on the file's own name and the two folders above it only: where the whole project lives (a folder called `demo` or
+// `mocks` further up) says nothing about this file, and must not quietly switch checks off.
+const FIXTURE_PATH = /(?:^|[\/\\])(?:seeds?|fixtures?|__fixtures__|mocks?|__mocks__|stories)[\/\\]|seed[-_.\w]*\.[cm]?[jt]sx?$/i;
+
+function isFixturePath(filePath: string): boolean {
+  return FIXTURE_PATH.test(filePath.split(/[\/\\]/).slice(-3).join("/"));
+}
+
+// a schema or a call written as a string (`v.pipe(v.string(), v.minLength(1))`) is code, not a credential
+function looksLikeCode(value: string): boolean {
+  return /^[\w$.]+\(.*\)$/.test(value);
+}
+
 function insideNonSecretContainer(literal: SyntaxNode): boolean {
   for (let p = literal.parent; p; p = p.parent) {
     if (p.type === "variable_declarator" || p.type === "public_field_definition" || p.type === "field_definition") {
@@ -161,6 +174,9 @@ export class HardcodedSecretAnalyzer implements Analyzer {
     // with 40 000 secrets (a hostile one) would make that check quadratic if its own findings were added too.
     let collecting = true;
     const reportedKeys = new Set<string>();
+    // Seed data, fixtures, mocks and demos hold made-up credentials on purpose: judged by name they are noise. (Provider-format
+    // tokens such as an AWS key are still reported there: a real key pasted into a seed file is a real key.)
+    const fixtureLike = isFixturePath(filePath);
 
     const add = (
       start: number,
@@ -194,6 +210,7 @@ export class HardcodedSecretAnalyzer implements Analyzer {
 
     // 1. Known token formats anywhere in the file, comments included.
     for (const match of findKnownSecrets(text)) {
+      if (fixtureLike && /private key/i.test(match.secret.label)) continue;
       add(
         match.index,
         match.index + match.text.length,
@@ -261,7 +278,7 @@ export class HardcodedSecretAnalyzer implements Analyzer {
       if (!rawName) continue;
       const name = normalizeName(rawName);
 
-      if (isSigningSecretName(name) && (name !== "secret" || isCallOptionsProperty(node)) && value.length >= 4) {
+      if (isSigningSecretName(name) && (name !== "secret" || isCallOptionsProperty(node)) && value.length >= 4 && !looksLikeCode(value)) {
         add(
           node.startIndex,
           node.endIndex,
@@ -272,7 +289,7 @@ export class HardcodedSecretAnalyzer implements Analyzer {
             `${isPlaceholder(value) ? " (it looks like a placeholder that was never replaced)" : ""}. Anyone who reads the ` +
             `code can forge logins. Use a long random value from an environment variable (process.env.${name.toUpperCase()}).`,
         );
-      } else if (isSensitiveName(name) && looksLikeSecret(value, name) && !isFirebaseWebConfig(node)) {
+      } else if (!fixtureLike && isSensitiveName(name) && looksLikeSecret(value, name) && !isFirebaseWebConfig(node)) {
         add(
           node.startIndex,
           node.endIndex,

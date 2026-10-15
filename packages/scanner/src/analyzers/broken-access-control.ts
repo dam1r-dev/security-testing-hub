@@ -1,5 +1,5 @@
 import { ParsedFile } from "../parsers/ast-parser";
-import { findNodes, snippet, toLocation, SyntaxNode } from "../parsers/utils";
+import { findNodes, snippet, toLocation, SyntaxNode, withoutComments } from "../parsers/utils";
 import { Finding } from "../types";
 import { Analyzer } from "./base-analyzer";
 import {
@@ -53,7 +53,7 @@ export class BrokenAccessControlAnalyzer implements Analyzer {
         if (!pathArg || pathArg.type !== "string") return false;
         return SENSITIVE_PATH_PATTERN.test(pathArg.text);
       })
-      .filter((route) => !AUTH_CHECK_HINT.test(route.text))
+      .filter((route) => !AUTH_CHECK_HINT.test(withoutComments(route.text)))
       .map((route) => ({
         ruleId: "broken-access-control" as const,
         severity: "critical" as const,
@@ -81,7 +81,7 @@ export class BrokenAccessControlAnalyzer implements Analyzer {
     if (hasNearbyMiddlewareWithAuthHint(filePath)) return [];
 
     return findNextHandlers(parsed.tree.rootNode)
-      .filter((h) => !AUTH_CHECK_HINT.test(h.node.text))
+      .filter((h) => !AUTH_CHECK_HINT.test(withoutComments(h.node.text)))
       .map((h) => ({
         ruleId: "broken-access-control" as const,
         severity: "critical" as const,

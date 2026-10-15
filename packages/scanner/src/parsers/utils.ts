@@ -91,3 +91,11 @@ function truncate(text: string, maxLength = 160): string {
 export function snippet(node: SyntaxNode, sourceCode: string): string {
   return truncate(nodeText(node, sourceCode));
 }
+
+/**
+ * The code of a node without its comments. A hint such as `req.session` that only appears in a comment (a commented-out fix, an
+ * explanation of the bug) is not a check; matching raw text counted it as one.
+ */
+export function withoutComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1");
+}

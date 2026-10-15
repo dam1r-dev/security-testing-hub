@@ -24,11 +24,22 @@ function isExpressSink(node: SyntaxNode): boolean {
 function isWebResponseSink(node: SyntaxNode): boolean {
   if (node.type !== "new_expression") return false;
   const constructor = node.childForFieldName("constructor");
-  return !!constructor && /^(Response|NextResponse)$/.test(constructor.text);
+  if (!constructor || !/^(Response|NextResponse)$/.test(constructor.text)) return false;
+  // `new Response(text)` is sent as text/plain: a browser shows it, it does not run it. Only a body that is declared to be HTML
+  // can script the page; and a Response used to read a stream (`new Response(request.body).arrayBuffer()`) is not sent at all.
+  const options = node.childForFieldName("arguments")?.namedChild(1);
+  return !!options && /html/i.test(options.text);
+}
+
+// Hono: c.html(markup) sends text/html.
+function isHonoHtmlSink(node: SyntaxNode): boolean {
+  if (node.type !== "call_expression") return false;
+  const callee = node.childForFieldName("function");
+  return callee?.type === "member_expression" && /^(?:c|ctx|context).html$/.test(callee.text);
 }
 
 function isSink(node: SyntaxNode): boolean {
-  return isExpressSink(node) || isWebResponseSink(node);
+  return isExpressSink(node) || isWebResponseSink(node) || isHonoHtmlSink(node);
 }
 
 /**

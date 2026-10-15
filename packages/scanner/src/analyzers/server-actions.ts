@@ -1,5 +1,5 @@
 import { ParsedFile } from "../parsers/ast-parser";
-import { SyntaxNode, findNodes, isFunctionNode, snippet, toLocation } from "../parsers/utils";
+import { SyntaxNode, findNodes, isFunctionNode, snippet, toLocation, withoutComments } from "../parsers/utils";
 import { FileInfo, ProjectContext } from "../taint/project";
 import { Finding } from "../types";
 import { Analyzer } from "./base-analyzer";
@@ -56,7 +56,7 @@ export function dbMutations(fn: SyntaxNode): SyntaxNode[] {
 
 /** Does this code, or a project function it calls (two levels deep), match `hint`? */
 function matches(node: SyntaxNode, hint: RegExp, info: FileInfo | undefined, project: ProjectContext, depth: number): boolean {
-  if (hint.test(node.text)) return true;
+  if (hint.test(withoutComments(node.text))) return true;
   if (!info || depth <= 0) return false;
   for (const call of info.callsIn(node)) {
     const fn = project.resolveCallee(call, info);
