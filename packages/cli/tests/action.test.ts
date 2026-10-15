@@ -185,6 +185,51 @@ describe("GitHub Action orchestrator (action/run.js)", () => {
     expect(calls[1]?.body?.body).toContain("1 finding(s) hidden by `security-hub-ignore` comments");
   });
 
+  it("uses the project's .security-hub.json: its failOn gates the check, its disabled rules are not reported", async () => {
+    write(".security-hub.json", '{"failOn": "critical"}');
+    await exec(baseEnv());
+    expect(outputs()).toMatchObject({ findings: "1", failed: "true" });
+
+    fs.writeFileSync(outputFile, "");
+    write(".security-hub.json", '{"failOn": "critical", "disable": ["sql-injection"]}');
+    await exec(baseEnv());
+    expect(outputs()).toMatchObject({ findings: "0", failed: "false" });
+    expect(fs.readFileSync(summaryFile, "utf8")).toContain("their rules are disabled in `.security-hub.json`");
+
+    write(".security-hub.json", '{"disabel": []}');
+    await expect(exec(baseEnv())).rejects.toThrow(/unknown setting "disabel"/);
+  });
+
+  it("hides what the baseline already knows, unless the baseline input is off", async () => {
+    write(".security-hub-baseline.json", scanner.serializeBaseline(scanner.createBaseline(scanner.scanPath(dir), dir)));
+    await exec(baseEnv({ INPUT_FAIL_ON: "critical" }));
+    expect(outputs()).toMatchObject({ findings: "0", failed: "false" });
+    expect(fs.readFileSync(summaryFile, "utf8")).toContain("existing finding(s) are in the baseline");
+
+    fs.writeFileSync(outputFile, "");
+    await exec(baseEnv({ INPUT_FAIL_ON: "critical", INPUT_BASELINE: "false" }));
+    expect(outputs()).toMatchObject({ findings: "1", failed: "true" });
+
+    fs.writeFileSync(outputFile, "");
+    write("src/newer.js", VULNERABLE("brandnew")); // not in the baseline: reported again
+    git("add", "-A");
+    git("commit", "-q", "-m", "another");
+    await exec(baseEnv({ INPUT_FAIL_ON: "critical" }));
+    expect(outputs()).toMatchObject({ findings: "1", failed: "true" });
+  });
+
+  it("shows Armo in the comment and the job summary, unless the mascot input is off", async () => {
+    await exec(baseEnv());
+    expect(fs.readFileSync(summaryFile, "utf8")).toContain('<img src="https://dam1r-dev.github.io/security-testing-hub/assets/mascot-');
+    expect(calls.find((c) => c.method === "POST")?.body?.body).toContain("<img");
+
+    fs.writeFileSync(summaryFile, "");
+    calls = [];
+    await exec(baseEnv({ INPUT_MASCOT: "false" }));
+    expect(fs.readFileSync(summaryFile, "utf8")).not.toContain("<img");
+    expect(calls.find((c) => c.method === "POST")?.body?.body).not.toContain("<img");
+  });
+
   it("rejects bad inputs with a clear message instead of running", async () => {
     await expect(exec(baseEnv({ INPUT_VERSION: "1.0.0; rm -rf /" }))).rejects.toThrow(/Input "version"/);
     await expect(exec(baseEnv({ INPUT_VERSION: "--registry=http://evil" }))).rejects.toThrow(/Input "version"/);

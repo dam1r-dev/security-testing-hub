@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/dam1r-dev/security-testing-hub/main/docs/security-hub.schema.json",
+  "title": "Security Testing Hub settings (.security-hub.json)",
+  "description": "A project's own settings for security-hub scan / the GitHub Action. Command-line flags and Action inputs win over this file.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "ignore": {
+      "description": "Path patterns to skip, relative to the project (gitignore-style subset: *, **, ?, leading /, trailing /). Added to .security-hub-ignore.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "examples": [["legacy/", "scripts/**"]]
+    },
+    "disable": {
+      "description": "Rules this project does not want reported. The report says how many findings that hid.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "sql-injection", "xss", "command-injection", "path-traversal", "csrf", "ssrf", "idor", "broken-access-control",
+          "insecure-role-assignment", "insecure-file-upload", "username-enumeration", "code-injection", "open-redirect",
+          "nosql-injection", "insecure-deserialization", "xxe", "hardcoded-secret", "supabase-rls", "supabase-auth",
+          "firebase-rules", "insecure-cors", "insecure-jwt", "missing-rate-limit", "exposed-files", "vulnerable-dependency"
+        ]
+      }
+    },
+    "severity": {
+      "description": "Report only findings at or above this severity.",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "failOn": {
+      "description": "Exit with code 1 (fail the check) when a reported finding is at or above this severity.",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "includeTests": {
+      "description": "Also scan test folders and *.test.* / *.spec.* files.",
+      "type": "boolean"
+    }
+  }
+}

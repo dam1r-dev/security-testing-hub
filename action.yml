@@ -29,6 +29,12 @@ inputs:
       On pull requests, post (and keep updating) one summary comment. Needs `pull-requests: write`
       permission; skipped with a warning when the token is read-only (pull requests from forks).
     default: "true"
+  mascot:
+    description: "Show Armo, the project mascot, in the pull request comment and the job summary (the picture is loaded from the project website). Set to false to leave it out."
+    default: "true"
+  baseline:
+    description: "Hide the findings recorded in .security-hub-baseline.json (made by `security-hub baseline`), so only new ones are reported and can fail the check. Set to false to report everything."
+    default: "true"
   sarif:
     description: "Upload results to GitHub code scanning (needs the security-events: write permission; private repositories need GitHub Code Security)."
     default: "false"
@@ -72,6 +78,8 @@ runs:
         INPUT_SEVERITY: ${{ inputs.severity }}
         INPUT_CHANGED_ONLY: ${{ inputs.changed-only }}
         INPUT_COMMENT: ${{ inputs.comment }}
+        INPUT_MASCOT: ${{ inputs.mascot }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
         INPUT_SARIF: ${{ inputs.sarif }}
         INPUT_IGNORE: ${{ inputs.ignore }}
         INPUT_INCLUDE_TESTS: ${{ inputs.include-tests }}

@@ -12,6 +12,14 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
   were skipped or only partly analysed. Only the grammars the project needs are downloaded. See
   [docs/web-scanner.md](docs/web-scanner.md).
 - `scanPath(..., { onProgress })` reports progress file by file.
+- **Armo in the pull request comment** and the job summary: the mascot beside the score, in the mood of the score (the
+  pictures are the ones the website serves). The Action's `mascot: false` leaves it out.
+- **`.security-hub.json`**: a project's own settings (`ignore`, `disable`, `severity`, `failOn`, `includeTests`), read by
+  `scan`, the Action and the in-browser scanner; flags and inputs win over it; `--config <file>`, `--no-config`; a typo is
+  an error. Disabled rules are counted in the report (`disabledCount`). JSON schema in `docs/`.
+- **`security-hub baseline`** and `.security-hub-baseline.json`: record today's findings so `scan` and the Action report
+  only new ones (`--baseline <file>`, `--no-baseline`, the Action's `baseline` input); the report says how many old findings
+  are hidden and how many baseline entries went stale. Findings are matched by rule, file and line text, never by a secret's value.
 
 ### Changed
 - The scanner no longer needs Node's `Buffer` (a JWT payload is decoded with `atob`, the head of a public file is read

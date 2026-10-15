@@ -29,3 +29,12 @@ export function mascotSay(color: ScoreColor): string {
 export function mascotAlt(color: ScoreColor): string {
   return ALT[color];
 }
+
+// The same three pictures are published with the website. A pull request comment cannot embed a data: URI (GitHub removes
+// it), so it links to them there; GitHub fetches the image itself and passes it through its image proxy.
+export const MASCOT_IMAGE_BASE = "https://dam1r-dev.github.io/security-testing-hub/assets";
+const IMAGE_FILE: Record<ScoreColor, string> = { green: "mascot-safe.png", yellow: "mascot-warn.png", red: "mascot-danger.png" };
+
+export function mascotImageUrl(color: ScoreColor): string {
+  return `${MASCOT_IMAGE_BASE}/${IMAGE_FILE[color]}`;
+}
