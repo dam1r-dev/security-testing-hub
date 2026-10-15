@@ -283,7 +283,7 @@ export function containsSourceDirectly(expression: SyntaxNode, source: SyntaxNod
 // Calls whose result is no longer attacker-shaped for injection purposes: numeric coercion, hashing,
 // escaping/sanitising. (`String(x)` and `x.toString()` are deliberately NOT here: they change nothing.)
 const CLEANING_CALLEE =
-  /(?:^|\.)(?:parseInt|parseFloat|Number|BigInt|Boolean|hash\w*|\w*Hash|md5|sha\d*|digest|escape\w*|sanitize\w*|encodeURI|encodeURIComponent|quote\w*|isNaN|isFinite)$/i;
+  /(?:^|\.)(?:parseInt|parseFloat|Number|BigInt|Boolean|hash\w*|\w*Hash|md5|sha\d*|digest|escape\w*|sanitize\w*|safe\w*|validate\w*|verify\w*|encodeURI|encodeURIComponent|quote\w*|isNaN|isFinite)$/i;
 
 /** Does `node` carry the tainted value outside of any cleaning call? */
 function carriesTaint(node: SyntaxNode, source: SyntaxNode, names: Set<string>): boolean {

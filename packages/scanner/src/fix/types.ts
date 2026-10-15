@@ -48,4 +48,4 @@ export interface FixOptions {
 }
 
 /** Rules that have an automatic fixer. */
-export const FIXABLE_RULES = ["sql-injection", "insecure-jwt", "hardcoded-secret", "insecure-cors", "supabase-rls"] as const;
+export const FIXABLE_RULES = ["sql-injection", "insecure-jwt", "hardcoded-secret", "insecure-cors", "supabase-rls", "xss", "open-redirect"] as const;
