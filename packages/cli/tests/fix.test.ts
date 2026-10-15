@@ -85,14 +85,14 @@ describe("security-hub fix", () => {
     const onlyJwt = run(dir, { only: ["insecure-jwt"] });
     expect(onlyJwt.text).toContain("token.js");
     expect(onlyJwt.text).not.toContain("q.js");
-    const bad = run(dir, { only: ["xss"] });
+    const bad = run(dir, { only: ["idor"] });
     expect(bad.code).toBe(2);
   });
 
   it("says so when there is nothing to fix, and lists what a person has to do", () => {
     const dir = project({ "ok.js": "module.exports = 1;\n" });
     expect(run(dir).text).toContain("Nothing to fix automatically.");
-    const leftovers = project({ "p.js": `const jwt = require("jsonwebtoken");\napp.get("/p", (req, res) => res.send(jwt.decode(req.headers.authorization)));\n` });
+    const leftovers = project({ "p.js": `const jwt = require("jsonwebtoken");\napp.get("/p", (req, res) => res.json(jwt.decode(req.headers.authorization)));\n` });
     const { text } = run(leftovers);
     expect(text).toContain("Left for you (1)");
     expect(text).toContain("jwt.verify");
