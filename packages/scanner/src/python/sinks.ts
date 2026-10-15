@@ -45,6 +45,9 @@ function firstText(node: SyntaxNode | undefined): string {
   return node.text;
 }
 
+// `redirect("/items/" + x)`, `redirect(f"{reverse('home')}?id={x}")`: the target starts with a path of this site, so the caller cannot change the host.
+const SAME_SITE_PREFIX = /^[rbfu]*["'](?:\/(?![/\\])|\{\s*(?:reverse|reverse_lazy|url_for|resolve_url)\()/i;
+
 function hasFixedHost(argument: SyntaxNode | undefined): boolean {
   return FIXED_HOST.test(firstText(argument));
 }
@@ -175,7 +178,7 @@ export function sinksOf(call: SyntaxNode, fileText: string): SinkSpec[] {
 
   if (REDIRECT_CALL.test(name)) {
     const target = first ?? keywords.get("url") ?? keywords.get("to");
-    if (target) {
+    if (target && !SAME_SITE_PREFIX.test(firstText(target))) {
       specs.push({
         rule: "open-redirect",
         severity: "medium",

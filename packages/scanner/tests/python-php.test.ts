@@ -244,3 +244,51 @@ describe("Python and PHP in a project scan", () => {
     expect(fixPromptFor(phpFinding as NonNullable<typeof phpFinding>)).toContain("prepare(");
   });
 });
+
+describe("Python and PHP precision fixes (validation round 12)", () => {
+  it("a redirect that starts with a path of this site is not an open redirect", () => {
+    const view = (target: string): string => `def v(request):\n    item = request.GET['id']\n    return redirect(${target})\n`;
+    expect(py(view("f\"{reverse('home')}?open={item}\""), "open-redirect")).toHaveLength(0);
+    expect(py(view("'/items/' + item"), "open-redirect")).toHaveLength(0);
+    expect(py(view("item"), "open-redirect")).toHaveLength(1);
+    expect(py(view("'//' + item"), "open-redirect")).toHaveLength(1);
+    expect(php("header('Location: /items/' . $_GET['id']);", "open-redirect")).toHaveLength(0);
+    expect(php("header('Location: ' . $_GET['u']);", "open-redirect")).toHaveLength(1);
+  });
+
+  it("$_FILES: the path PHP chose and the size are not the caller's, the file name is", () => {
+    expect(php("$p = $_FILES['f']['tmp_name']; echo file_get_contents($p);", "path-traversal")).toHaveLength(0);
+    expect(php("echo file_get_contents($_FILES['f']['name']);", "path-traversal")).toHaveLength(1);
+  });
+
+  it("Laravel validation rules, seeders and Django's tests.py are not credentials", () => {
+    expect(php("$rules = ['password' => 'required|string|min:8|confirmed'];", "hardcoded-secret")).toHaveLength(0);
+    expect(php("$u = ['password' => 'Zk3!p9Lq7#vX2mRt5Nb8'];", "hardcoded-secret")).toHaveLength(1);
+    expect(php("class DemoSeeder { const DEMO_PASSWORD = 'Zk3!p9Lq7#vX2mRt5Nb8'; }", "hardcoded-secret", "/app/database/seeders/DemoSeeder.php")).toHaveLength(0);
+    expect(py("PASSWORD = 'Zk3!p9Lq7#vX2mRt5Nb8'\n", "hardcoded-secret", "/app/screening/tests.py")).toHaveLength(1); // scanSource does not skip tests: the walk does
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hub-tests-py-"));
+    fs.writeFileSync(path.join(dir, "tests.py"), "PASSWORD = 'Zk3!p9Lq7#vX2mRt5Nb8'\n");
+    fs.writeFileSync(path.join(dir, "views.py"), "PASSWORD = 'Zk3!p9Lq7#vX2mRt5Nb8'\n");
+    expect(scanPath(dir, { config: false }).results.map((r) => path.basename(r.file))).toEqual(["views.py"]);
+  });
+
+  it("a minified or bundled file is skipped with a note, not analysed for 15 seconds", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hub-min-"));
+    fs.writeFileSync(path.join(dir, "bundle.js"), `var a=${"x+1;".repeat(20000)}`); // one 80 KB line
+    fs.writeFileSync(path.join(dir, "app.js"), "app.get('/x', (req, res) => { exec('echo ' + req.query.a); });\n");
+    const results = scanPath(dir, { config: false }).results;
+    const bundle = results.find((r) => r.file.endsWith("bundle.js"));
+    expect(bundle?.parseError).toMatch(/minified or bundled/);
+    expect(results.find((r) => r.file.endsWith("app.js"))?.findings.length).toBeGreaterThan(0);
+  });
+});
+
+describe("development settings files", () => {
+  it("DEBUG = True is reported in settings.py but not in settings/dev.py or a tests settings file", () => {
+    expect(py("DEBUG = True\n", "debug-mode", "/app/proj/settings.py")).toHaveLength(1);
+    expect(py("DEBUG = True\n", "debug-mode", "/app/config/settings/dev.py")).toHaveLength(0);
+    expect(py("DEBUG = True\n", "debug-mode", "/app/proj_tests/settings.py")).toHaveLength(0);
+    // a project that merely lives in a folder called "test" is not a test settings file
+    expect(py("DEBUG = True\n", "debug-mode", "/home/me/test/shop/proj/settings.py")).toHaveLength(1);
+  });
+});

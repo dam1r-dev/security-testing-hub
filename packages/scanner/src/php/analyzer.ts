@@ -2,6 +2,7 @@ import { checkBudgetNow } from "../budget";
 import { Analyzer } from "../analyzers/base-analyzer";
 import { ParsedFile, SupportedLanguage } from "../parsers/ast-parser";
 import { SyntaxNode, findNodes, snippet, toLocation } from "../parsers/utils";
+import { isFixturePath } from "../analyzers/hardcoded-secret";
 import { findKnownSecrets, isPlaceholder, isSensitiveName, isSigningSecretName, looksLikeSecret, normalizeName, redact } from "../secrets/detect";
 import { Finding, Severity, VulnerabilityType } from "../types";
 import { argumentsOf, calleeName, carriedBy, isRequestObject, trackTaint } from "./engine";
@@ -128,7 +129,7 @@ function sinksOf(node: SyntaxNode, text: string): Sink[] {
     }
     if (lower === "header") {
       const first = args[0];
-      if (first && /^["']\s*location\s*:/i.test(firstText(first))) {
+      if (first && /^["']\s*location\s*:/i.test(firstText(first)) && !/^["']\s*location\s*:\s*\/(?![/\\])/i.test(firstText(first))) {
         out.push({
           rule: "open-redirect",
           severity: "medium",
@@ -456,9 +457,11 @@ export class PhpAnalyzer implements Analyzer {
       }
     }
 
-    // 4. Secrets written in the code.
+    // 4. Secrets written in the code. (Seeders, fixtures and mocks hold made-up credentials on purpose: judged by name they are noise.)
+    const fixtureLike = isFixturePath(filePath);
     const lines = text.split("\n");
     for (const match of findKnownSecrets(text)) {
+      if (fixtureLike && /private key/i.test(match.secret.label)) continue;
       const before = text.slice(0, match.index);
       const line = before.split("\n").length;
       const column = match.index - before.lastIndexOf("\n");
@@ -477,7 +480,7 @@ export class PhpAnalyzer implements Analyzer {
       const rawName = value === undefined ? undefined : assignedName(literal);
       if (value === undefined || !rawName || value.length < 4) continue;
       const name = normalizeName(rawName);
-      if (isPlaceholder(value)) continue;
+      if (isPlaceholder(value) || fixtureLike) continue;
       const signing = isSigningSecretName(name);
       if (!signing && !(isSensitiveName(name) && looksLikeSecret(value, name))) continue;
       if (signing && !looksLikeSecret(value, name) && value.length < 8) continue;
