@@ -2,7 +2,7 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
-## Unreleased
+## 0.7.0 - 2026-10-15
 
 ### Added
 - **The scanner runs in the browser.** On the website, drop a project folder and it is scanned on your computer, with no
