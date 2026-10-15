@@ -3,15 +3,27 @@ import { AnalyzerConfig, BaseAnalyzer, firstArgument } from "./base-analyzer";
 import { isRequestSource } from "./sources";
 
 // fetch(url), request(url), got(url) — direct function calls.
-const DIRECT_CALLEE_PATTERN = /^(fetch|request|got)$/;
+const DIRECT_CALLEE_PATTERN = /^(fetch|request|got|needle|superagent|ky|phin|bent)$/;
 // axios.get(url), http.get(url), https.request(url), axios({ url }) style client methods.
-const HTTP_CLIENT_OBJECT_PATTERN = /^(axios|http|https)$/;
+const HTTP_CLIENT_OBJECT_PATTERN = /^(axios|http|https|needle|superagent|got|ky|undici|phin|urllib|bent)$/;
 const HTTP_CLIENT_METHOD_PATTERN = /^(get|post|put|delete|patch|head|request)$/;
+
+// `https://oeis.org/${id}`: the scheme and the whole host are written in the code, so the caller can change the path or the
+// query but not WHERE the request goes. (An attacker-chosen path on a fixed host is not server-side request forgery.)
+const FIXED_HOST_PREFIX = /^[`'"]https?:\/\/[A-Za-z0-9.-]+(?::\d+)?[\/?#]/;
+
+function hasFixedHost(node: SyntaxNode): boolean {
+  const first = node.childForFieldName("arguments")?.namedChild(0);
+  if (!first) return false;
+  if (first.type === "binary_expression") return FIXED_HOST_PREFIX.test(first.childForFieldName("left")?.text ?? "");
+  return (first.type === "template_string" || first.type === "string") && FIXED_HOST_PREFIX.test(first.text);
+}
 
 function isSink(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;
   const callee = node.childForFieldName("function");
   if (!callee) return false;
+  if (hasFixedHost(node)) return false;
 
   if (callee.type === "identifier") {
     return DIRECT_CALLEE_PATTERN.test(callee.text);

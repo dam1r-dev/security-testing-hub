@@ -299,6 +299,57 @@ of the 25 projects, so those two rules are **tested on fixtures only**: nothing 
 on real code, and nothing says they miss anything either. Return-value taint added no finding on these projects; its
 precision is checked by the regression tests (`return-taint.test.ts`), its recall is not measured.
 
+## Round 11: SvelteKit, Remix, Nuxt, tRPC, Hono and four new rules, on 24 projects not seen before (+ NodeGoat)
+
+The 25 projects below (24 new ones and NodeGoat) were picked from GitHub topic searches (`sveltekit`, `remix`, `trpc`, `hono`, `nuxt3`, `stripe-webhooks`,
+`lemonsqueezy`), small (under 12 MB), recently pushed, few stars: the kind of code the scanner is for. Read-only shallow clones,
+nothing installed or run. OWASP NodeGoat was added as the known-vulnerable reference.
+
+**First pass** (before any tuning), 24 projects: **31 findings, 11 real (35%)**. The 20 false positives:
+
+| Cause | Count | Fix |
+|---|---|---|
+| Seed / fixture files with made-up passwords and a demo SSH key (`seed/login-record-seed.ts`, `devSeed.ts`) | 11 | credentials judged by name are skipped in seed / fixture / mock / story files (the file's own name and two folders above it only); provider-format tokens are still reported there |
+| `/regex/.exec(file)` taken for `child_process.exec` | 1 (+1 more through it) | a regex literal or a regex-named receiver is not a shell |
+| `fetch(`https://oeis.org/${param}`)`: scheme and host fixed, only the path is the caller's | 2 | not SSRF when the host is written in the code |
+| `new Response(request.body)`, used to read a stream and sent as `text/plain` anyway | 2 | `new Response(x)` is XSS only when the options declare HTML; `c.html()` (Hono) added as a sink |
+| `options.scopes.map((s) => escapeHtml(s)).join("")` carried taint through the callback | 1 | a callback that cleans each element (escape / sanitize / encodeURI / Number...) cleans the result |
+| A schema written as a string (`'v.pipe(v.string(), v.minLength(1))'`) taken for a secret | 2 | a value that is a call expression is code, not a credential |
+
+Left as they are: `pinCatalogAlbum(..., apple_music_id)` (a zod-validated number reaching a fixed host; the scanner cannot see types) and a
+dev smoke script that reflects a query value into an `.m3u8` playlist.
+
+**Second pass: 13 findings in the 24 projects, 11 real (85%).** The real ones: `getSession()` trusted on the server in a SvelteKit
+hook (Supabase's advice at the time, now outdated), an unchecked `next` redirect in two Supabase auth callbacks (`${origin}${next}`
+is open to `@evil.com`), a user-supplied `source_url` fetched without a host check, a reflected error in a local OAuth callback, and
+six Prisma-migration tables in a project that also uses Supabase (no RLS).
+
+**New framework support, measured:** `examples/vulnerable-frameworks` (a fixture with the same mistakes in each style) is found in full,
+and its safe twins are not reported (`frameworks.test.ts`). On real code the new access-control check reported 8 handlers in Prisma's
+own example apps (Nuxt `server/routes/*`, a React Router `action`, tRPC `publicProcedure.mutation`s): all accurate, none of them check
+anyone, they are demos. **No** SvelteKit / Remix / Nuxt / tRPC handler in the 24 new projects was reported wrongly; but most of them have
+no mutation handler at all, so this is a weak test of precision for those frameworks, not proof.
+
+**New rules on real code** (every project downloaded so far, rounds 6-11): `mass-assignment` 6 findings (3 `create(req.body)` / `update(id, req.body)` in a
+real fleet-management app and 3 in Prisma's deployment examples: all accurate), `insecure-token-storage` 9 (a real app, Juice Shop; the
+`__session` cookie set from JavaScript in Firebase's own sample is the documented pattern but still readable by scripts),
+`prototype-pollution` 2 (Juice Shop: `solves[key][mode] = verdict` with a request-chosen key), `webhook-signature` 0 (its one first-pass
+hit was a smoke-test script that lists Stripe event names: the handler test was tightened). Only one project in the corpus has a payment
+webhook, so this rule's recall on real code is **not measured**; it is tested on fixtures.
+
+**Re-run of the earlier corpora** after the precision changes: round 9's 16 projects: 41 findings (unchanged); round 6/8's: no old finding
+lost; the only increase is the 8 access-control findings above.
+
+**NodeGoat** (deliberately vulnerable): 13 findings, all in the code it is meant to have: 3 `eval(req.body.*)`, the `$where` NoSQL injection, the
+open redirect, the SSRF through `needle.get(req.query.url + ...)` (**found now: `needle`, `superagent`, `ky`, `undici` were not known HTTP
+clients**), username enumeration, no rate limit on login, CSRF, and 4 hard-coded secrets. Still missed, as listed below: the IDOR on
+`/allocations/:userId` (the `isLoggedIn` middleware reads `req.session`, which the rule takes as proof of an ownership check; a comment
+saying `req.session` used to count too, which is fixed), `/benefits` without an admin check, XSS through templates, ReDoS, cookie flags.
+
+**Cost:** the scan is dominated by the data-flow rules, each of which walks every function once; four more rules added about 7%.
+The slowest project (322 files, one 150 KB route file) takes 25 s in total, as before. Not optimised yet: the rules do not share the
+work of finding request sources.
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are

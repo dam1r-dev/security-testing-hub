@@ -1,5 +1,5 @@
 import { ParsedFile } from "../parsers/ast-parser";
-import { findNodes, snippet, toLocation, SyntaxNode } from "../parsers/utils";
+import { findNodes, snippet, toLocation, SyntaxNode, withoutComments } from "../parsers/utils";
 import { Finding } from "../types";
 import { Analyzer } from "./base-analyzer";
 import { findNextHandlers, idLikeDynamicSegments, isNextRouteFile, routeSegments } from "./nextjs-routes";
@@ -43,7 +43,7 @@ const ROLE_GATE = /\b(?:checkRole|requireRole|hasRole|authorizeRoles?|restrictTo
 
 /** True when this code, or a project function it calls (two levels deep), looks at who the caller is. */
 function checksOwnership(node: SyntaxNode, info: FileInfo, project: ProjectContext, depth: number): boolean {
-  if (OWNERSHIP_CHECK_HINT.test(node.text)) return true;
+  if (OWNERSHIP_CHECK_HINT.test(withoutComments(node.text))) return true;
   if (depth <= 0) return false;
   for (const call of info.callsIn(node)) {
     const fn = project.resolveCallee(call, info);
@@ -120,7 +120,7 @@ export class IdorAnalyzer implements Analyzer {
     const routes = findIdParamRoutes(parsed.tree.rootNode);
 
     return routes
-      .filter((route) => !OWNERSHIP_CHECK_HINT.test(route.call.text) && !ROLE_GATE.test(route.call.text))
+      .filter((route) => !OWNERSHIP_CHECK_HINT.test(withoutComments(route.call.text)) && !ROLE_GATE.test(route.call.text))
       .filter((route) => !info || !handlerChecksOwnership(route.call, info, project))
       .map((route) => ({
         ruleId: "idor" as const,
@@ -149,7 +149,7 @@ export class IdorAnalyzer implements Analyzer {
 
     const handlers = findNextHandlers(parsed.tree.rootNode);
     return handlers
-      .filter((h) => (info ? !checksOwnership(h.node, info, project, 2) : !OWNERSHIP_CHECK_HINT.test(h.node.text)))
+      .filter((h) => (info ? !checksOwnership(h.node, info, project, 2) : !OWNERSHIP_CHECK_HINT.test(withoutComments(h.node.text))))
       .filter((h) => !ROLE_GATE.test(h.node.text))
       // A handler that takes no arguments cannot read the id from the URL at all.
       .filter((h) => (h.node.childForFieldName("parameters")?.namedChildCount ?? 1) > 0)

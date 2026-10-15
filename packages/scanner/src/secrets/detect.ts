@@ -59,6 +59,8 @@ export function looksLikeSecret(value: string, normalizedName?: string): boolean
   const keyword = normalizedName?.split("_").pop();
   const isWordsInCamelCase = /^[a-z]+(?:[A-Z][a-z0-9]*)+$/.test(value) || /^(?:[A-Z][a-z0-9]+){2,}$/.test(value);
   if (isWordsInCamelCase && keyword && value.toLowerCase().includes(keyword)) return false;
+  // a schema or a call written as a string (`v.pipe(v.string(), v.minLength(1))`, `z.string().min(1)`) is code, not a credential
+  if (/^[\w$.]+\(.*\)$/.test(value)) return false;
   if (isPasswordHash(value)) return false;
   const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((re) => re.test(value)).length;
   return classes >= 2 && entropy(value) >= 3.0;

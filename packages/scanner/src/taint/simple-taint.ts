@@ -104,6 +104,9 @@ function subtreeContainsNode(root: SyntaxNode, target: SyntaxNode): boolean {
   return root.startIndex <= target.startIndex && root.endIndex >= target.endIndex;
 }
 
+const TRANSFORMING_METHODS = /^(?:map|flatMap|reduce|reduceRight)$/;
+const CLEANING_CALL_IN_CALLBACK = /(?:escape\w*|sanitize\w*|encodeURI\w*|parseInt|parseFloat|Number|BigInt|hash\w*|quote\w*)\s*\(/i;
+
 /**
  * True if `node` sits inside `boundary` WITHOUT being passed as an argument to
  * some intermediate function call along the way (e.g. template-literal
@@ -119,6 +122,14 @@ export function isDirectlyWithin(node: SyntaxNode, boundary: SyntaxNode): boolea
     const parent: SyntaxNode | null = current.parent;
     if (!parent) return false;
     if (parent.type === "arguments" && parent.id !== boundary.id) return false;
+    // `items.map((i) => escapeHtml(i)).join("")`: a callback that cleans each element decides what comes out, not the receiver.
+    if (parent.type === "member_expression" && parent.childForFieldName("object")?.id === current.id) {
+      const call = parent.parent;
+      if (call?.type === "call_expression" && call.childForFieldName("function")?.id === parent.id && TRANSFORMING_METHODS.test(parent.childForFieldName("property")?.text ?? "")) {
+        const callback = call.childForFieldName("arguments")?.namedChild(0);
+        if (callback && (callback.type === "arrow_function" || callback.type === "function_expression") && CLEANING_CALL_IN_CALLBACK.test(callback.text)) return false;
+      }
+    }
     // `table[userKey]` picks WHICH trusted entry is used; the value that comes out is
     // not attacker-written (e.g. `const cfg = providers[name]; fetch(cfg.url)`).
     if (parent.type === "subscript_expression" && parent.childForFieldName("index")?.id === current.id) return false;

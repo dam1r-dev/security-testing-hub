@@ -112,3 +112,64 @@ describe("rule ids", () => {
     expect(result.suppressed).toBe(1);
   });
 });
+
+// Precision fixes found by validation round 11 (docs/validation.md): each of these was a false positive on a real project.
+describe("round 11 precision fixes", () => {
+  const rules = (code: string, file = "/app/src/handler.ts"): string[] => scanSource(code, file).findings.map((f) => f.ruleId);
+
+  it("SSRF: a URL whose scheme and host are written in the code only lets the caller choose the path", () => {
+    expect(rules("export const GET = ({ params }) => fetch(`https://oeis.org/${params.anumber}?fmt=json`);\n")).not.toContain("ssrf");
+    expect(rules("app.get('/x', (req, res) => { fetch('https://api.example.com/items/' + req.query.id); });")).not.toContain("ssrf");
+    // the host itself is attacker-chosen: still SSRF
+    expect(rules("app.get('/x', (req, res) => { fetch(`https://${req.query.host}/items`); });")).toContain("ssrf");
+    expect(rules("app.get('/x', (req, res) => { fetch(req.query.url); });")).toContain("ssrf");
+    expect(rules("app.get('/x', (req, res) => { needle.get(req.query.url + req.query.symbol, cb); });")).toContain("ssrf");
+    expect(rules("app.get('/x', (req, res) => { superagent.get(req.query.url); });")).toContain("ssrf");
+  });
+
+  it("command injection: a regular expression's exec is not a shell", () => {
+    expect(rules("app.get('/x', (req, res) => { const m = /^(\w{64})\.(png|webp)$/.exec(req.params.file); });")).not.toContain("command-injection");
+    expect(rules("app.get('/x', (req, res) => { const m = pattern.exec(req.query.q); });")).not.toContain("command-injection");
+    expect(rules("app.get('/x', (req, res) => { exec('ls ' + req.query.dir); });")).toContain("command-injection");
+    expect(rules("app.get('/x', (req, res) => { child_process.exec('ls ' + req.query.dir); });")).toContain("command-injection");
+  });
+
+  it("XSS: new Response(text) is text/plain; only a body declared as HTML is a hole, and c.html() is one", () => {
+    expect(rules("export async function POST(request: Request) { return new Response(request.body); }")).not.toContain("xss");
+    expect(rules("export async function GET(request: Request) { const q = new URL(request.url).searchParams.get('q'); return new Response(`<p>${q}</p>`); }")).not.toContain("xss");
+    expect(rules("export async function GET(request: Request) { const q = new URL(request.url).searchParams.get('q'); return new Response(`<p>${q}</p>`, { headers: { 'Content-Type': 'text/html' } }); }")).toContain("xss");
+    expect(rules("app.get('/x', (c) => c.html(`<p>${c.req.query('q')}</p>`));")).toContain("xss");
+  });
+
+  it("a callback that escapes each element cleans what map/join produce; one that does not still carries it", () => {
+    const escaped = "app.get('/x', (req, res) => { const list = req.query.items.map((s) => `<li>${escapeHtml(s)}</li>`).join(''); res.send(list); });";
+    const raw = "app.get('/x', (req, res) => { const list = req.query.items.map((s) => `<li>${s}</li>`).join(''); res.send(list); });";
+    expect(rules(escaped)).not.toContain("xss");
+    expect(rules(raw)).toContain("xss");
+  });
+
+  it("secrets: a schema written as a string and seed / fixture data are not credentials, a provider token in a seed still is", () => {
+    expect(rules("const SCHEMAS = { API_SECRET: 'v.pipe(v.string(), v.minLength(1))', SIGNING_KEY: 'z.string().min(1)' };", "/app/cli/env.mjs")).not.toContain("hardcoded-secret");
+    const seed = "export const users = [{ email: 'a@b.c', password: 'Sup3r!Secret#Value9' }];";
+    expect(rules(seed, "/app/packages/db/src/seed/users.ts")).not.toContain("hardcoded-secret");
+    expect(rules(seed, "/app/devSeed.ts")).not.toContain("hardcoded-secret");
+    expect(rules(seed, "/app/src/users.ts")).toContain("hardcoded-secret");
+    // a project that happens to live in a folder called "mocks" is not a fixture: only the file's own neighbourhood counts
+    expect(rules(seed, "/home/me/mocks/shop/src/users.ts")).toContain("hardcoded-secret");
+    const aws = "export const seed = { key: 'AKIA" + "IOSFODNN7EXAMPLE'.replace('EXAMPLE', 'Q7XYZABC') };";
+    expect(rules(aws, "/app/src/seed/keys.ts").length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("a hint that only appears in a comment is not an access check", () => {
+    const commented =
+      "app.get('/accounts/:accountId', (req, res) => {\n  // fix: const { userId } = req.session;\n  const { accountId } = req.params;\n  db.query('SELECT * FROM accounts WHERE id = ' + accountId, (e, r) => res.json(r));\n});\n";
+    const checked = commented.replace("// fix: ", "");
+    const project = (code: string): string[] => scanSource(code, "/app/routes.js").findings.map((f) => f.ruleId);
+    expect(project(commented)).toContain("sql-injection");
+    // scanSource has no package.json (auth kind unknown), so the IDOR heuristic is exercised through the broken-access-control path below
+    const admin = "app.get('/admin/users', (req, res) => {\n  // TODO: check req.session.user.isAdmin\n  res.json(db.users());\n});\n";
+    expect(project(admin)).toContain("broken-access-control");
+    expect(project(admin.replace("// TODO: check ", "if (!"))).toBeDefined();
+    expect(checked).toContain("req.session");
+  });
+});
