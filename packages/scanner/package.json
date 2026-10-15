@@ -38,5 +38,9 @@
     "directory": "packages/scanner"
   },
   "homepage": "https://github.com/dam1r-dev/security-testing-hub#readme",
-  "bugs": "https://github.com/dam1r-dev/security-testing-hub/issues"
+  "bugs": "https://github.com/dam1r-dev/security-testing-hub/issues",
+  "optionalDependencies": {
+    "tree-sitter-php": "0.23.12",
+    "tree-sitter-python": "0.23.4"
+  }
 }

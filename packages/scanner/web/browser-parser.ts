@@ -7,6 +7,8 @@ import type { ParsedFile, SupportedLanguage } from "../src/parsers/ast-parser";
 
 export type { ParsedFile, SupportedLanguage };
 
+export const JS_LANGUAGES: readonly SupportedLanguage[] = ["javascript", "typescript", "tsx"];
+
 export interface WasmSources {
   /** tree-sitter.wasm from web-tree-sitter */
   runtime: Uint8Array;
@@ -14,6 +16,8 @@ export interface WasmSources {
   javascript?: Uint8Array;
   typescript?: Uint8Array;
   tsx?: Uint8Array;
+  python?: Uint8Array;
+  php?: Uint8Array;
 }
 
 const EXTENSION_TO_LANGUAGE: Record<string, SupportedLanguage> = {
@@ -23,6 +27,8 @@ const EXTENSION_TO_LANGUAGE: Record<string, SupportedLanguage> = {
   ".cjs": "javascript",
   ".ts": "typescript",
   ".tsx": "tsx",
+  ".py": "python",
+  ".php": "php",
 };
 
 // Same limit as the native parser: real files parse in milliseconds, a hostile one never finishes.
@@ -33,7 +39,7 @@ let languages: Partial<Record<SupportedLanguage, Parser.Language>> | undefined;
 export async function initParser(sources: WasmSources): Promise<void> {
   await Parser.init({ wasmBinary: sources.runtime });
   languages = {};
-  for (const language of ["javascript", "typescript", "tsx"] as const) {
+  for (const language of ["javascript", "typescript", "tsx", "python", "php"] as const) {
     const wasm = sources[language];
     if (wasm) languages[language] = await Parser.Language.load(wasm);
   }

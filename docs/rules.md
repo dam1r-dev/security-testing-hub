@@ -362,6 +362,48 @@ A credential kept where any script can read it: `localStorage.setItem("token", .
 Keys count when they name a credential (`token`, `jwt`, `bearer`, `secret`, `session_id`, `api_key`, `password`). UI state (`theme`, `authMode`), CSRF
 tokens and flags (`hasToken`) do not. The fix is a server-set cookie with `HttpOnly`, `Secure` and `SameSite`.
 
+## Python and PHP
+
+Python (`.py`: Flask, FastAPI, Django) and PHP (`.php`: plain scripts, Laravel, Symfony) are read by their own analyzers (`packages/scanner/src/python`,
+`.../php`) and reported under the same rule ids, so `security-hub-ignore`, `.security-hub.json`, the baseline and the score work as for JavaScript.
+The tree-sitter grammars are **optional packages**: when one is missing the files are listed with a note, never skipped silently.
+
+**How data is followed.** One function at a time (the top level of a PHP script is a scope too), statements in the order they run: a variable
+that is assigned something built from request data holds request data from then on; assigned something clean, it does not. What carries a value
+on: f-strings, `+` / `.` / `%`, `.format()`, `.join()`, string methods, subscripts and attributes of a tainted object, `str()`, `sprintf`, `trim`...
+What stops it: a call that cleans (Python `int()`, `escape()`, `quote()`, `secure_filename()`; PHP `(int)`, `intval`, `htmlspecialchars`, `escapeshellarg`,
+`mysqli_real_escape_string`, `basename`...) and a bound parameter (`cursor.execute("... %s", (v,))`, `$stmt->execute([$v])`: the value is not in the SQL
+text). An unknown function is not followed. A helper defined **in the same file** is followed one call deep; a helper in another file is not (yet).
+
+| | Request input |
+|---|---|
+| Flask | `request.args`, `.form`, `.values`, `.json`, `.get_json()`, `.data`, `.cookies`, `.headers`, `.files`; the parameters of an `@app.route` / `@app.get` view (text, unless a converter such as `<int:id>` makes it a number) |
+| FastAPI | the parameters of a path operation (path, query and body values); a parameter typed `int`, `float`, `bool`, `UUID`, a date (also `Optional[...]`, `List[...]`) is converted by the framework and is not input; `Depends(...)` and `Request` are not input |
+| Django | `request.GET`, `.POST`, `.body`, `.COOKIES`, `.META`, `.FILES`, DRF `.data` / `.query_params`; the URL captures that come after `request` in a view |
+| PHP | `$_GET`, `$_POST`, `$_REQUEST`, `$_COOKIE`, `$_FILES`, `$_SERVER` (only the keys a caller writes: `HTTP_*`, `REQUEST_URI`, `QUERY_STRING`, `PATH_INFO`), `php://input`, Laravel `$request->input() / get() / all() / only() / route()`; the parameters of a public controller method (not `int`-typed ones, not `Request` objects) |
+
+| Rule | Python | PHP |
+|---|---|---|
+| `sql-injection` | `cursor.execute` / `executemany` / `executescript`, `Model.objects.raw`, `.extra`, `pandas.read_sql`, SQLAlchemy `session.execute(text(...))` with a built string | `mysqli_query`, `mysql_query`, `pg_query`, `->query` / `->exec` / `->prepare`, `DB::select / statement / raw / unprepared`, `whereRaw` / `selectRaw` / `orderByRaw` with a built string |
+| `command-injection` | `os.system`, `os.popen`, `subprocess.*` with `shell=True`, `asyncio.create_subprocess_shell` | `system`, `exec`, `shell_exec`, `passthru`, `popen`, `proc_open`, backticks |
+| `code-injection` | `eval`, `exec`, `compile`; request data as a template: `render_template_string`, `jinja2.Template`, `from_string` (server-side template injection) | `eval`, `assert`, `call_user_func`, `create_function`; `include` / `require` of a request-built path (file inclusion); `extract()` of request data |
+| `insecure-deserialization` | `pickle.load(s)`, `marshal`, `dill`, `yaml.load` without a safe loader, `yaml.unsafe_load`, `shelve` | `unserialize` |
+| `path-traversal` | `open`, `send_file`, `FileResponse`, `os.remove / listdir / ...`, `shutil.*`, `Path(x).read_text()` | `file_get_contents`, `fopen`, `readfile`, `file_put_contents`, `unlink`, `move_uploaded_file`, `copy`... |
+| `ssrf` | `requests`, `httpx`, `urllib`, `aiohttp` (a URL whose scheme and host are written in the code is fine) | `curl_init`, `CURLOPT_URL`, Guzzle / `Http::get`, `fsockopen`, `get_headers` |
+| `open-redirect` | `redirect`, `HttpResponseRedirect`, `RedirectResponse` (not when `url_has_allowed_host_and_scheme` or similar is used) | `header("Location: ...")`, `redirect()`, `Redirect::to` |
+| `xss` | a returned HTML string in a view (Flask sends it as HTML), `HttpResponse`, `HTMLResponse`, `make_response`, `Markup`, `mark_safe` | `echo`, `print`, `<?= ?>` |
+| `mass-assignment` | not yet | `Model::create($request->all())`, `->fill`, `->update`, `firstOrCreate`... |
+| `insecure-jwt` | `jwt.decode(..., verify=False)`, `verify_signature: False`, the `none` algorithm | not yet |
+| `csrf` | `@csrf_exempt` | not yet |
+| `debug-mode` | `app.run(debug=True)`, `DEBUG = True` (not when read from the environment) | `ini_set("display_errors", 1)`, `phpinfo()` |
+| `hardcoded-secret` | provider token formats, `SECRET_KEY = "..."`, `password="..."`, dictionary entries | the same, `define("DB_PASSWORD", "...")`, array entries, properties |
+
+**Known limits.** Flow stays in one file; `flask.g`, class attributes and values stored in dictionaries are not followed; a decorator that
+transforms the arguments is not understood; Django's ORM (`filter`, `get`) is treated as safe because it parameterizes (a `**kwargs` expansion
+from request data is not examined); Python's `str.format` in an SQL string is reported, `sql.SQL(...).format(sql.Identifier(x))` (psycopg2) is not
+recognised as safe and is reported; PHP include / require resolution across files and Blade / Twig templates are not read. Test files (`test_*.py`,
+`*_test.py`, `conftest.py`, `*Test.php`) and `venv` / `site-packages` / `vendor` are skipped like JavaScript tests and `node_modules`.
+
 ## `ssrf` (high)
 
 - **Sinks:** `fetch(url)`, `request(url)`, `got(url)`, and

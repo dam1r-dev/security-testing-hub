@@ -27,7 +27,8 @@ export type VulnerabilityType =
   | "mass-assignment"
   | "prototype-pollution"
   | "webhook-signature"
-  | "insecure-token-storage";
+  | "insecure-token-storage"
+  | "debug-mode";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 

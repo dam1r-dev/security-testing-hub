@@ -39,6 +39,7 @@ export const RULE_IDS: readonly VulnerabilityType[] = [
   "prototype-pollution",
   "webhook-signature",
   "insecure-token-storage",
+  "debug-mode",
 ];
 
 // `// security-hub-ignore`, `/* security-hub-ignore */`, `// security-hub-ignore sql-injection, xss -- reason`

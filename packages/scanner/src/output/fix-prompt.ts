@@ -107,6 +107,10 @@ const HOW_TO_FIX: Record<VulnerabilityType, string> = {
     "Do not keep the login token in localStorage, sessionStorage or a cookie set from JavaScript. Let the server set it as a cookie with " +
     "HttpOnly, Secure and SameSite=Lax (or Strict), and read the user from a /me endpoint. Remove the token from the client code and " +
     "from places such as Redux state that are persisted to storage.",
+  "debug-mode":
+    "Turn debug mode off for anything that is reachable from the internet. In Flask do not call app.run(debug=True): read it from an " +
+    "environment variable that is only set on your laptop, and serve production with gunicorn or uvicorn. In Django set DEBUG from the " +
+    "environment (DEBUG = os.environ.get(\"DEBUG\") == \"1\"), set ALLOWED_HOSTS, and make sure the production environment does not set it.",
   "vulnerable-dependency":
     "Update the named package to a fixed version (npm install <package>@<fixed version>, or npm audit fix for the safe updates). " +
     "Read the changelog before a major upgrade and run the tests afterwards. Do not use npm audit fix --force without checking " +
@@ -124,6 +128,57 @@ const REQUIREMENTS = [
   "Avoid adding new dependencies unless there is no reasonable alternative.",
   "If you cannot fix it safely without more context, tell me exactly what you need to see.",
 ];
+
+// The advice above is written for JavaScript / TypeScript. Python and PHP findings get the same ideas in their own libraries.
+const HOW_TO_FIX_PYTHON: Partial<Record<VulnerabilityType, string>> = {
+  "sql-injection":
+    "Never put request data into SQL text with f-strings, % or +. Pass values separately: cursor.execute(\"SELECT ... WHERE id = %s\", (value,)) " +
+    "(sqlite3 uses ?), SQLAlchemy text(\"... :id\") with {\"id\": value} or the ORM, Django Model.objects.filter(...) or raw(sql, [value]). " +
+    "A table or column name cannot be a parameter: pick it from a fixed allowlist.",
+  "command-injection":
+    "Do not build a shell command from input. Use subprocess.run([\"program\", arg1, arg2], check=True) with a list and no shell=True, validate " +
+    "the value (an allowlist or a strict pattern), and never use os.system / os.popen with request data.",
+  "code-injection":
+    "Never eval / exec request data or pass it as a template (render_template_string, jinja2.Template). Parse the value instead " +
+    "(json.loads, int(), ast.literal_eval) and keep templates fixed: render_template(\"page.html\", value=value).",
+  "path-traversal":
+    "Reduce request data to a plain file name (werkzeug.utils.secure_filename, os.path.basename), join it to a fixed folder, and check that " +
+    "the resolved path is still inside the folder (Path(base, name).resolve().is_relative_to(base)). Prefer send_from_directory.",
+  ssrf: "Validate the URL against an allowlist of hosts and schemes before requesting it, resolve the host and refuse loopback, link-local (169.254.x.x) and private ranges, and do not follow redirects blindly (allow_redirects=False).",
+  xss: "Escape request data before it goes into HTML: markupsafe.escape(value) / django.utils.html.escape, or return render_template(...) / a Django template, which escape by default. Never mark user input safe (Markup, mark_safe).",
+  "open-redirect":
+    "Redirect only to paths you build yourself (url_for, reverse). If the target comes from the request, check it: Django url_has_allowed_host_and_scheme(url, allowed_hosts={request.get_host()}), or accept only values that start with a single / and not //.",
+  "insecure-deserialization": "Do not unpickle / yaml.load data that came from outside. Use json.loads for data and yaml.safe_load for YAML; if pickle is unavoidable, sign the data (hmac) and verify it before loading.",
+  "hardcoded-secret":
+    "Do NOT write the real value anywhere in your answer or the code. Replace the literal with os.environ[\"NAME\"] (or Django's django-environ / Flask's app.config.from_prefixed_env()), put the real value in a .env file that is in .gitignore, and tell me to rotate the leaked secret.",
+  "insecure-jwt": "Decode tokens with the secret and an explicit algorithms=[\"HS256\"] list; never verify=False, never verify_signature False, never the \"none\" algorithm. Issue tokens with an exp claim.",
+  csrf: "Remove @csrf_exempt, and send the CSRF token with every state-changing request (Django {% csrf_token %} / the X-CSRFToken header; Flask-WTF CSRFProtect). Token-authenticated APIs (Authorization header) do not need it; cookie-authenticated ones do.",
+};
+
+const HOW_TO_FIX_PHP: Partial<Record<VulnerabilityType, string>> = {
+  "sql-injection":
+    "Never put request data into SQL text. Use a prepared statement: $stmt = $pdo->prepare(\"SELECT ... WHERE id = ?\"); $stmt->execute([$value]); " +
+    "(mysqli: bind_param; Laravel: DB::select(\"... ?\", [$value]) or the query builder / Eloquent). A table or column name cannot be bound: pick it from an allowlist.",
+  "command-injection":
+    "Avoid the shell for anything that uses request data: use PHP functions instead, or build the command from fixed text plus escapeshellarg($value) " +
+    "for each value, after validating the value (an allowlist or a strict pattern).",
+  "code-injection":
+    "Never eval request data, and never include / require a path built from it. Map the value to a fixed list of pages or classes (a match or an array lookup) and include that. Do not use extract() on request data.",
+  "path-traversal": "Reduce request data to a file name with basename(), join it to a fixed folder, and check that realpath() of the result starts with that folder. Never pass a request value straight to file_get_contents / fopen / readfile.",
+  ssrf: "Validate the URL against an allowlist of hosts and schemes before requesting it, resolve the host and refuse loopback, link-local (169.254.x.x) and private ranges, and disable redirects (CURLOPT_FOLLOWLOCATION false).",
+  xss: "Escape request data for HTML where it is printed: htmlspecialchars($value, ENT_QUOTES, \"UTF-8\"). In Laravel Blade use {{ $value }} (escaped), never {!! $value !!} for user input.",
+  "open-redirect": "Redirect only to routes you build yourself (route(\"name\")). If the target comes from the request, check its host against an allowlist (parse_url) or accept only paths that start with a single / and not //.",
+  "insecure-deserialization": "Do not unserialize() data that came from outside: use json_decode, or unserialize($data, [\"allowed_classes\" => false]) and sign the data with hash_hmac.",
+  "hardcoded-secret":
+    "Do NOT write the real value anywhere in your answer or the code. Replace the literal with getenv(\"NAME\") (Laravel: env(\"NAME\") in a config file), put the real value in .env, keep .env out of git, and tell me to rotate the leaked secret.",
+  "mass-assignment": "Do not pass $request->all() to create / update / fill. Use $request->validated() with a rule for each accepted field, or $request->only([...]), and keep sensitive columns out of $fillable (or list them in $guarded).",
+};
+
+function adviceFor(finding: Finding): string {
+  const file = finding.location.file.toLowerCase();
+  const specific = file.endsWith(".py") ? HOW_TO_FIX_PYTHON[finding.ruleId] : file.endsWith(".php") ? HOW_TO_FIX_PHP[finding.ruleId] : undefined;
+  return specific ?? HOW_TO_FIX[finding.ruleId];
+}
 
 export interface FixPromptOptions {
   /** Show file paths relative to this folder. */
@@ -161,7 +216,7 @@ function issueBlock(finding: Finding, options: FixPromptOptions): string[] {
     `Where: ${displayFile(finding, options)}, line ${finding.location.startLine}`,
     `Problem: ${oneLine(finding.message, 700)}`,
     `Code: ${oneLine(finding.sinkSnippet, 200)}`,
-    `How to fix: ${HOW_TO_FIX[finding.ruleId]}`,
+    `How to fix: ${adviceFor(finding)}`,
   ];
 }
 

@@ -23,7 +23,7 @@ response bodies, `exec()` with interpolated input) because that's what's
 common in training data. This tool is a fast, local pre-commit/CI check
 tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 
-## What it detects (29 rules)
+## What it detects (30 rules)
 
 | Vulnerability | CWE | Analyzer |
 |---|---|---|
@@ -55,9 +55,18 @@ tuned for exactly the patterns that show up in "vibe-coded" Express apps.
 | Prototype pollution | [CWE-1321](https://cwe.mitre.org/data/definitions/1321.html) | request data deep-merged (`_.merge`, `deepmerge`, `$.extend(true, ...)`) or used as the keys of `a[k1][k2] = v` |
 | Webhook without signature check | [CWE-345](https://cwe.mitre.org/data/definitions/345.html) | Stripe / Lemon Squeezy / Paddle handlers that act on payment events without verifying the signature |
 | Token in browser storage | [CWE-922](https://cwe.mitre.org/data/definitions/922.html) | `localStorage.setItem("token", ...)`, `sessionStorage`, a login cookie written from JavaScript |
+| Debug mode left on | [CWE-489](https://cwe.mitre.org/data/definitions/489.html) | Flask `app.run(debug=True)`, Django `DEBUG = True`, PHP `display_errors` / `phpinfo()` |
 | Hard-coded secrets | [CWE-798](https://cwe.mitre.org/data/definitions/798.html) | provider token formats (AWS, GitHub, Stripe, OpenAI/Anthropic, Slack, Supabase `service_role`, private keys, DB URLs), guessable `jwt.sign` / `session` secrets, credentials by name, secrets behind `NEXT_PUBLIC_`-style prefixes, committed `.env` files |
 
-**Frameworks:** Express, Fastify, Koa, Next.js (App Router, Pages API, Server Actions), **SvelteKit** (`+server`, form actions, `load`),
+**Languages: JavaScript / TypeScript, Python and PHP.** Python (Flask, FastAPI, Django) and PHP (plain scripts, Laravel) get the same kind of
+data-flow check: SQL injection, command injection, `eval` / template / file-inclusion injection, unsafe deserialization, path traversal,
+SSRF, open redirect, reflected XSS, plus mass assignment (Laravel), `@csrf_exempt`, a JWT decoded without verification, debug mode and
+hard-coded secrets. Typed FastAPI parameters (`int`, `UUID`...) and Flask `<int:id>` converters are understood as safe. Helpers defined in
+the same file are followed one call deep; **other files are not yet** (a value handed to a function in another module is not followed). See
+[docs/rules.md](docs/rules.md#python-and-php). The grammars are optional packages (`tree-sitter-python`, `tree-sitter-php`): if one cannot be
+installed on your machine those files are reported as skipped, never silently.
+
+**JavaScript frameworks:** Express, Fastify, Koa, Next.js (App Router, Pages API, Server Actions), **SvelteKit** (`+server`, form actions, `load`),
 **Remix / React Router** (`loader`, `action`), **Nuxt / Nitro** (`server/api`, h3 readers), **tRPC** (`input` of `publicProcedure` /
 `protectedProcedure`) and **Hono**: request data is followed from each framework's way of reading it, and handlers that change data
 without checking the caller (or change someone else's record) are reported. Prisma `$queryRawUnsafe` / `$executeRawUnsafe` are SQL sinks.
@@ -330,8 +339,9 @@ matched by the name it is assigned to and never by its value, so the file holds 
 This is a v1 MVP, built to a **realistic** plan (see
 [docs/dev-plan.md](docs/dev-plan.md)) rather than an idealized one:
 
-- **JavaScript/TypeScript only.** Python and PHP support are a post-MVP
-  goal (would need separate Tree-sitter grammars and per-language rules).
+- **JavaScript / TypeScript, Python and PHP.** Python and PHP are newer and
+  less measured (see docs/validation.md): their data flow stays inside one file
+  (plus helpers in that file), where the JavaScript analysis follows calls across files.
 - **Taint follows calls, not return values.** Request data is tracked through
   local variables, destructuring and template strings, and **into** the
   project functions you pass it to — across files, through `require`/`import`

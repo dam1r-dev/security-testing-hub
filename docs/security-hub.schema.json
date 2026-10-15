@@ -23,7 +23,7 @@
           "insecure-role-assignment", "insecure-file-upload", "username-enumeration", "code-injection", "open-redirect",
           "nosql-injection", "insecure-deserialization", "xxe", "hardcoded-secret", "supabase-rls", "supabase-auth",
           "firebase-rules", "insecure-cors", "insecure-jwt", "missing-rate-limit", "exposed-files", "vulnerable-dependency",
-          "mass-assignment", "prototype-pollution", "webhook-signature", "insecure-token-storage"
+          "mass-assignment", "prototype-pollution", "webhook-signature", "insecure-token-storage", "debug-mode"
         ]
       }
     },

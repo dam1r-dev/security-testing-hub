@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Security Testing Hub — find the security holes in your AI-written app</title>
 <meta name="description" content="Open-source security scanner for vibe-coded Node.js, Next.js, Supabase and Firebase projects. Free, runs on your machine, shows a 0-100 score and a ready-to-paste fix prompt for your AI assistant." />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; worker-src 'self'; script-src 'sha256-LQ3CXTZloiGxlC/paBBuHjzfY+F3XlML8EdNCxu9i9Y='; base-uri 'none'; form-action 'none'" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; worker-src 'self'; script-src 'sha256-pzPe2wAoYy9L2NRryOpsYZwniO0UfKTfm8QJzjS/Sqg='; base-uri 'none'; form-action 'none'" />
 <style>
   :root {
     --bg: #f8fafc; --panel: #ffffff; --text: #0f172a; --muted: #64748b; --line: #e2e8f0; --accent: #0f172a;
@@ -124,7 +124,7 @@
 
   <section id="rules">
     <h2>What it finds</h2>
-    <p class="sub">29 rules, built around what actually goes wrong in AI-generated projects: Express, Next.js (with Server Actions), SvelteKit, Remix, Nuxt, tRPC and Hono, plus Supabase and Firebase.</p>
+    <p class="sub">30 rules, built around what actually goes wrong in AI-generated projects: Express, Next.js (with Server Actions), SvelteKit, Remix, Nuxt, tRPC and Hono, Flask, FastAPI, Django and PHP, plus Supabase and Firebase.</p>
     <div class="rules" id="ruleList"></div>
   </section>
 
@@ -182,7 +182,7 @@
     'Insecure role assignment', 'Insecure file upload', 'Username enumeration', 'Code injection', 'Open redirect', 'NoSQL injection',
     'Insecure deserialization', 'XXE', 'Hard-coded secrets (keys, .env, service accounts)', 'Supabase Row Level Security', 'Supabase auth misuse', 'Firebase rules',
     'Insecure CORS', 'Insecure JWT use', 'No rate limit on sign-in', 'Secrets in public folders', 'Vulnerable dependencies (optional)',
-    'Mass assignment', 'Prototype pollution', 'Webhook without signature check', 'Login token in browser storage'];
+    'Mass assignment', 'Prototype pollution', 'Webhook without signature check', 'Login token in browser storage', 'Debug mode left on'];
   var SEVERITIES = ['critical', 'high', 'medium', 'low'];
   var SEV_COLOR = { critical: '#7f1d1d', high: '#dc2626', medium: '#ca8a04', low: '#6b7280' };
   var MOODS = {

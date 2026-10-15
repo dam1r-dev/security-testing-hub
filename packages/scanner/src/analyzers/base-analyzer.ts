@@ -1,5 +1,5 @@
 import { checkBudgetNow } from "../budget";
-import { ParsedFile } from "../parsers/ast-parser";
+import { ParsedFile, SupportedLanguage } from "../parsers/ast-parser";
 import { SyntaxNode, findFunctionBodies, findNodes, snippet, toLocation } from "../parsers/utils";
 import { CrossFileFlow, findCrossFileFlows, firstArgument } from "../taint/interprocedural";
 import { ProjectContext } from "../taint/project";
@@ -9,6 +9,8 @@ import { analyzeFunctionBody } from "../taint/simple-taint";
 import { Finding, Severity, VulnerabilityType } from "../types";
 
 export interface Analyzer {
+  /** The languages this analyzer reads. Default: JavaScript and TypeScript (see JS_LANGUAGES in parsers/ast-parser.ts). */
+  readonly languages?: readonly SupportedLanguage[];
   /**
    * `context` lets taint-based analyzers follow calls into other files of the same
    * scan; without it they only see helpers defined in `parsed` itself.
