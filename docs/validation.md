@@ -350,6 +350,42 @@ saying `req.session` used to count too, which is fixed), `/benefits` without an 
 The slowest project (322 files, one 150 KB route file) takes 25 s in total, as before. Not optimised yet: the rules do not share the
 work of finding request sources.
 
+## Round 12: Python and PHP, on 23 small real projects + DVWA and pygoat
+
+The Python (Flask, FastAPI, Django) and PHP (scripts, Laravel) analyzers are new, so this is their first contact with code they were not written
+against: 23 small, recent projects from GitHub topic searches (`flask`, `fastapi`, `django`, `laravel`, `php`; read-only shallow clones, nothing
+installed or run), plus two deliberately vulnerable applications as the reference for what is found: **DVWA** (PHP) and **pygoat** (Django).
+
+**First pass** (before tuning), 23 real projects: **44 findings, about 30 of them real (about two thirds)**. What was wrong:
+
+| Cause | Count | Fix |
+|---|---|---|
+| Laravel validation rules read as passwords (`'password' => 'required\|string\|min:8\|confirmed'`) | 8 | a `rule\|rule:arg` list is not a credential |
+| Django's `tests.py` and a Laravel seeder with made-up passwords | 4 | `tests.py` / `test.py` are test files; `seeders`, `factories` join the seed / fixture folders |
+| `redirect(f"{reverse('home')}?open_modal={id}")`: the target starts with a path of the site | 1 | a redirect whose target begins with a same-site path (`/x`, `reverse()`, `url_for()`, `header("Location: /x")`) is not open |
+| `DEBUG = True` in `settings/dev.py` and a tests settings file | 2 | judged by the file's own name and two folders above it (the scanner does not look further up: a project in a folder called `test` is still scanned) |
+| 5 admin-panel JavaScript bundles (300-900 KB, not named `.min.js`) took 15 s each: the scan of one project took **76 s** | (time) | a file whose lines average over 300 characters is skipped with a visible note: the same project takes **4.7 s** |
+
+A mistake of the engine itself, found by DVWA: `$_FILES["f"]["tmp_name"]` is a path PHP chose, not the caller's; only the name and the type are. It was treated as input.
+
+**After the fixes: 25 findings in the 23 projects.** Accurate: `pickle.loads` of a form field in a metadata review route (remote code execution; the best find of the round),
+12 path-traversal findings in a file-sharing app (a file manager whose paths come from requests), `SECRET_KEY` and `DEBUG = True` in Django settings that still carry the
+`django-insecure-` placeholder (3 projects), a JWT secret with a literal default in a pydantic settings class, `app.run(debug=True)`, a SQL schema inside a served
+`static/` folder, two `localStorage` tokens. Uncertain: 3 passwords in a script that generates a Postman collection (test credentials of a dev tool, probably).
+
+**DVWA** (PHP, deliberately vulnerable): 43 findings. Found: SQL injection (3 of 3 modules at the low level and the blind variant), command injection (every level), open redirect,
+the JSONP reflected value, hard-coded tokens, `phpinfo()`, 14 file-path findings. **Missed:** reflected / stored / DOM XSS, file inclusion, file upload, CSRF, weak session ids,
+captcha, JavaScript: about half of its vulnerability families. The reason for the two biggest (XSS, file inclusion) is the same: DVWA builds the output in one file
+(`$html .= ...`) and prints it (or `include`s the chosen file) in another, and the PHP analysis does not follow a value across files. False positives in the same run: the
+"impossible" level's `shell_exec('ping ' . $target)`, where `$target` was checked with `is_numeric` first (the scanner has no notion of a validating `if`), and `PHP_SELF` in a redirect helper.
+
+**pygoat** (Django, deliberately vulnerable): the SQL injections through `raw()`, `eval`, `yaml.load`, `pickle.loads`, SSRF with `requests.get`, a file opened from a request value, and
+a command run through a helper, plus 25 `@csrf_exempt` views and the placeholder `SECRET_KEY`. Not found: its template-based XSS (HTML templates are not read) and access-control labs.
+
+**Limits shown by this round** (also in docs/rules.md): data flow stays inside one file (plus helpers in that file), no template languages (Jinja, Django templates, Blade, Twig),
+no validation-by-`if`, no mass-assignment rule for Python, no JWT / CSRF rules for PHP. 23 projects is a small sample and most of them have few request handlers, so precision
+here is **less well measured than for JavaScript**; the numbers above describe this sample, not the languages.
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are

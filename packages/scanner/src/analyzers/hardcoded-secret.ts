@@ -79,9 +79,9 @@ const NON_SECRET_CONTAINER = /placeholder|example|sample|dummy|fake|mock|fixture
 
 // Judged on the file's own name and the two folders above it only: where the whole project lives (a folder called `demo` or
 // `mocks` further up) says nothing about this file, and must not quietly switch checks off.
-const FIXTURE_PATH = /(?:^|[/\\])(?:seeds?|fixtures?|__fixtures__|mocks?|__mocks__|stories)[/\\]|seed[-_.\w]*\.[cm]?[jt]sx?$/i;
+const FIXTURE_PATH = /(?:^|[/\\])(?:seeds?|seeders?|factories|fixtures?|__fixtures__|mocks?|__mocks__|stories)[/\\]|seed[-_.\w]*\.[cm]?[jt]sx?$/i;
 
-function isFixturePath(filePath: string): boolean {
+export function isFixturePath(filePath: string): boolean {
   return FIXTURE_PATH.test(filePath.split(/[/\\]/).slice(-3).join("/"));
 }
 

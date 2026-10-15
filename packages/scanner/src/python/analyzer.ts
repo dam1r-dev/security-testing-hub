@@ -1,6 +1,7 @@
 import { checkBudgetNow } from "../budget";
 import { ParsedFile, SupportedLanguage } from "../parsers/ast-parser";
 import { SyntaxNode, findNodes, snippet, toLocation } from "../parsers/utils";
+import { isFixturePath } from "../analyzers/hardcoded-secret";
 import { findKnownSecrets, isPlaceholder, isSensitiveName, isSigningSecretName, looksLikeSecret, normalizeName, redact } from "../secrets/detect";
 import { Finding } from "../types";
 import { Analyzer } from "../analyzers/base-analyzer";
@@ -16,6 +17,8 @@ import { HTML_IN_STRING, SinkSpec, XSS_RETURN_MESSAGE, sinksOf } from "./sinks";
  * Data flows through a helper defined in the same file (`def find_user(name): cursor.execute(f"...{name}")`) are followed one call
  * deep. Helpers in other files are not (yet): a value handed to them is not followed.
  */
+
+const DEVELOPMENT_FILE = /(?:^|[/\\_.-])(?:dev|develop|development|local|test|tests|testing|ci|debug)(?:[/\\_.-]|$)/i;
 
 const ROTATE =
   "Treat it as already leaked: revoke / rotate it now (removing the line is not enough: it stays in the git history), " +
@@ -228,10 +231,13 @@ export class PythonAnalyzer implements Analyzer {
         });
       }
     }
+    // `settings/dev.py`, `local_settings.py`, `tests/settings.py`: debug mode is what those files are for (judged by the file's own name and
+    // the two folders above it: a project that lives in a folder called `test` is not a test settings file)
+    const developmentFile = DEVELOPMENT_FILE.test(filePath.split(/[/\\]/).slice(-3).join("/"));
     for (const assignment of findNodes(root, (n) => n.type === "assignment")) {
       const left = assignment.childForFieldName("left");
       const right = assignment.childForFieldName("right");
-      if (left?.type === "identifier" && /^DEBUG$/.test(left.text) && right?.text === "True" && !/os\.environ|getenv|env\(/.test(assignment.text)) {
+      if (!developmentFile && left?.type === "identifier" && /^DEBUG$/.test(left.text) && right?.text === "True" && !/os\.environ|getenv|env\(/.test(assignment.text)) {
         add({
           ruleId: "debug-mode",
           severity: "high",
@@ -244,9 +250,11 @@ export class PythonAnalyzer implements Analyzer {
       }
     }
 
-    // 4. Secrets written in the code.
+    // 4. Secrets written in the code. (Seed data, fixtures and mocks hold made-up credentials on purpose: judged by name they are noise.)
+    const fixtureLike = isFixturePath(filePath);
     const lines = text.split("\n");
     for (const match of findKnownSecrets(text)) {
+      if (fixtureLike && /private key/i.test(match.secret.label)) continue;
       const before = text.slice(0, match.index);
       const line = before.split("\n").length;
       const column = match.index - before.lastIndexOf("\n");
@@ -265,7 +273,7 @@ export class PythonAnalyzer implements Analyzer {
       const rawName = value === undefined ? undefined : assignedName(literal);
       if (value === undefined || !rawName || value.length < 4) continue;
       const name = normalizeName(rawName);
-      if (isPlaceholder(value)) continue;
+      if (isPlaceholder(value) || fixtureLike) continue;
       const signing = isSigningSecretName(name);
       if (!signing && !(isSensitiveName(name) && looksLikeSecret(value, name))) continue;
       if (signing && !looksLikeSecret(value, name) && !/^django-insecure-/.test(value) && value.length < 8) continue;

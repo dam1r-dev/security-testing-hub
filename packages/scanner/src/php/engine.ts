@@ -111,6 +111,9 @@ export function carriedBy(expression: SyntaxNode, tainted: Names): string | unde
         if (tainted.has(node.text)) return node.text;
         break;
       case "subscript_expression": {
+        // $_FILES["f"]["tmp_name"] is a path PHP chose, and "size" / "error" are numbers: only the name and the type are the caller's
+        const key = node.namedChild(1);
+        if (key?.type === "string" && /^(?:tmp_name|size|error)$/.test(key.text.slice(1, -1))) break;
         const base = node.namedChild(0);
         if (base) stack.push(base);
         break;

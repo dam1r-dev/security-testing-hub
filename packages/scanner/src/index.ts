@@ -87,7 +87,7 @@ const TEST_DIRS = new Set(["test", "tests", "__tests__", "__mocks__", "e2e", "cy
 const MINIFIED_FILE_PATTERN = /\.min\.[cm]?js$/i;
 // Also `test-suite.ts`, `test_users.js`, `login-test.ts`: a test script kept next to the code (seen in a real project:
 // its fake sign-up passwords were reported as leaked credentials).
-const TEST_FILE_PATTERN = /(?:\.(?:test|spec)|[-_](?:test|tests|spec)|^(?:test|tests|spec)[-_][^.]*|^conftest)\.(?:[cm]?[jt]sx?|py|php)$/i;
+const TEST_FILE_PATTERN = /(?:\.(?:test|spec)|[-_](?:test|tests|spec)|^(?:test|tests|spec)[-_][^.]*|^(?:conftest|tests?))\.(?:[cm]?[jt]sx?|py|php)$/i;
 // PHPUnit: UserControllerTest.php (case matters: "latest.php" is not a test)
 const PHPUNIT_FILE_PATTERN = /[a-z0-9]Test\.php$/;
 /** Optional project-level ignore list, one path pattern per line (see docs/rules.md). */
@@ -97,6 +97,18 @@ export const IGNORE_FILE_NAME = ".security-hub-ignore";
 // code a person wrote. Skipped with a visible warning rather than silently.
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".py", ".php"]);
+
+/**
+ * A bundle or minified file that does not say so in its name (`public/js/app.js`, `dist/chunk-4f2a.js`): a few very long lines, far from
+ * what a person writes. Nothing in it is code worth reading, and it takes the whole time budget to analyse (several 500 KB bundles of an admin
+ * panel took 15 s each). Judged by the average line length.
+ */
+export function looksMinified(text: string): boolean {
+  if (text.length < 20_000) return false;
+  let lines = 1;
+  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) lines++;
+  return text.length / lines > 300;
+}
 
 export function defaultAnalyzers(): Analyzer[] {
   return [
@@ -265,6 +277,7 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
         };
       }
       sourceCode = fs.readFileSync(file, "utf8");
+      if (looksMinified(sourceCode)) return { file, findings: [], parseError: "Skipped: the file looks minified or bundled (very long lines), not hand-written code." };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { file, findings: [], parseError: `Failed to read file: ${message}` };
