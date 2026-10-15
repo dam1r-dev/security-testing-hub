@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Security Testing Hub — find the security holes in your AI-written app</title>
 <meta name="description" content="Open-source security scanner for vibe-coded Node.js, Next.js, Supabase and Firebase projects. Free, runs on your machine, shows a 0-100 score and a ready-to-paste fix prompt for your AI assistant." />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; worker-src 'self'; script-src 'sha256-QIlnZXxn4c0PTXz03igvCBIhKGPxVeXixOD0ZiNuF6g='; base-uri 'none'; form-action 'none'" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; worker-src 'self'; script-src 'sha256-LQ3CXTZloiGxlC/paBBuHjzfY+F3XlML8EdNCxu9i9Y='; base-uri 'none'; form-action 'none'" />
 <style>
   :root {
     --bg: #f8fafc; --panel: #ffffff; --text: #0f172a; --muted: #64748b; --line: #e2e8f0; --accent: #0f172a;
@@ -41,6 +41,14 @@
   .rules { display: flex; flex-wrap: wrap; gap: 8px; }
   .rules span { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
   .privacy { font-size: 13px; color: var(--muted); }
+  /* Armo moves with the mood of the score: breathes when calm, fidgets when unsure, shakes when alarmed */
+  @keyframes armo-calm { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-3px) scale(1.025); } }
+  @keyframes armo-unsure { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-2.5deg); } 75% { transform: rotate(2.5deg); } }
+  @keyframes armo-alarm { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-3px) rotate(-1deg); } 40% { transform: translateX(3px) rotate(1deg); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
+  .armo-green { animation: armo-calm 4s ease-in-out infinite; }
+  .armo-yellow { animation: armo-unsure 2.2s ease-in-out infinite; }
+  .armo-red { animation: armo-alarm .7s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { .armo-green, .armo-yellow, .armo-red { animation: none; } }
   progress { width: 100%; max-width: 420px; height: 10px; }
   .notes { margin-top: 14px; font-size: 13px; color: var(--muted); }
   .notes summary { cursor: pointer; }
@@ -94,7 +102,7 @@
         <a class="btn" href="#start">Use the command line</a>
       </div>
     </div>
-    <img id="heroMascot" src="assets/mascot-safe.png" alt="Armo, the armadillo who guards your code" />
+    <img id="heroMascot" class="armo-green" src="assets/mascot-safe.png" alt="Armo, the armadillo who guards your code" />
   </div>
 
   <section id="demo">
@@ -229,6 +237,7 @@
     var card = $('scorecard');
     card.style.background = mood.bg; card.style.borderColor = mood.color + '66';
     $('moodImg').src = mood.img; $('heroMascot').src = mood.img;
+    ['moodImg', 'heroMascot'].forEach(function (id) { $(id).className = 'armo-' + score.color; });
     $('ring').style.setProperty('--v', String(score.value)); $('ring').style.setProperty('--c', mood.color);
     $('ringValue').textContent = String(score.value); $('ringValue').style.color = mood.color;
     $('label').textContent = score.label; $('label').style.color = mood.color;
