@@ -1,0 +1,1 @@
+{ "name": "vulnerable-frameworks", "private": true, "description": "Deliberately vulnerable handlers in SvelteKit, Remix, Nuxt, tRPC and Hono style: a fixture for the scanner's tests. Do not deploy." }

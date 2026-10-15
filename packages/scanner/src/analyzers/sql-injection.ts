@@ -6,11 +6,18 @@ import { isRequestSource } from "./sources";
 // db.prepare(...) (better-sqlite3, node:sqlite), etc.
 const SINK_CALLEE_PATTERN = /(^|\.)(query|execute|raw|prepare)$/;
 
+// Prisma: $queryRawUnsafe / $executeRawUnsafe take the statement as a string. $queryRaw / $executeRaw are safe as a tagged
+// template (prisma.$queryRaw`... ${id}`: the values are bound) and unsafe when called with a string built by hand.
+const PRISMA_UNSAFE_PATTERN = /(^|\.)\$(queryRawUnsafe|executeRawUnsafe)$/;
+const PRISMA_RAW_PATTERN = /(^|\.)\$(queryRaw|executeRaw)$/;
+
 function isSink(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;
   const callee = node.childForFieldName("function");
   if (!callee) return false;
   if (callee.type !== "member_expression" && callee.type !== "identifier") return false;
+  if (PRISMA_UNSAFE_PATTERN.test(callee.text)) return true;
+  if (PRISMA_RAW_PATTERN.test(callee.text)) return node.childForFieldName("arguments")?.type !== "template_string";
   return SINK_CALLEE_PATTERN.test(callee.text);
 }
 

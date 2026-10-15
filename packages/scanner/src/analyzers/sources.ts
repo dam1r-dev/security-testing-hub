@@ -9,10 +9,26 @@ const KOA_MEMBER_PATTERN = /^ctx\.(?:request\.)?(params|query|body|cookies|heade
 // Next.js route context: GET(request, context) -> context.params.id
 const CONTEXT_PARAMS_PATTERN = /^(?:ctx|context)\.params(\.\w+|\[[^\]]*\])?$/;
 // Hono: c.req.param("id"), c.req.query("q"), await c.req.json(), c.req.parseBody(), c.req.header("x")
-const HONO_CALL_PATTERN = /^(?:c|ctx|context)\.req\.(param|query|queries|json|text|formData|parseBody|header)$/;
+const HONO_CALL_PATTERN = /^(?:c|ctx|context)\.req\.(param|query|queries|json|text|formData|parseBody|header|valid|arrayBuffer)$/;
 
-// Next.js App Router / Web Request API body readers: request.json(), req.text(), ...
-const NEXT_BODY_READ_PATTERN = /^(req|request)\.(json|text|formData)$/;
+// SvelteKit (`event.params.id`) and other frameworks that name the request context `event`.
+// `event.locals` is what the server put there (the session), not input, so only `params` counts.
+const EVENT_MEMBER_PATTERN = /^(?:event|evt)\.params(\.\w+|\[[^\]]*\])?$/;
+// tRPC: `.mutation(({ input }) => ...)` written as `.mutation((opts) => opts.input.id)`
+const TRPC_OPTIONS_INPUT_PATTERN = /^(?:opts|options)\.input(\.\w+|\[[^\]]*\])?$/;
+
+// Next.js App Router / Web Request API body readers: request.json(), req.text(), SvelteKit's event.request.json(), ...
+const NEXT_BODY_READ_PATTERN = /^(?:req|request|event\.request|evt\.request)\.(json|text|formData|arrayBuffer)$/;
+// Headers of the incoming request (not of a response that came back from fetch()).
+const REQUEST_HEADER_GET_PATTERN = /^(?:req|request|event\.request|evt\.request|c\.req|ctx\.request)\.headers\.get$/;
+
+// Nuxt / Nitro (h3): `getQuery(event)`, `await readBody(event)`, `getRouterParam(event, "id")`, `getCookie(event, "x")`.
+const H3_READERS = new Set([
+  "getQuery", "getValidatedQuery", "getRouterParam", "getRouterParams", "getValidatedRouterParams", "readBody", "readValidatedBody",
+  "readFormData", "readMultipartFormData", "getHeader", "getHeaders", "getRequestHeader", "getRequestHeaders", "getCookie", "parseCookies",
+  "getRequestURL",
+]);
+const H3_EVENT_NAMES = new Set(["event", "evt", "e", "h3Event", "ev"]);
 
 // Chains ending in .searchParams.get(...) / .cookies.get(...) — covers
 // `request.nextUrl.searchParams.get(...)`, `new URL(request.url).searchParams.get(...)`,
@@ -24,15 +40,25 @@ const NEXT_ACCESSOR_SUFFIX_PATTERN = /(^|\.)(searchParams\.get|cookies\.get)$/;
 function isExpressSource(node: SyntaxNode): boolean {
   if (node.type !== "member_expression" && node.type !== "subscript_expression") return false;
   const text = node.text;
-  return EXPRESS_MEMBER_PATTERN.test(text) || KOA_MEMBER_PATTERN.test(text) || CONTEXT_PARAMS_PATTERN.test(text);
+  return (
+    EXPRESS_MEMBER_PATTERN.test(text) ||
+    KOA_MEMBER_PATTERN.test(text) ||
+    CONTEXT_PARAMS_PATTERN.test(text) ||
+    EVENT_MEMBER_PATTERN.test(text) ||
+    TRPC_OPTIONS_INPUT_PATTERN.test(text)
+  );
 }
 
 function isNextSource(node: SyntaxNode): boolean {
   if (node.type !== "call_expression") return false;
   const callee = node.childForFieldName("function");
+  if (callee?.type === "identifier" && H3_READERS.has(callee.text)) {
+    const first = node.childForFieldName("arguments")?.namedChild(0);
+    return first?.type === "identifier" && H3_EVENT_NAMES.has(first.text);
+  }
   if (!callee || callee.type !== "member_expression") return false;
   const calleeText = callee.text;
-  if (NEXT_BODY_READ_PATTERN.test(calleeText) || HONO_CALL_PATTERN.test(calleeText)) return true;
+  if (NEXT_BODY_READ_PATTERN.test(calleeText) || HONO_CALL_PATTERN.test(calleeText) || REQUEST_HEADER_GET_PATTERN.test(calleeText)) return true;
   return NEXT_ACCESSOR_SUFFIX_PATTERN.test(calleeText);
 }
 

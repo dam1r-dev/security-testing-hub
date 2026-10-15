@@ -22,6 +22,7 @@ import { XxeAnalyzer } from "./analyzers/xxe";
 import { HardcodedSecretAnalyzer } from "./analyzers/hardcoded-secret";
 import { SupabaseAuthAnalyzer } from "./analyzers/supabase-auth";
 import { ServerActionAnalyzer } from "./analyzers/server-actions";
+import { FrameworkAccessAnalyzer } from "./analyzers/framework-access";
 import { InsecureCorsAnalyzer } from "./analyzers/cors";
 import { InsecureJwtAnalyzer } from "./analyzers/jwt";
 import { MissingRateLimitAnalyzer } from "./analyzers/rate-limit";
@@ -107,6 +108,7 @@ export function defaultAnalyzers(): Analyzer[] {
     new HardcodedSecretAnalyzer(),
     new SupabaseAuthAnalyzer(),
     new ServerActionAnalyzer(),
+    new FrameworkAccessAnalyzer(),
     new InsecureCorsAnalyzer(),
     new InsecureJwtAnalyzer(),
     new MissingRateLimitAnalyzer(),

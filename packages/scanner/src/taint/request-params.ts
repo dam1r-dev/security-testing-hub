@@ -20,7 +20,7 @@ export interface Origin {
   names: string[];
 }
 
-export const REQUEST_KEYS = ["body", "query", "params", "cookies", "headers", "file", "files"] as const;
+export const REQUEST_KEYS = ["body", "query", "params", "cookies", "headers", "file", "files", "input"] as const;
 
 const REQUEST_TYPE = /Request|Req\b|LoaderFunctionArgs|ActionFunctionArgs|Context\b|Args\b/;
 const RESPONSE_NAME = /^_?(res|response|reply)$/;
@@ -55,6 +55,42 @@ function bindingsByKey(pattern: SyntaxNode): Map<string, string[]> {
   return result;
 }
 
+const ENTRY_POINT_NAMES = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD", "load", "loader", "action", "clientLoader", "clientAction"]);
+
+/**
+ * An exported `GET` / `load` / `loader` / `action` function, or a member of an `actions = { ... }` object: what SvelteKit and Remix call
+ * with the request. Its first parameter is the request context even when it destructures only `{ params }`.
+ */
+function isFrameworkEntryPoint(fn: SyntaxNode): boolean {
+  const declarator = fn.parent?.type === "variable_declarator" ? fn.parent : undefined;
+  const name = fn.childForFieldName("name")?.text ?? declarator?.childForFieldName("name")?.text;
+  const exported = fn.parent?.type === "export_statement" || declarator?.parent?.parent?.type === "export_statement";
+  if (name && ENTRY_POINT_NAMES.has(name) && exported) return true;
+  // `export const actions = { default: async ({ request }) => ..., create: ... }`
+  const pair = fn.parent;
+  if (pair?.type === "pair" || pair?.type === "method_definition") {
+    const object = pair.parent;
+    const owner = object?.parent;
+    return owner?.type === "variable_declarator" && owner.childForFieldName("name")?.text === "actions";
+  }
+  return false;
+}
+
+const TRPC_RESOLVER_METHODS = new Set(["query", "mutation", "subscription"]);
+
+/** The function is the resolver of a tRPC procedure: an argument of `.query(...)`, `.mutation(...)` or `.subscription(...)`. */
+export function isTrpcResolver(fn: SyntaxNode): boolean {
+  const args = fn.parent;
+  if (args?.type !== "arguments") return false;
+  const call = args.parent;
+  const callee = call?.type === "call_expression" ? call.childForFieldName("function") : null;
+  if (callee?.type !== "member_expression") return false;
+  const method = callee.childForFieldName("property")?.text ?? "";
+  // `.query(` / `.mutation(` are also methods of database clients and query libraries: a tRPC procedure is recognised by its chain
+  // (`publicProcedure.input(...).mutation(...)`, `t.procedure.query(...)`), whose root has "procedure" in its name.
+  return TRPC_RESOLVER_METHODS.has(method) && /[pP]rocedure/.test(callee.childForFieldName("object")?.text ?? "");
+}
+
 export function requestParamOrigins(fn: SyntaxNode, keys: readonly string[] = REQUEST_KEYS): Origin[] {
   if (!isFunctionNode(fn)) return [];
   const params = fn.childForFieldName("parameters")?.namedChildren.filter((p) => p.type !== "comment") ?? [];
@@ -86,6 +122,23 @@ export function requestParamOrigins(fn: SyntaxNode, keys: readonly string[] = RE
       const names = pattern ? boundNames(pattern) : [];
       if (pattern && names.length > 0) origins.push({ node: pattern, names });
     }
+  }
+
+  // SvelteKit: `GET({ params, url, request, locals })` / `load({ params })` / `actions = { default: ({ request, params }) => ... }`.
+  // A first parameter that holds `params` next to other members of the RequestEvent is that event: its `params` are the URL's.
+  if (first?.pattern?.type === "object_pattern" && keys.includes("params")) {
+    const bindings = bindingsByKey(first.pattern);
+    const isEvent = ["url", "locals", "cookies", "setHeaders", "platform", "fetch"].some((key) => bindings.has(key)) || isFrameworkEntryPoint(fn);
+    if (isEvent && !origins.some((o) => o.node === first.pattern)) {
+      const names = pick(first.pattern, ["params"]);
+      if (names.length > 0) origins.push({ node: first.pattern, names });
+    }
+  }
+
+  // tRPC: `.mutation(({ input, ctx }) => ...)` / `.query(async ({ input }) => ...)`: the validated input is still the caller's.
+  if (keys.includes("input") && isTrpcResolver(fn) && first?.pattern?.type === "object_pattern") {
+    const names = pick(first.pattern, ["input"]);
+    if (names.length > 0) origins.push({ node: first.pattern, names });
   }
 
   // Next.js route handlers: GET(request, { params }) — the dynamic URL segments.
