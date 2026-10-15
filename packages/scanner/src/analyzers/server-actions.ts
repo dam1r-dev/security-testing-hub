@@ -19,22 +19,22 @@ import { isServerActionFunction } from "./nextjs-routes";
  */
 
 // Actions that are meant to run before anyone is signed in, or that only write public submissions.
-const PUBLIC_ACTION_NAME = /login|log_?in|sign_?in|sign_?up|register|logout|sign_?out|forgot|reset|verify|confirm|contact|subscribe|newsletter|waitlist|feedback|webhook|analytics|track|callback|oauth|invite|otp/i;
+export const PUBLIC_ACTION_NAME = /login|log_?in|sign_?in|sign_?up|register|logout|sign_?out|forgot|reset|verify|confirm|contact|subscribe|newsletter|waitlist|feedback|webhook|analytics|track|callback|oauth|invite|otp/i;
 
 const MUTATION_CALLEE =
   /(?:^|\.)(?:create|createMany|update|updateMany|upsert|delete|deleteMany|insert|insertMany|remove|destroy|findOneAndUpdate|findByIdAndUpdate|findByIdAndDelete|findOneAndDelete|updateOne|deleteOne|insertOne|replaceOne|bulkWrite|setDoc|updateDoc|deleteDoc|addDoc|execute|run|\$executeRaw|\$executeRawUnsafe)$/;
-const DB_OBJECT = /prisma|\bdb\b|database|supabase|drizzle|knex|\bsql\b|collection|model|repo|repository|firestore|admin|\btrx?\b|\borm\b|conn|\bclient\b|\.from\(/i;
+export const DB_OBJECT = /prisma|\bdb\b|database|supabase|drizzle|knex|\bsql\b|collection|model|repo|repository|firestore|admin|\btrx?\b|\borm\b|conn|\bclient\b|\.from\(/i;
 
 const AUTH_CALL =
   /(?:^|\.)(?:auth|getSession|getServerSession|getUser|getCurrentUser|currentUser|requireUser|requireAuth|requireAdmin|requireSession|verifySession|validateRequest|getToken|checkAuth|ensureAuth\w*|authenticate|isAuthenticated|assertAuth\w*|withAuth|protect|guard|verifyIdToken|getAuth)$/i;
-const ADMIN_CLIENT = /service_?role|createAdminClient|supabaseAdmin|getAdminClient|\badmin\.from\(/i;
+export const ADMIN_CLIENT = /service_?role|createAdminClient|supabaseAdmin|getAdminClient|\badmin\.from\(/i;
 const SESSION_COOKIE =/cookies\(\)\s*\.get\(\s*["'`][\w-]*(?:session|token|auth)/i;
 
 // A reference to the caller's own id: `userId`, `session.user.id`, `ownerId`, ...
-const USER_REF_ONCE = /\b(?:user|session|currentUser|auth|me|account)\??\.(?:user\??\.)?(?:id|uid|userId)\b|\buserId\b|\buser_id\b|\bownerId\b|\bowner_id\b|\bcreatedBy\b|\bauthorId\b|\buid\b/;
+export const USER_REF_ONCE = /\b(?:user|session|currentUser|auth|me|account)\??\.(?:user\??\.)?(?:id|uid|userId)\b|\buserId\b|\buser_id\b|\bownerId\b|\bowner_id\b|\bcreatedBy\b|\bauthorId\b|\buid\b/;
 
 // A helper whose name says it checks ownership (`verifyUserAccess(id)`, `isOwner(...)`).
-const OWNERSHIP_HELPER =
+export const OWNERSHIP_HELPER =
   /\b\w*(?:verify|check|assert|ensure|require|authori[sz]e|validate)\w*(?:Access|Owner|Ownership|Permission|Permissions|Allowed|Authori[sz]ation)\w*\b|\b(?:isOwner|belongsTo|userOwns|ownsResource)\s*\(/i;
 
 const ID_NAME = /^(?:id|.*(?:Id|ID|_id))$/;
@@ -46,7 +46,7 @@ function actionName(fn: SyntaxNode): string {
   return declarator?.childForFieldName("name")?.text ?? "default";
 }
 
-function dbMutations(fn: SyntaxNode): SyntaxNode[] {
+export function dbMutations(fn: SyntaxNode): SyntaxNode[] {
   return findNodes(fn, (n) => {
     if (n.type !== "call_expression") return false;
     const callee = n.childForFieldName("function")?.text ?? "";
@@ -65,7 +65,7 @@ function matches(node: SyntaxNode, hint: RegExp, info: FileInfo | undefined, pro
   return false;
 }
 
-function checksCaller(fn: SyntaxNode, info: FileInfo | undefined, project: ProjectContext): boolean {
+export function checksCaller(fn: SyntaxNode, info: FileInfo | undefined, project: ProjectContext): boolean {
   if (SESSION_COOKIE.test(fn.text)) return true;
   const calls = findNodes(fn, (n) => n.type === "call_expression");
   if (calls.some((c) => AUTH_CALL.test(c.childForFieldName("function")?.text ?? ""))) return true;
