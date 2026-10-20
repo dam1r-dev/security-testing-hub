@@ -5,9 +5,11 @@ import { isFixturePath } from "../analyzers/hardcoded-secret";
 import { findKnownSecrets, isPlaceholder, isSensitiveName, isSigningSecretName, looksLikeSecret, normalizeName, redact } from "../secrets/detect";
 import { Finding } from "../types";
 import { Analyzer } from "../analyzers/base-analyzer";
+import { ProjectContext } from "../taint/project";
 import { calleeText, callArguments, carriedBy, trackTaint } from "./engine";
-import { decoratorsOf, originsOf, parametersOf } from "./origins";
-import { HTML_IN_STRING, SinkSpec, XSS_RETURN_MESSAGE, sinksOf } from "./sinks";
+import { PythonProject, argumentFor } from "./project";
+import { decoratorsOf, originsOf } from "./origins";
+import { HTML_IN_STRING, XSS_RETURN_MESSAGE, sinksOf } from "./sinks";
 
 /**
  * The Python rules (Flask, FastAPI, Django) in one analyzer: data flow from the request into SQL, shell, `eval`, deserialization, file
@@ -23,11 +25,6 @@ const DEVELOPMENT_FILE = /(?:^|[/\\_.-])(?:dev|develop|development|local|test|te
 const ROTATE =
   "Treat it as already leaked: revoke / rotate it now (removing the line is not enough: it stays in the git history), " +
   "then load the new value from an environment variable (os.environ[\"NAME\"]) or a secret manager.";
-
-interface Summary {
-  /** Index of the parameter -> the sink it reaches. */
-  hits: Map<number, { rule: SinkSpec["rule"]; line: number; spec: SinkSpec }>;
-}
 
 function strippedString(node: SyntaxNode): string | undefined {
   if (node.type !== "string") return undefined;
@@ -60,7 +57,7 @@ function assignedName(literal: SyntaxNode): string | undefined {
 export class PythonAnalyzer implements Analyzer {
   readonly languages: readonly SupportedLanguage[] = ["python"];
 
-  analyze(parsed: ParsedFile, filePath: string): Finding[] {
+  analyze(parsed: ParsedFile, filePath: string, context?: ProjectContext): Finding[] {
     const root = parsed.tree.rootNode;
     const text = parsed.sourceCode;
     const findings: Finding[] = [];
@@ -73,46 +70,9 @@ export class PythonAnalyzer implements Analyzer {
     };
 
     const functions = findNodes(root, (n) => n.type === "function_definition");
-    const byName = new Map<string, SyntaxNode[]>();
-    for (const fn of functions) {
-      const name = fn.childForFieldName("name")?.text;
-      if (name) byName.set(name, [...(byName.get(name) ?? []), fn]);
-    }
-
-    // 1. What a helper does with its parameters: which of them reach a dangerous call (followed one call deep).
-    const summaries = new Map<SyntaxNode, Summary>();
-    for (const fn of functions) {
-      checkBudgetNow();
-      const parameters = parametersOf(fn).filter((p) => !["self", "cls"].includes(p.name));
-      if (parameters.length === 0 || originsOf(fn).length > 0) continue; // a handler itself is checked below
-      if (!/execute|system|popen|subprocess|eval|exec|pickle|yaml|open|requests|httpx|urlopen|redirect|HttpResponse|send_file|shutil|os\./.test(fn.text)) continue;
-      const summary: Summary = { hits: new Map() };
-      parameters.forEach((p, index) => {
-        trackTaint(fn, new Set([p.name]), {
-          onCall: (call, tainted) => {
-            if (summary.hits.has(index)) return;
-            for (const spec of sinksOf(call, text)) {
-              if (spec.args.some((a) => carriedBy(a, tainted) !== undefined)) {
-                summary.hits.set(index, { rule: spec.rule, line: call.startPosition.row + 1, spec });
-                return;
-              }
-            }
-          },
-        });
-      });
-      if (summary.hits.size > 0) summaries.set(fn, summary);
-    }
-
-    const helperFor = (call: SyntaxNode, inside: SyntaxNode): { fn: SyntaxNode; summary: Summary } | undefined => {
-      const callee = call.childForFieldName("function");
-      const name = callee?.type === "identifier" ? callee.text : callee?.type === "attribute" && /^(?:self|cls)$/.test(callee.childForFieldName("object")?.text ?? "") ? callee.childForFieldName("attribute")?.text : undefined;
-      if (!name) return undefined;
-      const candidates = byName.get(name) ?? [];
-      if (candidates.length !== 1) return undefined;
-      const fn = candidates[0] as SyntaxNode;
-      const summary = summaries.get(fn);
-      return summary && fn.id !== inside.id ? { fn, summary } : undefined;
-    };
+    // The rest of the project: a call to `get_user(name)` from another module is followed into that module (see project.ts).
+    const project = PythonProject.of(context ?? ProjectContext.forSingleFile(filePath, parsed));
+    project.parse(filePath, parsed);
 
     // 2. The data flow, function by function.
     for (const fn of functions) {
@@ -143,20 +103,19 @@ export class PythonAnalyzer implements Analyzer {
               break;
             }
           }
-          const helper = helperFor(call, fn);
+          const helper = project.resolve(call, filePath, fn, tainted);
           if (helper) {
-            const { positional } = callArguments(call);
-            const offset = parametersOf(helper.fn).some((p) => p.name === "self" || p.name === "cls") ? 1 : 0;
-            for (const [index, hit] of helper.summary.hits) {
-              const arg = positional[index - offset];
+            for (const [index, hit] of project.summary(helper)) {
+              const arg = argumentFor(call, helper.fn, index);
               const via = arg ? carriedBy(arg, tainted) : undefined;
               if (via === undefined) continue;
-              const name = calleeText(call);
+              const place = hit.file === filePath ? `line ${hit.line}` : `${project.context.displayPath(hit.file)}:${hit.line}`;
+              const route = hit.chain.length > 0 ? ` (via ${hit.chain.join(" -> ")})` : "";
               add({
-                ruleId: hit.rule,
+                ruleId: hit.spec.rule,
                 severity: hit.spec.severity,
                 confidence: hit.spec.confidence,
-                message: `${hit.spec.message(via)} The value is passed to ${name}() and reaches the vulnerable call at line ${hit.line}.`,
+                message: `${hit.spec.message(via)} The value is passed to ${helper.name}() and reaches the vulnerable call at ${place}${route}.`,
                 location: toLocation(call, filePath),
                 sourceSnippet: via,
                 sinkSnippet: snippet(call, text),

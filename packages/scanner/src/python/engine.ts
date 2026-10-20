@@ -1,5 +1,6 @@
 import { checkBudget } from "../budget";
 import { SyntaxNode } from "../parsers/utils";
+import { alwaysExits, conditionGuard } from "./guards";
 
 /**
  * Taint tracking for Python (Flask, FastAPI, Django). One function at a time, in the order the statements run:
@@ -218,8 +219,26 @@ export function trackTaint(
       else if (!additive) tainted.delete(name); // `x = int(x)`: no longer the caller's text
     }
   };
+  // Names a check has cleared inside one branch, put back when the branch ends: block node id -> the names taken out.
+  const branchGuards = new Map<number, string[]>();
+  const taken = new Map<number, string[]>();
   walkFunction(fn, {
     enter(node) {
+      if (node.type === "if_statement" || node.type === "elif_clause") {
+        const guard = conditionGuard(node.childForFieldName("condition"));
+        const consequence = node.childForFieldName("consequence");
+        if (consequence && guard.yes.length > 0) branchGuards.set(consequence.id, guard.yes);
+        // the else branch of an if/elif chain: what the first check settles when it fails
+        if (node.type === "if_statement" && guard.no.length > 0) {
+          for (const clause of node.namedChildren) if (clause.type === "else_clause") branchGuards.set(clause.id, guard.no);
+        }
+      }
+      const cleared = branchGuards.get(node.id);
+      if (cleared) {
+        const names = cleared.filter((name) => tainted.has(name));
+        for (const name of names) tainted.delete(name);
+        taken.set(node.id, names);
+      }
       if (node.type === "for_statement" || node.type === "for_in_clause") {
         const names = boundNames(node.childForFieldName("left") ?? node);
         const source = node.childForFieldName("right");
@@ -227,6 +246,13 @@ export function trackTaint(
       }
     },
     exit(node) {
+      const restore = taken.get(node.id);
+      if (restore) for (const name of restore) tainted.add(name);
+      // `if not x.isdigit(): abort(400)`: when the check fails the function stops, so after the if the value is checked
+      if (node.type === "if_statement" && node.namedChildren.every((c) => c.type !== "else_clause" && c.type !== "elif_clause")) {
+        const guard = conditionGuard(node.childForFieldName("condition"));
+        if (guard.no.length > 0 && alwaysExits(node.childForFieldName("consequence"))) for (const name of guard.no) tainted.delete(name);
+      }
       switch (node.type) {
         case "assignment":
           assign(node.childForFieldName("left"), node.childForFieldName("right"), false);

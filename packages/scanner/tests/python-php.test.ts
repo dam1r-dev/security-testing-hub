@@ -292,3 +292,93 @@ describe("development settings files", () => {
     expect(py("DEBUG = True\n", "debug-mode", "/home/me/test/shop/proj/settings.py")).toHaveLength(1);
   });
 });
+
+describe("data flow across files (validation round 12, improvement 1)", () => {
+  const python = found(path.join(repo, "examples", "vulnerable-python-app"));
+  const phpFound = found(path.join(repo, "examples", "vulnerable-php-app"));
+
+  it("Python: a view calling a helper in another module (from-import, module alias, an imported class's method, two hops)", () => {
+    expect(python).toEqual(
+      expect.arrayContaining([
+        "app/routes.py:12:sql-injection", // from .db import find_user
+        "app/routes.py:17:sql-injection", // from . import db as database; database.find_user(...)
+        "app/routes.py:27:command-injection", // report_for -> run_report -> subprocess (shell=True)
+        "app/routes.py:32:sql-injection", // UserService().lookup -> find_user
+      ]),
+    );
+    expect(python.some((r) => r.startsWith("app/routes.py:22:"))).toBe(false); // find_user_safe binds the value
+    expect(python.some((r) => r.startsWith("app/db.py") && /sql-injection|command/.test(r))).toBe(false); // the helper alone is not a handler
+  });
+
+  it("PHP: a global function in another file, a static method, an injected service, two hops", () => {
+    expect(phpFound).toEqual(
+      expect.arrayContaining([
+        "search.php:4:sql-injection", // find_user_by_name() in lib/db.php
+        "search.php:6:command-injection", // report_for -> run_report -> shell_exec
+        "app/Http/Controllers/SearchController.php:15:sql-injection", // $this->users->search(...)
+        "app/Http/Controllers/SearchController.php:20:sql-injection", // UserRepository::findBy(...)
+      ]),
+    );
+    expect(phpFound.some((r) => r.startsWith("search.php:5:"))).toBe(false); // find_user_safe prepares the statement
+  });
+
+  it("the finding says where the value ends up, and cyclic calls do not loop", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hub-xfile-"));
+    const write = (name: string, text: string): void => {
+      fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
+      fs.writeFileSync(path.join(dir, name), text);
+    };
+    write("pkg/__init__.py", "");
+    write("pkg/a.py", "from .b import second\n\ndef first(x, n):\n    if n:\n        return second(x, n - 1)\n    return x\n");
+    write("pkg/b.py", "import os\nfrom .a import first\n\ndef second(x, n):\n    os.system('echo ' + x)\n    return first(x, n)\n");
+    write("views.py", "from flask import request\nfrom pkg.a import first\n\n@app.route('/x')\ndef x():\n    return first(request.args['v'], 3)\n");
+    const result = scanPath(dir, { config: false });
+    const finding = result.results.flatMap((r) => r.findings).find((f) => f.ruleId === "command-injection");
+    expect(finding?.message).toContain("pkg/b.py:5");
+    expect(finding?.message).toContain("via second");
+  });
+});
+
+describe("checks clear the value (validation round 12, improvement 2)", () => {
+  const route = (body: string): string => `@app.route('/x')\ndef x():\n    v = request.args['v']\n    cur = db.cursor()\n${body}`;
+
+  it("Python: inside the branch a check guards, and after a failed check that stops the function", () => {
+    expect(py(route("    if v.isdigit():\n        cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(0);
+    expect(py(route("    if v.isdigit():\n        pass\n    cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(1); // after the if: not checked
+    expect(py(route("    if not v.isdigit():\n        abort(400)\n    cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(0);
+    expect(py(route("    if not v.isdigit():\n        return 'bad'\n    cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(0);
+    expect(py(route("    if not v.isdigit():\n        print('hm')\n    cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(1); // the failed check does not stop anything
+    expect(py(route("    if v in ('a', 'b'):\n        cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(0);
+    expect(py(route("    if v in ALLOWED and other:\n        cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(0);
+    expect(py(route("    if v in ALLOWED or other:\n        cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(1); // `or`: the first part may be false
+    expect(py(route("    if re.fullmatch(r'[a-z]+', v):\n        cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(0);
+    expect(py(route("    if is_valid_name(v):\n        cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(0);
+    expect(py(route("    if v.startswith('a'):\n        cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(1); // says nothing about the rest of the value
+    expect(py(route("    if v == 'admin':\n        cur.execute(f\"select {v}\")\n    else:\n        cur.execute(f\"select {v}\")\n"), "sql-injection")).toHaveLength(1);
+  });
+
+  it("PHP: is_numeric, in_array and an anchored preg_match, inside the branch and as an early exit", () => {
+    expect(php("$id = $_GET['id']; if (is_numeric($id)) { mysql_query(\"select $id\"); }", "sql-injection")).toHaveLength(0);
+    expect(php("$id = $_GET['id']; if (is_numeric($id)) { } mysql_query(\"select $id\");", "sql-injection")).toHaveLength(1);
+    expect(php("$id = $_GET['id']; if (!is_numeric($id)) { exit; } mysql_query(\"select $id\");", "sql-injection")).toHaveLength(0);
+    expect(php("$id = $_GET['id']; if (!is_numeric($id)) { die('bad'); } mysql_query(\"select $id\");", "sql-injection")).toHaveLength(0);
+    expect(php("$id = $_GET['id']; if (!is_numeric($id)) { echo 'x'; } mysql_query(\"select $id\");", "sql-injection")).toHaveLength(1);
+    expect(php("$p = $_GET['p']; if (in_array($p, $allowed)) { include $p . '.php'; }", "code-injection")).toHaveLength(0);
+    expect(php("$p = $_GET['p']; if (!preg_match('/^[a-z]+$/', $p)) { die('bad'); } include $p;", "code-injection")).toHaveLength(0);
+    expect(php("$p = $_GET['p']; if (preg_match('/^[a-z]/', $p)) { include $p; }", "code-injection")).toHaveLength(1); // not anchored at the end
+    expect(php("$p = $_GET['p']; if (strlen($p) > 3) { include $p; }", "code-injection")).toHaveLength(1);
+    expect(php("$p = $_GET['p']; if ($p === 'home') { include $p; }", "code-injection")).toHaveLength(0);
+  });
+
+  it("checking that a key EXISTS says nothing about its value", () => {
+    expect(php("$input = json_decode(file_get_contents('php://input'), true); if (array_key_exists('target', $input)) { $t = $input['target']; exec('ping ' . $t); }", "command-injection")).toHaveLength(1);
+  });
+
+  it("DVWA's 'impossible' level: the address is checked with is_numeric before it reaches the shell", () => {
+    const code =
+      "$target = stripslashes($_REQUEST['ip']);\n$octet = explode('.', $target);\nif ((is_numeric($octet[0])) && (is_numeric($octet[1]))) {\n    $target = $octet[0] . '.' . $octet[1];\n    $cmd = shell_exec('ping ' . $target);\n}\n";
+    expect(php(code, "command-injection")).toHaveLength(1); // $octet[0] is a subscript, not a plain name: reported (documented limit)
+    const simple = "$ip = $_REQUEST['ip'];\nif (is_numeric($ip)) {\n    $cmd = shell_exec('ping ' . $ip);\n}\n";
+    expect(php(simple, "command-injection")).toHaveLength(0);
+  });
+});
