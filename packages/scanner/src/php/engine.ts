@@ -1,5 +1,6 @@
 import { checkBudget } from "../budget";
 import { SyntaxNode } from "../parsers/utils";
+import { alwaysExits, conditionGuard } from "./guards";
 
 /**
  * Taint tracking for PHP (plain scripts, Laravel, Symfony). The same idea as the Python engine: statements in the order they run,
@@ -50,7 +51,7 @@ export function isRequestObject(node: SyntaxNode): boolean {
 export function calleeName(call: SyntaxNode): string {
   if (call.type === "function_call_expression") return (call.childForFieldName("function")?.text ?? "").replace(/^\\/, "");
   if (call.type === "member_call_expression") return call.childForFieldName("name")?.text ?? "";
-  if (call.type === "scoped_call_expression") return `${call.childForFieldName("scope")?.text ?? ""}::${call.childForFieldName("name")?.text ?? ""}`;
+  if (call.type === "scoped_call_expression") return `${(call.childForFieldName("scope")?.text ?? "").replace(/^\\/, "")}::${call.childForFieldName("name")?.text ?? ""}`;
   return "";
 }
 
@@ -239,8 +240,25 @@ export function trackTaint(scope: SyntaxNode, origins: Iterable<string>, onNode:
       else if (!additive) tainted.delete(name);
     }
   };
+  // Variables a check has cleared inside one branch, put back when the branch ends: branch node id -> the names taken out.
+  const branchGuards = new Map<number, string[]>();
+  const taken = new Map<number, string[]>();
   walkScope(scope, {
     enter(node) {
+      if (node.type === "if_statement" || node.type === "else_if_clause") {
+        const guard = conditionGuard(node.childForFieldName("condition"));
+        const body = node.childForFieldName("body");
+        if (body && guard.yes.length > 0) branchGuards.set(body.id, guard.yes);
+        if (node.type === "if_statement" && guard.no.length > 0) {
+          for (const clause of node.namedChildren) if (clause.type === "else_clause") branchGuards.set(clause.id, guard.no);
+        }
+      }
+      const cleared = branchGuards.get(node.id);
+      if (cleared) {
+        const names = cleared.filter((name) => tainted.has(name));
+        for (const name of names) tainted.delete(name);
+        taken.set(node.id, names);
+      }
       if (node.type === "foreach_statement") {
         const [iterated, ...rest] = node.namedChildren;
         if (iterated && carriedBy(iterated, tainted) !== undefined) {
@@ -249,6 +267,13 @@ export function trackTaint(scope: SyntaxNode, origins: Iterable<string>, onNode:
       }
     },
     exit(node) {
+      const restore = taken.get(node.id);
+      if (restore) for (const name of restore) tainted.add(name);
+      // `if (!is_numeric($x)) { exit; }`: when the check fails the script stops, so after the if the value is checked
+      if (node.type === "if_statement" && node.namedChildren.every((c) => c.type !== "else_clause" && c.type !== "else_if_clause")) {
+        const guard = conditionGuard(node.childForFieldName("condition"));
+        if (guard.no.length > 0 && alwaysExits(node.childForFieldName("body"))) for (const name of guard.no) tainted.delete(name);
+      }
       switch (node.type) {
         case "assignment_expression":
           assign(node.childForFieldName("left"), node.childForFieldName("right"), false);
