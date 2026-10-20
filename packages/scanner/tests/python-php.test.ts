@@ -377,8 +377,54 @@ describe("checks clear the value (validation round 12, improvement 2)", () => {
   it("DVWA's 'impossible' level: the address is checked with is_numeric before it reaches the shell", () => {
     const code =
       "$target = stripslashes($_REQUEST['ip']);\n$octet = explode('.', $target);\nif ((is_numeric($octet[0])) && (is_numeric($octet[1]))) {\n    $target = $octet[0] . '.' . $octet[1];\n    $cmd = shell_exec('ping ' . $target);\n}\n";
-    expect(php(code, "command-injection")).toHaveLength(1); // $octet[0] is a subscript, not a plain name: reported (documented limit)
+    expect(php(code, "command-injection")).toHaveLength(0); // the check names $octet[0]: the list of octets counts as checked
     const simple = "$ip = $_REQUEST['ip'];\nif (is_numeric($ip)) {\n    $cmd = shell_exec('ping ' . $ip);\n}\n";
     expect(php(simple, "command-injection")).toHaveLength(0);
+  });
+});
+
+describe("templates and the remaining rules (validation round 12, improvements 3 and 4)", () => {
+  const python = found(path.join(repo, "examples", "vulnerable-python-app"));
+  const phpFound = found(path.join(repo, "examples", "vulnerable-php-app"));
+
+  it("a value handed to a template that prints it unescaped is XSS: Jinja |safe and Blade {!! !!}; the escaped variable next to it is not", () => {
+    expect(python).toContain("templates_app.py:8:xss");
+    expect(python.filter((r) => r.startsWith("templates_app.py"))).toHaveLength(1); // `title` is printed by {{ title }}
+    expect(phpFound).toContain("app/Http/Controllers/ProfileController.php:10:xss");
+    expect(phpFound.filter((r) => r.startsWith("app/Http/Controllers/ProfileController.php"))).toHaveLength(1); // $bio is escaped
+  });
+
+  it("templates are found by name in a project's folders, autoescape off counts, a template elsewhere is not guessed", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hub-tpl-"));
+    const write = (name: string, text: string): void => {
+      fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
+      fs.writeFileSync(path.join(dir, name), text);
+    };
+    write("shop/templates/shop/item.html", "{% autoescape off %}<p>{{ desc }}</p>{% endautoescape %}<p>{{ name }}</p>");
+    write("views.py", "def item(request):\n    return render(request, 'shop/item.html', {'desc': request.GET['d'], 'name': request.GET['n']})\n");
+    write("other.py", "def other(request):\n    return render(request, 'missing.html', {'desc': request.GET['d']})\n");
+    const result = scanPath(dir, { config: false });
+    const xss = result.results.flatMap((r) => r.findings.map((f) => `${path.basename(r.file)}:${f.ruleId}:${f.message.includes("autoescape off")}`)).filter((x) => x.includes(":xss:"));
+    expect(xss).toEqual(["views.py:xss:true"]); // desc yes, name no, the unknown template nothing
+  });
+
+  it("Python mass assignment: the whole body into a write, not a single field or a validated form", () => {
+    const hits = (code: string): number => scanSource(code, "/app/v.py").findings.filter((f) => f.ruleId === "mass-assignment").length;
+    expect(hits("def v(request):\n    return User.objects.create(**request.POST.dict())\n")).toBe(1);
+    expect(hits("@app.route('/s')\ndef s():\n    data = request.get_json()\n    db.session.add(User(**data))\n")).toBe(1);
+    expect(hits("@app.route('/s')\ndef s():\n    db.users.insert_one(request.get_json())\n")).toBe(1);
+    expect(hits("@app.route('/s')\ndef s():\n    return User(name=request.json['name'])\n")).toBe(0);
+    expect(hits("def v(request):\n    form = F(request.POST)\n    if form.is_valid():\n        return User.objects.create(**form.cleaned_data)\n")).toBe(0);
+  });
+
+  it("PHP: a JWT that accepts the none algorithm or is read without verification, and CSRF protection switched off", () => {
+    const rules = (code: string, file = "/app/a.php"): string[] => scanSource(`<?php\n${code}\n`, file).findings.map((f) => f.ruleId);
+    expect(rules("$d = JWT::decode($tok, $key, ['HS256', 'none']);")).toContain("insecure-jwt");
+    expect(rules("$d = JWT::decode($tok, new Key($key, 'HS256'));")).not.toContain("insecure-jwt");
+    expect(rules("$p = json_decode(base64_decode(explode('.', $tok)[1]));")).toContain("insecure-jwt");
+    expect(rules("class V extends VerifyCsrfToken { protected $except = ['*']; }")).toContain("csrf");
+    expect(rules("class V extends VerifyCsrfToken { protected $except = ['stripe/webhook']; }")).not.toContain("csrf");
+    const blade = scanSource("<form method=\"POST\" action=\"/x\"><input></form>\n<form method=\"post\">@csrf<input></form>\n", "/app/resources/views/a.blade.php").findings.filter((f) => f.ruleId === "csrf");
+    expect(blade.map((f) => f.location.startLine)).toEqual([1]);
   });
 });

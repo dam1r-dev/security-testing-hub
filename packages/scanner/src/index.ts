@@ -36,6 +36,7 @@ import { scanExposedFiles } from "./backend/exposed";
 import { scanBackendConfigs } from "./backend/discover";
 import { scanEnvFiles } from "./secrets/env-files";
 import { emptyConfig, HubConfig, loadConfig } from "./config";
+import { forgetTemplates } from "./templates";
 import { applyInlineSuppressions, compileIgnorePatterns, parseIgnoreFile } from "./suppress";
 import { ProjectContext } from "./taint/project";
 import { Finding, ScanResult, ScanSummary } from "./types";
@@ -255,6 +256,7 @@ function readIgnoreFile(rootDir: string): string[] {
 /** Recursively scans every supported JS/TS file under `targetPath` (a file or a directory). */
 export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSummary {
   const analyzers = options.analyzers ?? defaultAnalyzers();
+  forgetTemplates(); // templates are read by the Python and PHP rules: a new scan reads them again
   const start = Date.now();
   const stat = fs.statSync(targetPath);
   const config = options.config === false ? emptyConfig() : (options.config ?? loadConfig(stat.isDirectory() ? targetPath : path.dirname(targetPath)).config);

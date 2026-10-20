@@ -7,6 +7,8 @@ import { Finding } from "../types";
 import { Analyzer } from "../analyzers/base-analyzer";
 import { ProjectContext } from "../taint/project";
 import { calleeText, callArguments, carriedBy, trackTaint } from "./engine";
+import { findTemplate, jinjaUnsafeUse } from "../templates";
+import { massAssignments } from "./mass";
 import { PythonProject, argumentFor } from "./project";
 import { decoratorsOf, originsOf } from "./origins";
 import { HTML_IN_STRING, XSS_RETURN_MESSAGE, sinksOf } from "./sinks";
@@ -54,6 +56,31 @@ function assignedName(literal: SyntaxNode): string | undefined {
   return undefined;
 }
 
+const TEMPLATE_CALL = /^(?:render_template|flask\.render_template|render|render_to_response|render_to_string|TemplateResponse|stream_template)$/;
+
+/** The values handed to a template as its context: keyword arguments (Flask), or a dict literal (Django), possibly held in a variable. */
+function templateContext(call: SyntaxNode, fn: SyntaxNode): Array<{ key: string; value: SyntaxNode }> {
+  const out: Array<{ key: string; value: SyntaxNode }> = [];
+  const { positional, keywords } = callArguments(call);
+  for (const [key, value] of keywords) out.push({ key, value });
+  const dictionaryOf = (node: SyntaxNode | undefined): SyntaxNode | undefined => {
+    if (!node) return undefined;
+    if (node.type === "dictionary") return node;
+    if (node.type !== "identifier") return undefined;
+    const assignment = findNodes(fn, (n) => n.type === "assignment" && n.childForFieldName("left")?.text === node.text && n.childForFieldName("right")?.type === "dictionary").pop();
+    return assignment?.childForFieldName("right") ?? undefined;
+  };
+  for (const argument of positional) {
+    const dictionary = dictionaryOf(argument);
+    for (const pair of dictionary?.namedChildren ?? []) {
+      const key = pair.childForFieldName("key");
+      const value = pair.childForFieldName("value");
+      if (pair.type === "pair" && key?.type === "string" && value) out.push({ key: key.text.replace(/^[rbfuRBFU]*["']|["']$/g, ""), value });
+    }
+  }
+  return out;
+}
+
 export class PythonAnalyzer implements Analyzer {
   readonly languages: readonly SupportedLanguage[] = ["python"];
 
@@ -84,6 +111,20 @@ export class PythonAnalyzer implements Analyzer {
       if (origins.length === 0 && !/request\b/.test(fn.text)) continue; // nothing of the caller's in this function
       const redirectGuarded = /url_has_allowed_host_and_scheme|is_safe_url|is_safe_redirect|safe_redirect|allowed_hosts|\.startswith\(\s*["']\/["']\s*\)/.test(fn.text);
 
+      for (const m of massAssignments(fn)) {
+        add({
+          ruleId: "mass-assignment",
+          severity: "medium",
+          confidence: "medium",
+          message:
+            `The whole request body (${m.body}) is passed to ${calleeText(m.call)}(...). Whatever fields the caller adds are written too (is_admin, role, balance, price, owner_id, email_verified). ` +
+            `Write only the fields you accept: a Django form or serializer with an explicit field list (cleaned_data / validated_data), a schema's .load(), or pick the keys one by one.`,
+          location: toLocation(m.call, filePath),
+          sourceSnippet: m.body,
+          sinkSnippet: snippet(m.call, text),
+        });
+      }
+
       trackTaint(fn, originNames, {
         onCall: (call, tainted) => {
           for (const spec of sinksOf(call, text)) {
@@ -101,6 +142,29 @@ export class PythonAnalyzer implements Analyzer {
                 sinkSnippet: snippet(call, text),
               });
               break;
+            }
+          }
+          // A value handed to a template that prints it without escaping (`{{ name|safe }}`).
+          if (TEMPLATE_CALL.test(calleeText(call))) {
+            const templateName = callArguments(call).positional.find((a) => a.type === "string" && /\.(?:html?|jinja2?|j2|txt|xml)["']$/i.test(a.text));
+            const file = templateName ? findTemplate(project.context.root, templateName.text.replace(/^[rbfuRBFU]*["']|["']$/g, ""), "jinja") : undefined;
+            if (file) {
+              for (const { key, value } of templateContext(call, fn)) {
+                const via = carriedBy(value, tainted);
+                const use = via === undefined ? undefined : jinjaUnsafeUse(file, key);
+                if (via === undefined || !use) continue;
+                add({
+                  ruleId: "xss",
+                  severity: "high",
+                  confidence: "medium",
+                  message:
+                    `User-controlled input ('${via}') is handed to the template as \`${key}\`, and ${project.context.displayPath(use.file)}:${use.line} prints it without escaping (${use.how}). ` +
+                    `A value with <script> runs in your visitors' browsers. Remove |safe (the template then escapes it), or escape the value yourself and mark only the result safe.`,
+                  location: toLocation(call, filePath),
+                  sourceSnippet: via,
+                  sinkSnippet: snippet(call, text),
+                });
+              }
             }
           }
           const helper = project.resolve(call, filePath, fn, tainted);

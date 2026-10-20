@@ -36,7 +36,10 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
 - **Python and PHP.** Flask, FastAPI and Django, plain PHP scripts and Laravel are scanned: SQL / command / code / template injection,
   deserialization, path traversal, SSRF, open redirect, reflected XSS, mass assignment (Laravel), `@csrf_exempt`, JWT without verification,
   debug mode and hard-coded secrets, in the same report, score, ignore comments, baseline and web scanner. Typed FastAPI parameters and Flask
-  converters are understood as safe; helpers in the same file are followed one call deep, other files are not yet. The grammars are optional
+  converters are understood as safe. Data flow follows the project's own functions across files (imports, module aliases, class methods, up to
+  three calls deep, reported at the call with the place it ends up), value checks (`isdigit`, `in`, `fullmatch`, `is_numeric`, `in_array`, an
+  anchored `preg_match`, early exits) clear the taint, templates are read (`{{ x|safe }}`, `{!! $x !!}`), plus Python mass assignment, PHP JWT and
+  CSRF (`$except = ['*']`, Blade forms without `@csrf`) checks. The grammars are optional
   packages: a machine that cannot install one lists those files as skipped. New rule `debug-mode` (30 rules in all). Fixtures:
   `examples/vulnerable-python-app`, `examples/vulnerable-php-app`; see docs/rules.md and docs/validation.md.
 - **Four new rules (29 in all, before `debug-mode`):** `mass-assignment` (the whole request body written to the database), `prototype-pollution`
