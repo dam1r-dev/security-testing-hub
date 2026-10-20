@@ -3,6 +3,7 @@ import { ParsedFile } from "../parsers/ast-parser";
 import { SyntaxNode, findNodes } from "../parsers/utils";
 import {
   findKnownSecrets,
+  isDemoLogin,
   isPlaceholder,
   isPublicEnvSecretName,
   isSensitiveName,
@@ -79,7 +80,7 @@ const NON_SECRET_CONTAINER = /placeholder|example|sample|dummy|fake|mock|fixture
 
 // Judged on the file's own name and the two folders above it only: where the whole project lives (a folder called `demo` or
 // `mocks` further up) says nothing about this file, and must not quietly switch checks off.
-const FIXTURE_PATH = /(?:^|[/\\])(?:seeds?|seeders?|factories|fixtures?|__fixtures__|mocks?|__mocks__|stories)[/\\]|seed[-_.\w]*\.[cm]?[jt]sx?$/i;
+const FIXTURE_PATH = /(?:^|[/\\])(?:seeds?|seeders?|factories|fixtures?|__fixtures__|mocks?|__mocks__|stories|e2e|cypress)[/\\]|(?:^|[/\\])e2e[-_.\w]*\.\w+$|seed[-_.\w]*\.[cm]?[jt]sx?$/i;
 
 export function isFixturePath(filePath: string): boolean {
   return FIXTURE_PATH.test(filePath.split(/[/\\]/).slice(-3).join("/"));
@@ -289,7 +290,7 @@ export class HardcodedSecretAnalyzer implements Analyzer {
             `${isPlaceholder(value) ? " (it looks like a placeholder that was never replaced)" : ""}. Anyone who reads the ` +
             `code can forge logins. Use a long random value from an environment variable (process.env.${name.toUpperCase()}).`,
         );
-      } else if (!fixtureLike && isSensitiveName(name) && looksLikeSecret(value, name) && !isFirebaseWebConfig(node)) {
+      } else if (!fixtureLike && isSensitiveName(name) && looksLikeSecret(value, name) && !isFirebaseWebConfig(node) && !isDemoLogin(text, node.startIndex)) {
         add(
           node.startIndex,
           node.endIndex,

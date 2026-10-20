@@ -2,7 +2,7 @@ import { checkBudgetNow } from "../budget";
 import { ParsedFile, SupportedLanguage } from "../parsers/ast-parser";
 import { SyntaxNode, findNodes, snippet, toLocation } from "../parsers/utils";
 import { isFixturePath } from "../analyzers/hardcoded-secret";
-import { findKnownSecrets, isPlaceholder, isSensitiveName, isSigningSecretName, looksLikeSecret, normalizeName, redact } from "../secrets/detect";
+import { findKnownSecrets, isDemoLogin, isPlaceholder, isSensitiveName, isSigningSecretName, looksLikeSecret, normalizeName, redact } from "../secrets/detect";
 import { Finding } from "../types";
 import { Analyzer } from "../analyzers/base-analyzer";
 import { ProjectContext } from "../taint/project";
@@ -298,7 +298,7 @@ export class PythonAnalyzer implements Analyzer {
       const name = normalizeName(rawName);
       if (isPlaceholder(value) || fixtureLike) continue;
       const signing = isSigningSecretName(name);
-      if (!signing && !(isSensitiveName(name) && looksLikeSecret(value, name))) continue;
+      if (!signing && (!(isSensitiveName(name) && looksLikeSecret(value, name)) || isDemoLogin(text, literal.startIndex))) continue;
       if (signing && !looksLikeSecret(value, name) && !/^django-insecure-/.test(value) && value.length < 8) continue;
       add({
         ruleId: "hardcoded-secret",

@@ -20,8 +20,15 @@ export interface KnownSecret {
   accept?: (match: RegExpExecArray) => boolean;
 }
 
-const PLACEHOLDER = /(example|your[_-]|xxxx|placeholder|dummy|fake|sample|changeme|replace[_-]?me|<[^>\s]+>|\*{3,}|\.{3,}|0{8,}|1234567890|abcdefgh)/i;
+const PLACEHOLDER = /(example|your[_-]|xxxx|placeholder|dummy|fake|sample|changeme|replace[_-]?me|dev[_-]only|\bstub[_-]|<[^>\s]+>|\*{3,}|\.{3,}|0{8,}|1234567890|abcdefgh)/i;
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?|host\.docker\.internal)$/i;
+
+/** A line that names a made-up person (`alice@example.com`) next to a password is a demo login, not a leaked credential. */
+export function isDemoLogin(source: string, index: number): boolean {
+  const start = source.lastIndexOf("\n", index - 1) + 1;
+  const end = source.indexOf("\n", index);
+  return /@(?:example\.(?:com|org|net)|test\.(?:com|org)|localhost)\b/i.test(source.slice(start, end === -1 ? source.length : end));
+}
 
 export function isPlaceholder(value: string): boolean {
   return PLACEHOLDER.test(value) || /^\$\{.*\}$/.test(value) || /^%\w+%$/.test(value);

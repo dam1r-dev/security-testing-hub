@@ -2,6 +2,15 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
+## Unreleased
+
+### Fixed
+- **Python: `use_case.execute(command)` is no longer SQL injection.** `execute` / `executemany` counts as a database call only when the receiver looks like a database
+  handle (`cursor`, `conn`, `db`, `session`, `engine`, ...) or the argument is SQL text being built. Clean-architecture FastAPI projects, which name their use cases `.execute(...)`,
+  produced 7 false findings in 27 layered projects (validation round 14).
+- Demo logins (a password on a line with an `@example.com` / `@test.com` address), `dev-only` and `stub-` values and `e2e` files are not leaked credentials.
+- Python: a redirect built on a configured host (`f"{frontend_base_url}/..."`, `settings.SITE_URL + path`) is not an open redirect.
+
 ## 0.7.1 - 2026-10-20
 
 ### Changed
