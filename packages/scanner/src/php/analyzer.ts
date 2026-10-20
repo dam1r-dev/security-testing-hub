@@ -140,6 +140,12 @@ export class PhpAnalyzer implements Analyzer {
       checkBudgetNow();
       const origins = scope.type === "method_declaration" ? controllerOrigins(scope) : [];
       const guarded = /parse_url|in_array\s*\(|allowed_hosts|wp_validate_redirect|wp_safe_redirect/.test(scope.text);
+      // Variables an included file leaves holding the caller's text, by the files that set them: reported with the finding.
+      const included = new Map<string, string[]>();
+      const fromInclude = (via: string): string => {
+        const files = included.get(via);
+        return files ? ` ${via} is set by ${files.slice(0, 3).map((f) => project.context.displayPath(f)).join(", ")}, which this file includes.` : "";
+      };
       trackTaint(scope, origins, (node, tainted) => {
         for (const sink of sinksOf(node, text)) {
           if (sink.rule === "open-redirect" && guarded) continue;
@@ -150,7 +156,7 @@ export class PhpAnalyzer implements Analyzer {
               ruleId: sink.rule,
               severity: sink.severity,
               confidence: sink.confidence,
-              message: sink.message(via),
+              message: sink.message(via) + fromInclude(via),
               location: toLocation(node, filePath),
               sourceSnippet: via,
               sinkSnippet: snippet(node, text),
@@ -191,13 +197,20 @@ export class PhpAnalyzer implements Analyzer {
               ruleId: hit.sink.rule,
               severity: hit.sink.severity,
               confidence: hit.sink.confidence,
-              message: `${hit.sink.message(via)} The value is passed to ${helper.name}() and reaches the vulnerable call at ${place}${route}.`,
+              message: `${hit.sink.message(via)} The value is passed to ${helper.name}() and reaches the vulnerable call at ${place}${route}.${fromInclude(via)}`,
               location: toLocation(node, filePath),
               sourceSnippet: via,
               sinkSnippet: snippet(node, text),
             });
           }
         }
+      }, {
+        onInclude: (node, tainted) => {
+          for (const [name, files] of project.includeExports(node, filePath, parsed)) {
+            tainted.add(name);
+            included.set(name, files);
+          }
+        },
       });
     }
 

@@ -411,8 +411,7 @@ What changed, finding by finding:
   flow is therefore tested only on fixtures (`examples/vulnerable-python-app/app/`, `examples/vulnerable-php-app/`: a helper in another module, a module alias, an imported
   class's method, a global PHP function, a static method, an injected service, two and three calls deep) and on synthetic projects (cyclic calls do not loop): **its recall and precision
   on real code are not measured.** The cost on the 1105-file Laravel project is about 6 s more (reading the names of all functions once).
-- **Still missed in DVWA:** reflected / stored XSS and file inclusion, because DVWA's pages share variables through `include` of a script (one file sets `$html`, another prints it); file
-  upload, weak session ids, captcha, JavaScript. Half of its families remain unfound.
+- **Still missed in DVWA:** file upload, weak session ids, captcha, JavaScript. (Reflected XSS and file inclusion through `include` were missed here and are found since round 15.)
 
 **Bundles.** Minified or bundled files without `.min` in the name are skipped with a note (round 12), which is what keeps the larger projects fast.
 
@@ -454,6 +453,30 @@ sink-by-name rule was the largest source of noise in layered code, and it is fix
 
 Speed: the slowest project (178 files, a Laravel app with vendored jQuery plugins) takes about 23 s, almost all of it in the JavaScript analyzers on non-minified third-party libraries under `public/`,
 not in the Python or PHP engines.
+
+## Round 15: variables shared through `include`, URL segments
+
+Two known gaps from rounds 12–14, fixed and measured on the same corpora (no new downloads).
+
+**PHP: `include` / `require` shares variables.** DVWA builds a page in two files: `source/low.php` sets `$html .= 'Hello ' . $_GET['name']`, `index.php` includes the chosen variant and prints `$html`.
+The scanner now works out, for every file, which variables it leaves holding the caller's text at its end, and an `include` brings those into the including scope. The path is resolved from what the
+code spells out: `include 'lib/db.php'` exactly, `require __DIR__ . "/source/{$level}.php"` as every file under `source/` (at most 12, two includes deep). Writing one key of an array
+(`$page['body'] .= "…{$html}…"`) puts the text into the array, so the later `dvwaHtmlEcho($page)` is reported. A finding says which files set the variable.
+
+| DVWA (`corpus6`) | before | after |
+|---|---|---|
+| findings | 41 | 50 |
+| new | | 9: the include in `fi/index.php` (local file inclusion), reflected XSS in `xss_r`, `sqli`, `brute`, `csp`, `bac` (a cookie printed raw), `api`, `upload`, `view_source` |
+| lost | | 0 |
+
+All nine were checked by hand against the source: each is a real, intended DVWA bug. The other 24 projects of corpus 6 and the 27 of corpus 7 gain nothing and lose nothing from this change.
+Scan time is unchanged (20 s for the 1105-file Laravel project).
+
+**Python: a URL segment cannot climb out of a directory.** `@app.get("/<filename>")` (Flask) and `@app.get("/files/{name}")` (FastAPI) refuse a `/` in the placeholder, so `os.path.join(DIR, filename)` can not leave `DIR`.
+Such a value is no longer reported for `path-traversal` (it still is for SQL, commands and the rest). `<path:name>`, `{name:path}`, query parameters and `unquote(name)` still are. The flask-openapi3 form
+`def get(path: FileModel)` counts too. This removes the 2 false findings left in round 14 (corpus 7: 21 → 19, nothing else changed).
+
+Not done: Django `path()` converters (they live in `urls.py`, not next to the view), and a lone `..` as the whole segment.
 
 ## What the scanner still misses (false negatives)
 

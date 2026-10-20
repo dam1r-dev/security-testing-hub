@@ -84,6 +84,27 @@ function flaskNumericNames(decorators: string[]): Set<string> {
   return numeric;
 }
 
+/**
+ * The route's placeholders that are ONE URL segment: Flask `<name>`, `<string:name>`, `<int:name>`, `<uuid:name>`; FastAPI `{name}`. The router
+ * refuses a "/" in them, so a file name taken from one cannot climb out of its directory. `<path:name>` and `{name:path}` take slashes.
+ * `undefined` when the route has a placeholder that does.
+ */
+function segmentPlaceholders(decorators: string[]): Set<string> | undefined {
+  const names = new Set<string>();
+  for (const decorator of decorators) {
+    if (!ROUTE_DECORATOR.test(decorator)) continue;
+    for (const m of decorator.matchAll(/<\s*(?:(\w+)(?:\([^)]*\))?\s*:\s*)?(\w+)\s*>/g)) {
+      if (m[1] === "path") return undefined;
+      names.add(m[2] as string);
+    }
+    for (const m of decorator.matchAll(/\{\s*(\w+)\s*(?::\s*(\w+))?\s*\}/g)) {
+      if (m[2] === "path") return undefined;
+      names.add(m[1] as string);
+    }
+  }
+  return names;
+}
+
 /** The names in this function that are the caller's from its first line. */
 export function originsOf(fn: SyntaxNode): Origin[] {
   const decorators = decoratorsOf(fn);
@@ -92,11 +113,14 @@ export function originsOf(fn: SyntaxNode): Origin[] {
 
   if (decorators.some((d) => ROUTE_DECORATOR.test(d))) {
     const numeric = flaskNumericNames(decorators);
+    const segments = segmentPlaceholders(decorators);
     for (const p of parameters) {
       if (FRAMEWORK_PARAMETER.has(p.name) || numeric.has(p.name)) continue;
       if (/^(?:Depends|Security)\s*\(/.test(p.defaultValue) || FRAMEWORK_TYPE.test(p.type) || isConvertedType(p.type)) continue;
       if (/^(?:Query|Path|Body|Header|Cookie|Form)\s*\(/.test(p.defaultValue) && isConvertedType(p.type)) continue;
-      origins.push({ name: p.name, why: "route parameter" });
+      // `def get(path: FileModel)` (flask-openapi3, spectree): the model named `path` holds the URL's placeholders
+      const holdsPlaceholders = p.name === "path" && /^[A-Z]\w*$/.test(p.type);
+      origins.push({ name: p.name, why: "route parameter", segment: !!segments && (segments.has(p.name) || holdsPlaceholders) });
     }
     return origins;
   }

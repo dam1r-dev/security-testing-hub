@@ -457,4 +457,80 @@ describe("validation round 14: layered projects", () => {
     expect(py('PASSWORD = "Zk3!p9Lq7#vX2mRt5Nb8"\n', "hardcoded-secret", "/app/scripts/e2e_login.py")).toHaveLength(0);
   });
 
+  it("a file name taken from one URL segment cannot climb out of its directory", () => {
+    const flask = (route: string): string => `@app.get("${route}")\ndef download(filename):\n    file = os.path.join(DIR, filename)\n    return send_file(file)\n`;
+    expect(py(flask("/<filename>"), "path-traversal")).toHaveLength(0);
+    expect(py(flask("/<string:filename>"), "path-traversal")).toHaveLength(0);
+    expect(py(flask("/<path:filename>"), "path-traversal")).toHaveLength(1);
+    // a query value can hold slashes
+    expect(py('@app.get("/f")\ndef download():\n    return send_file(os.path.join(DIR, request.args["f"]))\n', "path-traversal")).toHaveLength(1);
+    // the segment plus a value that can hold slashes: still reported
+    expect(py('@app.get("/<name>")\ndef d(name):\n    return send_file(os.path.join(DIR, name, request.args["f"]))\n', "path-traversal")).toHaveLength(1);
+    // unquote can turn %2F into a slash
+    expect(py('@app.get("/<name>")\ndef d(name):\n    return send_file(unquote(name))\n', "path-traversal")).toHaveLength(1);
+    // the other rules still see the value
+    expect(py('@app.get("/<name>")\ndef d(name):\n    cur.execute(f"SELECT * FROM t WHERE n = \'{name}\'")\n', "sql-injection")).toHaveLength(1);
+    // FastAPI
+    expect(py('@app.get("/files/{name}")\ndef d(name: str):\n    return FileResponse(os.path.join(DIR, name))\n', "path-traversal")).toHaveLength(0);
+    expect(py('@app.get("/files/{name:path}")\ndef d(name: str):\n    return FileResponse(os.path.join(DIR, name))\n', "path-traversal")).toHaveLength(1);
+    expect(py('@app.get("/files")\ndef d(name: str):\n    return FileResponse(os.path.join(DIR, name))\n', "path-traversal")).toHaveLength(1);
+    // flask-openapi3: the model named path holds the placeholders
+    expect(py('@api.get("/<filename>")\ndef d(path: DownloadFilePath):\n    return send_file(os.path.join(DIR, path.filename))\n', "path-traversal")).toHaveLength(0);
+  });
+
+  describe("PHP: variables an included file leaves behind (round 15)", () => {
+    const project = (files: Record<string, string>): string => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hub-include-"));
+      for (const [name, body] of Object.entries(files)) {
+        fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
+        fs.writeFileSync(path.join(dir, name), body);
+      }
+      return dir;
+    };
+
+    it("an include that picks the file by a variable brings in what any variant leaves tainted", () => {
+      const dir = project({
+        "index.php": "<?php\n$level = 'low';\nrequire_once __DIR__ . \"/source/{$level}.php\";\necho '<h1>Result</h1>' . $html;\n",
+        "source/low.php": "<?php\n$html = '';\nif (isset($_GET['name'])) {\n  $html .= '<pre>Hello ' . $_GET['name'] . '</pre>';\n}\n",
+        "source/impossible.php": "<?php\n$html = '';\n$html .= htmlspecialchars($_GET['name']);\n",
+      });
+      const findings = scanPath(dir, { config: false }).results.flatMap((r) => r.findings.map((f) => ({ file: path.basename(r.file), line: f.location.startLine, rule: f.ruleId, message: f.message })));
+      const hit = findings.find((f) => f.file === "index.php" && f.rule === "xss");
+      expect(hit?.line).toBe(4);
+      expect(hit?.message).toMatch(/\$html is set by .*low\.php/);
+      expect(findings.filter((f) => f.file === "impossible.php")).toHaveLength(0);
+    });
+
+    it("an include of a named file: its tainted variables reach a query after it", () => {
+      const dir = project({
+        "page.php": "<?php\ninclude 'lib/params.php';\n$r = mysqli_query($db, \"SELECT * FROM t WHERE id = $id\");\n",
+        "lib/params.php": "<?php\n$id = $_GET['id'];\n$limit = 10;\n",
+      });
+      const rules = scanPath(dir, { config: false }).results.filter((r) => r.file.endsWith("page.php")).flatMap((r) => r.findings.map((f) => `${f.location.startLine}:${f.ruleId}`));
+      expect(rules).toContain("3:sql-injection");
+    });
+
+    it("variables the included file cleans, or sets from its own constants, are not the caller's", () => {
+      const dir = project({
+        "page.php": "<?php\ninclude 'lib/params.php';\necho $id . $title;\n",
+        "lib/params.php": "<?php\n$id = (int) $_GET['id'];\n$title = 'Home';\n",
+      });
+      const found = scanPath(dir, { config: false }).results.flatMap((r) => r.findings.map((f) => f.ruleId));
+      expect(found.filter((r) => r === "xss")).toHaveLength(0);
+    });
+
+    it("a variable reassigned after the include is no longer the caller's; an include the code does not spell out is left alone", () => {
+      const dir = project({
+        "page.php": "<?php\ninclude 'lib/params.php';\n$id = 5;\necho $id;\ninclude $something . $other;\n",
+        "lib/params.php": "<?php\n$id = $_GET['id'];\n",
+      });
+      const found = scanPath(dir, { config: false }).results.filter((r) => r.file.endsWith("page.php")).flatMap((r) => r.findings.map((f) => f.ruleId));
+      expect(found).toHaveLength(0);
+    });
+
+    it("writing one key of an array puts the caller's text into the array; the session and server arrays are left alone", () => {
+      expect(php("$page['body'] .= '<p>' . $_GET['q'] . '</p>';\necho $page['body'];", "xss")).toHaveLength(1);
+      expect(php("$_SESSION['q'] = $_GET['q'];\necho $_SESSION['other'];", "xss")).toHaveLength(0);
+    });
+  });
 });

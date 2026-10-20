@@ -63,7 +63,7 @@ data-flow check: SQL injection, command injection, `eval` / template / file-incl
 SSRF, open redirect, reflected XSS, plus mass assignment (Laravel), `@csrf_exempt`, a JWT decoded without verification, debug mode and
 hard-coded secrets. Typed FastAPI parameters (`int`, `UUID`...) and Flask `<int:id>` converters are understood as safe. Helpers defined in
 the project's own functions are followed across files (imports, class methods, up to three calls deep), checks such as `isdigit()` / `is_numeric()` / `in_array()` clear the
-value, and a template that prints a variable raw (`|safe`, `{!! !!}`) is XSS. Not followed: scripts that share variables through `include`. See
+value, and a template that prints a variable raw (`|safe`, `{!! !!}`) is XSS. Variables shared through `include` are followed. See
 [docs/rules.md](docs/rules.md#python-and-php). The grammars are optional packages (`tree-sitter-python`, `tree-sitter-php`): if one cannot be
 installed on your machine those files are reported as skipped, never silently.
 

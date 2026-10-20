@@ -6,7 +6,7 @@ import { findKnownSecrets, isDemoLogin, isPlaceholder, isSensitiveName, isSignin
 import { Finding } from "../types";
 import { Analyzer } from "../analyzers/base-analyzer";
 import { ProjectContext } from "../taint/project";
-import { calleeText, callArguments, carriedBy, trackTaint } from "./engine";
+import { calleeText, callArguments, carriedBy, DECODES, trackTaint, withSlashes } from "./engine";
 import { findTemplate, jinjaUnsafeUse } from "../templates";
 import { massAssignments } from "./mass";
 import { PythonProject, argumentFor } from "./project";
@@ -125,12 +125,15 @@ export class PythonAnalyzer implements Analyzer {
         });
       }
 
+      const segmentNames = new Set(origins.filter((o) => o.segment).map((o) => o.name));
       trackTaint(fn, originNames, {
-        onCall: (call, tainted) => {
+        onCall: (call, tainted, segment) => {
           for (const spec of sinksOf(call, text)) {
             if (spec.rule === "open-redirect" && redirectGuarded) continue;
+            // a file name that is one URL segment has no "/" in it
+            const seen = spec.rule === "path-traversal" ? withSlashes(tainted, segment) : tainted;
             for (const arg of spec.args) {
-              const via = carriedBy(arg, tainted);
+              const via = carriedBy(arg, seen === tainted || DECODES.test(arg.text) ? tainted : seen);
               if (via === undefined) continue;
               add({
                 ruleId: spec.rule,
@@ -171,7 +174,7 @@ export class PythonAnalyzer implements Analyzer {
           if (helper) {
             for (const [index, hit] of project.summary(helper)) {
               const arg = argumentFor(call, helper.fn, index);
-              const via = arg ? carriedBy(arg, tainted) : undefined;
+              const via = arg ? carriedBy(arg, hit.spec.rule === "path-traversal" ? withSlashes(tainted, segment) : tainted) : undefined;
               if (via === undefined) continue;
               const place = hit.file === filePath ? `line ${hit.line}` : `${project.context.displayPath(hit.file)}:${hit.line}`;
               const route = hit.chain.length > 0 ? ` (via ${hit.chain.join(" -> ")})` : "";
@@ -203,7 +206,7 @@ export class PythonAnalyzer implements Analyzer {
             sinkSnippet: snippet(statement, text),
           });
         },
-      });
+      }, segmentNames);
     }
 
     // 3. Checks that need no data flow.

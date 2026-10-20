@@ -22,6 +22,9 @@ const MAX_FILES = 4000;
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_DEPTH = 3;
 const SKIP_DIRS = new Set(["vendor", "node_modules", ".git", "storage", "cache", "tests", "test", "__tests__", "public"]);
+const MAX_INCLUDE_DEPTH = 2;
+const MAX_INCLUDE_CANDIDATES = 12;
+const NO_NAMES: ReadonlySet<string> = new Set();
 const COMMON_METHOD = new Set(["get", "set", "add", "all", "find", "first", "create", "update", "delete", "save", "count", "exists", "map", "filter", "each", "pluck", "where", "with", "query", "execute", "run", "handle", "boot", "register", "toArray", "toString", "__construct"]);
 
 export interface Hit {
@@ -52,6 +55,71 @@ export function argumentFor(call: SyntaxNode, _fn: SyntaxNode, index: number): S
   return argumentsOf(call)[index];
 }
 
+/**
+ * The text of an `include` / `require` path as pieces: a string for what the code spells out, null for what it does not (a variable, a
+ * constant, `__DIR__`, a call). `DVWA_ROOT . "vulnerabilities/xss/source/{$file}"` -> [null, "vulnerabilities/xss/source/", null].
+ */
+export function includePieces(node: SyntaxNode | null): Array<string | null> {
+  const out: Array<string | null> = [];
+  const visit = (current: SyntaxNode | null, depth: number): void => {
+    if (!current || depth > 20) {
+      out.push(null);
+      return;
+    }
+    switch (current.type) {
+      case "string":
+        out.push(current.text.slice(1, -1));
+        break;
+      case "encapsed_string":
+        for (const part of current.namedChildren) out.push(part.type === "string_content" ? part.text : part.type === "escape_sequence" ? "" : null);
+        break;
+      case "binary_expression":
+        if (current.childForFieldName("operator")?.text === ".") {
+          visit(current.childForFieldName("left"), depth + 1);
+          visit(current.childForFieldName("right"), depth + 1);
+        } else {
+          out.push(null);
+        }
+        break;
+      case "parenthesized_expression":
+        visit(current.namedChild(0), depth + 1);
+        break;
+      default:
+        out.push(null);
+    }
+  };
+  visit(node, 0);
+  const merged: Array<string | null> = [];
+  for (const piece of out) {
+    const last = merged.length - 1;
+    if (piece === null) {
+      if (last < 0 || merged[last] !== null) merged.push(null);
+    } else if (last >= 0 && merged[last] !== null) {
+      merged[last] = (merged[last] as string) + piece;
+    } else {
+      merged.push(piece);
+    }
+  }
+  return merged;
+}
+
+/** A pattern for the project-relative paths an include may mean, or undefined when the code says too little ("$dir . $name . '.php'"). */
+export function includePattern(pieces: Array<string | null>): RegExp | undefined {
+  const literal = pieces.filter((p): p is string => p !== null).join("");
+  if (literal.replace(/[./\\]/g, "").length < 5 || (!literal.includes("/") && !/\.php$/.test(literal))) return undefined;
+  let source = "";
+  pieces.forEach((piece, index) => {
+    if (piece === null) {
+      if (index > 0) source += index === pieces.length - 1 ? "[^/]*" : ".*?";
+      return;
+    }
+    let text = piece.replace(/\\/g, "/");
+    if (index === 0 || (index === 1 && pieces[0] === null)) text = text.replace(/^(?:\.{0,2}\/)+/, "");
+    source += text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  });
+  return new RegExp(`(?:^|/)${source}$`);
+}
+
 function shortName(name: string): string {
   return name.replace(/^\\/, "").split("\\").pop() ?? name;
 }
@@ -63,6 +131,10 @@ export class PhpProject {
   private readonly inProgress = new Set<string>();
   private readonly mentioned = new Map<string, Set<string>>();
   private indexed = false;
+  private files: string[] = [];
+  private readonly exportsCache = new Map<string, ReadonlySet<string>>();
+  private readonly exporting = new Set<string>();
+  private readonly candidateCache = new Map<string, string[]>();
   // Names found in the text of every file, without parsing it: a function name -> the files that mention `function name(`.
   private readonly functionFiles = new Map<string, Set<string>>();
   private readonly classFiles = new Map<string, Set<string>>();
@@ -124,6 +196,7 @@ export class PhpProject {
         }
       }
     }
+    this.files = files;
     const add = (map: Map<string, Set<string>>, name: string, file: string): void => {
       const set = map.get(name) ?? new Set<string>();
       set.add(file);
@@ -198,6 +271,61 @@ export class PhpProject {
     for (const m of text.matchAll(/\b([A-Z]\w+)\s+\$\w+/g)) names.add(m[1] as string);
     this.mentioned.set(file, names);
     return names;
+  }
+
+  /** The project files an `include` / `require` can mean: the one it spells out, or those that fit the part it does spell out. */
+  includedFiles(include: SyntaxNode, fromFile: string, parsed: ParsedFile): string[] {
+    const from = path.resolve(fromFile);
+    this.ensureIndex({ file: from, parsed });
+    const pieces = includePieces(include.namedChild(0));
+    const key = JSON.stringify(pieces);
+    const relative = (file: string): string => path.relative(this.context.root, file).split(path.sep).join("/");
+    // include "lib/db.php": next to this file, or from the project root
+    const only = pieces.length === 1 ? pieces[0] : null;
+    if (only !== null && only !== undefined) {
+      for (const base of [path.dirname(from), this.context.root]) {
+        const exact = path.resolve(base, only);
+        if (exact !== from && this.files.includes(exact)) return [exact];
+      }
+    }
+    let matches = this.candidateCache.get(key);
+    if (!matches) {
+      const pattern = includePattern(pieces);
+      matches = pattern ? this.files.filter((f) => pattern.test(relative(f))) : [];
+      if (matches.length > MAX_INCLUDE_CANDIDATES) matches = [];
+      this.candidateCache.set(key, matches);
+    }
+    return matches.filter((f) => f !== from);
+  }
+
+  /** The variables an included file leaves holding the caller's text, by the files that do it. */
+  includeExports(include: SyntaxNode, fromFile: string, parsed: ParsedFile, depth = 0): Map<string, string[]> {
+    const out = new Map<string, string[]>();
+    for (const candidate of this.includedFiles(include, fromFile, parsed)) {
+      for (const name of this.exportsOf(candidate, depth)) out.set(name, [...(out.get(name) ?? []), candidate]);
+    }
+    return out;
+  }
+
+  private exportsOf(file: string, depth: number): ReadonlySet<string> {
+    const known = this.exportsCache.get(file);
+    if (known) return known;
+    if (this.exporting.has(file) || depth >= MAX_INCLUDE_DEPTH) return NO_NAMES;
+    this.exporting.add(file);
+    try {
+      checkBudgetNow();
+      const parsed = this.parse(file);
+      if (!parsed) return NO_NAMES;
+      const names = trackTaint(parsed.tree.rootNode, [], () => undefined, {
+        onInclude: (node, tainted) => {
+          for (const name of this.includeExports(node, file, parsed, depth + 1).keys()) tainted.add(name);
+        },
+      });
+      this.exportsCache.set(file, names);
+      return names;
+    } finally {
+      this.exporting.delete(file);
+    }
   }
 
   /** The function a call goes to, if it is one of the project's. */
