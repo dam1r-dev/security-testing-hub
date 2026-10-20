@@ -2,6 +2,16 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
+## Unreleased
+
+### Added
+- **PHP follows variables shared through `include` / `require`.** The variables an included file leaves holding the caller's text are the caller's in the including script (`$html` set in `source/low.php`,
+  printed in `index.php`). The path may be spelled out or built from a variable (every matching file, up to 12). `$page['body'] .= $x` puts `$x` into `$page`. On DVWA this finds 9 more real bugs
+  (file inclusion, 8 reflected XSS) and loses none (validation round 15).
+
+### Fixed
+- Python: a Flask `<name>` / FastAPI `{name}` placeholder is one URL segment and cannot carry a `/`, so it is not reported as path traversal (`<path:name>`, query values and `unquote()` still are).
+
 ## 0.7.2 - 2026-10-20
 
 ### Fixed

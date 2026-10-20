@@ -96,6 +96,16 @@ export function boundNames(pattern: SyntaxNode): string[] {
   }
 }
 
+// Arrays that PHP fills in itself: writing one key of them does not make the rest the caller's.
+const NOT_A_BAG = new Set(["$_SESSION", "$_SERVER", "$_ENV", "$GLOBALS", "$this", "$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES"]);
+
+/** `$page['body'] .= $x` puts $x into $page: the variable a subscript write goes to, if it is a plain one. */
+function writtenBag(target: SyntaxNode): string | undefined {
+  let current: SyntaxNode | null = target;
+  while (current && current.type === "subscript_expression") current = current.namedChild(0);
+  return current?.type === "variable_name" && current !== target && !NOT_A_BAG.has(current.text) ? current.text : undefined;
+}
+
 function pushAll(stack: SyntaxNode[], nodes: Iterable<SyntaxNode>): void {
   for (const node of nodes) stack.push(node);
 }
@@ -228,10 +238,22 @@ export function walkScope(scope: SyntaxNode, handlers: WalkHandlers): void {
  * Runs `onNode` for every node that can be a dangerous use (calls, `include`, `echo`, `print`, `exit`, backticks) with the variables that
  * are the caller's AT THAT POINT. Assignments and loops update the set as the walk goes.
  */
-export function trackTaint(scope: SyntaxNode, origins: Iterable<string>, onNode: (node: SyntaxNode, tainted: Names) => void): void {
+export interface TrackOptions {
+  /** After an `include` / `require`: the included file runs in this scope, so the variables it leaves tainted are tainted here. */
+  onInclude?(node: SyntaxNode, tainted: Set<string>): void;
+}
+
+/** Returns the variables that are the caller's when the scope ends (what an included file leaves behind). */
+export function trackTaint(scope: SyntaxNode, origins: Iterable<string>, onNode: (node: SyntaxNode, tainted: Names) => void, options: TrackOptions = {}): ReadonlySet<string> {
   const tainted = new Set(origins);
   const assign = (target: SyntaxNode | null, value: SyntaxNode | null, additive: boolean): void => {
     if (!target || !value) return;
+    const bag = writtenBag(target);
+    if (bag) {
+      // one key of an array: the array holds the caller's text from now on (and keeps what it held before)
+      if (carriedBy(value, tainted) !== undefined) tainted.add(bag);
+      return;
+    }
     const names = boundNames(target);
     if (names.length === 0) return;
     const carries = carriedBy(value, tainted) !== undefined;
@@ -294,6 +316,7 @@ export function trackTaint(scope: SyntaxNode, origins: Iterable<string>, onNode:
         case "exit_statement":
         case "shell_command_expression":
           onNode(node, tainted);
+          if (/^(?:include|require)/.test(node.type)) options.onInclude?.(node, tainted);
           break;
         case "expression_statement":
           // `<p><?= $value ?></p>`: the short echo tag is an echo
@@ -304,4 +327,5 @@ export function trackTaint(scope: SyntaxNode, origins: Iterable<string>, onNode:
       }
     },
   });
+  return tainted;
 }

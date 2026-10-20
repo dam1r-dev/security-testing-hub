@@ -19,6 +19,22 @@ export interface Origin {
   name: string;
   /** Why this name is the caller's: "route parameter", "request.args". Shown in messages. */
   why: string;
+  /**
+   * The value is one URL segment (Flask `<name>`, FastAPI `{name}`): the router refuses a "/" in it, so it cannot climb out of a directory.
+   * Such a value is still the caller's for every other rule.
+   */
+  segment?: boolean;
+}
+
+/** Calls that can turn an escaped "/" (%2F) back into a slash. */
+export const DECODES = /unquote|b64decode|unescape/;
+
+/** The tainted names whose value may contain a "/" (the ones a path-traversal sink must look at). */
+export function withSlashes(tainted: ReadonlySet<string>, segment: ReadonlySet<string>): ReadonlySet<string> {
+  if (segment.size === 0) return tainted;
+  const out = new Set<string>();
+  for (const name of tainted) if (!segment.has(name)) out.add(name);
+  return out;
 }
 
 // `request.args`, `request.form["x"]`, `self.request.GET.get("x")`, `request.query_params`, `request.json`...
@@ -206,17 +222,33 @@ export function walkFunction(fn: SyntaxNode, handlers: WalkHandlers): void {
 export function trackTaint(
   fn: SyntaxNode,
   origins: ReadonlySet<string>,
-  handlers: { onCall?(call: SyntaxNode, tainted: ReadonlySet<string>): void; onReturn?(statement: SyntaxNode, tainted: ReadonlySet<string>): void },
+  handlers: {
+    onCall?(call: SyntaxNode, tainted: ReadonlySet<string>, segment: ReadonlySet<string>): void;
+    onReturn?(statement: SyntaxNode, tainted: ReadonlySet<string>, segment: ReadonlySet<string>): void;
+  },
+  segmentOrigins: ReadonlySet<string> = new Set(),
 ): void {
   const tainted = new Set(origins);
+  // The tainted names that hold one URL segment only: kept apart so that a path-traversal sink can ignore them. A name that is
+  // cleared by a check keeps its entry (it comes back with the same kind when the branch ends); an assignment sets it again.
+  const segment = new Set([...segmentOrigins].filter((name) => origins.has(name)));
   const assign = (targets: SyntaxNode | null, value: SyntaxNode | null, additive: boolean): void => {
     if (!targets || !value) return;
     const names = boundNames(targets);
     if (names.length === 0) return;
     const carries = carriedBy(value, tainted) !== undefined;
+    // `unquote(name)` can turn %2F into a slash: not a segment any more
+    const slashes = carries && (segment.size === 0 ? true : carriedBy(value, withSlashes(tainted, segment)) !== undefined || DECODES.test(value.text));
     for (const name of names) {
-      if (carries) tainted.add(name);
-      else if (!additive) tainted.delete(name); // `x = int(x)`: no longer the caller's text
+      if (carries) {
+        const wasFull = tainted.has(name) && !segment.has(name);
+        tainted.add(name);
+        if (slashes || (additive && wasFull)) segment.delete(name);
+        else segment.add(name);
+      } else if (!additive) {
+        tainted.delete(name); // `x = int(x)`: no longer the caller's text
+        segment.delete(name);
+      }
     }
   };
   // Names a check has cleared inside one branch, put back when the branch ends: block node id -> the names taken out.
@@ -242,7 +274,14 @@ export function trackTaint(
       if (node.type === "for_statement" || node.type === "for_in_clause") {
         const names = boundNames(node.childForFieldName("left") ?? node);
         const source = node.childForFieldName("right");
-        if (source && carriedBy(source, tainted) !== undefined) for (const name of names) tainted.add(name);
+        if (source && carriedBy(source, tainted) !== undefined) {
+          const slashes = segment.size === 0 || carriedBy(source, withSlashes(tainted, segment)) !== undefined;
+          for (const name of names) {
+            tainted.add(name);
+            if (slashes) segment.delete(name);
+            else segment.add(name);
+          }
+        }
       }
     },
     exit(node) {
@@ -261,10 +300,10 @@ export function trackTaint(
           assign(node.childForFieldName("left"), node.childForFieldName("right"), true);
           break;
         case "call":
-          handlers.onCall?.(node, tainted);
+          handlers.onCall?.(node, tainted, segment);
           break;
         case "return_statement":
-          handlers.onReturn?.(node, tainted);
+          handlers.onReturn?.(node, tainted, segment);
           break;
         default:
           break;
