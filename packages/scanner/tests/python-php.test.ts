@@ -428,3 +428,33 @@ describe("templates and the remaining rules (validation round 12, improvements 3
     expect(blade.map((f) => f.location.startLine)).toEqual([1]);
   });
 });
+
+describe("validation round 14: layered projects", () => {
+  it("use_case.execute(command) runs application code, cursor.execute(query) runs SQL", () => {
+    const view = (call: string): string => `@router.post("/x")\ndef x(request: Request):\n    value = request.query_params["v"]\n    ${call}\n`;
+    expect(py(view("use_case.execute(value)"), "sql-injection")).toHaveLength(0);
+    expect(py(view("container.import_products.execute(value)"), "sql-injection")).toHaveLength(0);
+    expect(py(view("GetProfileUseCase(service).execute(value)"), "sql-injection")).toHaveLength(0);
+    expect(py(view("cursor.execute(value)"), "sql-injection")).toHaveLength(1);
+    expect(py(view("db.session.execute(value)"), "sql-injection")).toHaveLength(1);
+    expect(py(view("handler.execute(f\"SELECT * FROM t WHERE a = {value}\")"), "sql-injection")).toHaveLength(1);
+  });
+  it("a redirect whose host comes from configuration is not an open redirect", () => {
+    const view = (target: string): string => `def v(request, path):
+    base = getattr(settings, 'X', '')
+    return redirect(${target})
+`;
+    expect(py(view('f"{frontend_base_url}/book/{path}"'), "open-redirect")).toHaveLength(0);
+    expect(py(view('settings.SITE_URL + path'), "open-redirect")).toHaveLength(0);
+    expect(py(view('path'), "open-redirect")).toHaveLength(1);
+  });
+
+  it("demo logins, placeholders and stub tokens are not leaked credentials", () => {
+    expect(py('DEMO = {"email": "alice@example.com", "password": "Alice123!"}\n', "hardcoded-secret")).toHaveLength(0);
+    expect(py('DEMO = {"email": "alice@company.io", "password": "Alice123!"}\n', "hardcoded-secret")).toHaveLength(1);
+    expect(py('_DEV_SECRET = "dev-only-secret-for-local-runs"\n', "hardcoded-secret")).toHaveLength(0);
+    expect(py('token = Token(access_token="stub-access-token-123")\n', "hardcoded-secret")).toHaveLength(0);
+    expect(py('PASSWORD = "Zk3!p9Lq7#vX2mRt5Nb8"\n', "hardcoded-secret", "/app/scripts/e2e_login.py")).toHaveLength(0);
+  });
+
+});

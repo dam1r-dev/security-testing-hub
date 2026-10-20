@@ -47,9 +47,24 @@ function firstText(node: SyntaxNode | undefined): string {
 
 // `redirect("/items/" + x)`, `redirect(f"{reverse('home')}?id={x}")`: the target starts with a path of this site, so the caller cannot change the host.
 const SAME_SITE_PREFIX = /^[rbfu]*["'](?:\/(?![/\\])|\{\s*(?:reverse|reverse_lazy|url_for|resolve_url)\()/i;
+// `redirect(f"{frontend_base_url}/book/{path}")`, `redirect(settings.SITE_URL + path)`: the host comes from configuration, the caller adds a path
+const CONFIGURED_HOST = /^(?:[rbfu]*["']\{\s*)?(?:self\.)?[\w.]*(?:base_?url|site_?url|frontend_?url|app_?url|public_?url)\w*\s*\}?/i;
 
 function hasFixedHost(argument: SyntaxNode | undefined): boolean {
   return FIXED_HOST.test(firstText(argument));
+}
+
+// `cursor.execute(query)`, `db.session.execute(...)`: a database handle. `use_case.execute(command)` runs application code, not SQL.
+const DB_RECEIVER = /(?:^|[._])(?:cursor|cur|curs|conn|connection|con|db|database|session|engine|sql|tx|transaction|pool|client|c)(?:\(\))?$|\bcursor\(|\.begin\(|\.connect\(/i;
+
+/** An argument that is plainly SQL text being built: a string, an f-string, +, %, .format(), text(...). */
+function buildsText(node: SyntaxNode): boolean {
+  if (node.type === "string" || node.type === "concatenated_string" || node.type === "binary_operator") return true;
+  if (node.type === "call") {
+    const callee = node.childForFieldName("function")?.text ?? "";
+    return SQL_WRAPPER.test(callee) || /\.(?:format|join|strip|replace)$/.test(callee);
+  }
+  return false;
 }
 
 function unwrapSql(argument: SyntaxNode): SyntaxNode {
@@ -76,7 +91,9 @@ export function sinksOf(call: SyntaxNode, fileText: string): SinkSpec[] {
   const first = positional[0];
 
   if (SQL_CALL.test(name)) {
-    const args = name.endsWith(".extra") ? [...positional, ...keywords.values()] : first ? [unwrapSql(first)] : [];
+    const receiver = name.slice(0, Math.max(0, name.lastIndexOf(".")));
+    const appCode = /(?:^|\.)(?:execute|executemany)$/.test(name) && first !== undefined && !DB_RECEIVER.test(receiver) && !buildsText(first);
+    const args = appCode ? [] : name.endsWith(".extra") ? [...positional, ...keywords.values()] : first ? [unwrapSql(first)] : [];
     specs.push({ rule: "sql-injection", severity: "critical", confidence: "medium", args, message: SQL_MESSAGE });
   }
 
@@ -178,7 +195,7 @@ export function sinksOf(call: SyntaxNode, fileText: string): SinkSpec[] {
 
   if (REDIRECT_CALL.test(name)) {
     const target = first ?? keywords.get("url") ?? keywords.get("to");
-    if (target && !SAME_SITE_PREFIX.test(firstText(target))) {
+    if (target && !SAME_SITE_PREFIX.test(firstText(target)) && !CONFIGURED_HOST.test(firstText(target))) {
       specs.push({
         rule: "open-redirect",
         severity: "medium",

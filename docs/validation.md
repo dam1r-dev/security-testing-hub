@@ -416,6 +416,45 @@ What changed, finding by finding:
 
 **Bundles.** Minified or bundled files without `.min` in the name are skipped with a note (round 12), which is what keeps the larger projects fast.
 
+## Round 14: layered Python and PHP projects (repository / service / use-case pattern)
+
+Round 13 added data flow across files, but its sample had no layered code to test it on. This round took **27 small recent projects that are organised in layers** (FastAPI with
+use cases, Flask and Django with service modules, Laravel and Slim with repositories), found by searching GitHub for the repository-pattern, clean-architecture and service-layer
+topics. Read-only shallow clones, nothing installed or run.
+
+| | first pass | after the fixes |
+|---|---|---|
+| findings | 39 | 21 |
+| false positives | 20 | 2 |
+| uncertain | 3 | 3 |
+
+**What was wrong (18 of the 20 false positives came from four causes; the other 2 remain):**
+
+- **`use_case.execute(command)` is not SQL (7).** The SQL sink matched any call ending in `.execute`. Clean-architecture FastAPI projects name their use-case objects `.execute(...)`, so every route
+  that passed a request field to one was reported as SQL injection (`container.import_products.execute(file)`, `GetMyProfileUseCase(service).execute(actor)`). Now `execute` / `executemany` counts as a
+  database call only when the receiver looks like a database handle (`cursor`, `conn`, `db`, `session`, `engine`, ...) or the argument is plainly SQL text being built (a string, an f-string,
+  `+`, `%`, `.format()`, `text(...)`).
+- **Demo logins (5).** `{ email: "alice@example.com", password: "Alice123!" }` in a login page, and `json_schema_extra` examples in Pydantic schemas. A password on a line that names an
+  `@example.com` / `@test.com` / `@localhost` address is now a demo login.
+- **Stubs and development fallbacks (4).** `access_token="stub-access-token-123"` in a stub provider, `_DEV_SECRET = "dev-only-secret-..."`, `SECRET_KEY = "django-insecure-local-dev-only"` inside an
+  `if IS_DEVELOPMENT` branch, and a password in `scripts/e2e_*.py`. `dev-only` and `stub-` are placeholder words now, and `e2e` files and folders are fixtures.
+- **A redirect whose host is configuration (1).** `redirect(f"{frontend_base_url}/book/{path}")`: the caller adds a path to a host that comes from settings. Names such as `base_url`,
+  `site_url`, `frontend_url` count as a fixed host.
+
+One deliberate non-change: `secret_key = "change-me-in-production"` is still reported. A default that is never replaced is a real hole, and the scanner says so.
+
+**The 21 that remain**, triaged by hand: 16 real (debug mode on in 4 files, `phpinfo()` left in `public/`, a hard-coded JWT secret, basic-auth password and database URI in a Flask config, a faucet API key,
+a default signing secret, the token in `localStorage`, two `$this->user->update($request->all(), $id)` mass assignments, `display_errors` on, two `Thumbs.db` files in `public/`), 3 uncertain
+(Blade forms without `@csrf` in an EasyUI project that probably submits them by Ajax with a header token), 2 false (a Flask route `<filename>` joined to a directory: Flask's default converter
+refuses a `/`, so the value cannot climb out of the directory; the scanner does not model converters for the path-traversal sink).
+
+**Cross-file flow, honestly.** None of the 21 findings needed it. These 27 projects keep their queries behind ORMs or parameterised repositories, so the layered code produced no cross-file true
+positives and no cross-file false positives either: the recall of the cross-file analysis on real code is still not measured. What this round did measure is the opposite side: the new
+sink-by-name rule was the largest source of noise in layered code, and it is fixed. Corpus 6 (DVWA, pygoat and 23 others) gives exactly the same 114 findings before and after the fixes.
+
+Speed: the slowest project (178 files, a Laravel app with vendored jQuery plugins) takes about 23 s, almost all of it in the JavaScript analyzers on non-minified third-party libraries under `public/`,
+not in the Python or PHP engines.
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are
