@@ -2,7 +2,7 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
-## Unreleased
+## 0.7.2 - 2026-10-20
 
 ### Fixed
 - **Python: `use_case.execute(command)` is no longer SQL injection.** `execute` / `executemany` counts as a database call only when the receiver looks like a database
