@@ -386,6 +386,36 @@ a command run through a helper, plus 25 `@csrf_exempt` views and the placeholder
 no validation-by-`if`, no mass-assignment rule for Python, no JWT / CSRF rules for PHP. 23 projects is a small sample and most of them have few request handlers, so precision
 here is **less well measured than for JavaScript**; the numbers above describe this sample, not the languages.
 
+## Round 13: Python and PHP, second pass: across files, value checks, templates
+
+Same 25 projects as round 12 (they are the only measurement there is for these two languages), after four improvements: data flow across files, value checks,
+template-aware XSS, and the remaining rules (Python mass assignment, PHP JWT / CSRF).
+
+| | Round 12 (final) | Round 13 |
+|---|---|---|
+| Findings in the 23 real projects | 25 | 22 |
+| DVWA (PHP, intentionally vulnerable) | 43 | 41 |
+| pygoat (Django, intentionally vulnerable) | 49 | 51 |
+| Scan time of the two largest projects (459 and 1105 files) | 4.7 s / 12 s | 5.3 s / 18 s |
+
+What changed, finding by finding:
+
+- **Removed, correctly:** DVWA's "impossible" command injection (the address is checked with `is_numeric` on every octet), and 5 findings in a file-sharing app where a user name had been
+  validated with an anchored `re.match` and `return 400` before it reached `os.makedirs` (the checks above). One real vulnerability briefly disappeared with the checks and was
+  restored: DVWA's API `exec("ping " . $target)` sits under `if (array_key_exists("target", $input))`, and a check that a key EXISTS says nothing about its value.
+- **Added, correctly:** two XSS in pygoat through its templates (`xss_lab.html` prints the variable with `|safe`), the wildcard CSRF exception in a Laravel 11 `bootstrap/app.php`
+  (`validateCsrfTokens(except: ['*'])`), one more path-traversal in the file-sharing app.
+- **False positives found and fixed on the way:** a Blade `<form>` whose `@csrf` is in an `@include`d partial (not judged now); a controller `show(Training $training)` read as user text
+  (Laravel loads that model by the URL's id: class-typed parameters are records, not input); `{!! nl2br(e(strip_tags($x))) !!}` flagged as a raw print (escaped inside).
+- **No new finding of the cross-file kind in these 25 projects.** Their database code is in the same file as the handler, or in Eloquent models, which parameterize. The cross-file
+  flow is therefore tested only on fixtures (`examples/vulnerable-python-app/app/`, `examples/vulnerable-php-app/`: a helper in another module, a module alias, an imported
+  class's method, a global PHP function, a static method, an injected service, two and three calls deep) and on synthetic projects (cyclic calls do not loop): **its recall and precision
+  on real code are not measured.** The cost on the 1105-file Laravel project is about 6 s more (reading the names of all functions once).
+- **Still missed in DVWA:** reflected / stored XSS and file inclusion, because DVWA's pages share variables through `include` of a script (one file sets `$html`, another prints it); file
+  upload, weak session ids, captcha, JavaScript. Half of its families remain unfound.
+
+**Bundles.** Minified or bundled files without `.min` in the name are skipped with a note (round 12), which is what keeps the larger projects fast.
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are

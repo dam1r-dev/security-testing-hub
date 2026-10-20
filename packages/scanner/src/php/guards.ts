@@ -18,6 +18,8 @@ function variableOf(node: SyntaxNode | null | undefined): string[] {
   if (!node) return [];
   if (node.type === "variable_name") return [node.text];
   if (node.type === "argument") return variableOf(node.namedChild(node.namedChildCount - 1));
+  // is_numeric($parts[0]): the check names one element; the usual shape is a list of values that are all checked (an IP address split at the dots)
+  if (node.type === "subscript_expression") return variableOf(node.namedChild(0));
   return [];
 }
 

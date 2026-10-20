@@ -373,7 +373,22 @@ that is assigned something built from request data holds request data from then 
 on: f-strings, `+` / `.` / `%`, `.format()`, `.join()`, string methods, subscripts and attributes of a tainted object, `str()`, `sprintf`, `trim`...
 What stops it: a call that cleans (Python `int()`, `escape()`, `quote()`, `secure_filename()`; PHP `(int)`, `intval`, `htmlspecialchars`, `escapeshellarg`,
 `mysqli_real_escape_string`, `basename`...) and a bound parameter (`cursor.execute("... %s", (v,))`, `$stmt->execute([$v])`: the value is not in the SQL
-text). An unknown function is not followed. A helper defined **in the same file** is followed one call deep; a helper in another file is not (yet).
+text). An unknown function is not followed.
+
+**Across files.** A call that is handed the caller's value is followed into the project's own code, up to three calls deep, and the finding is reported at the
+call with the place the value ends up ("... reaches the vulnerable call at app/db.py:8 (via report_for -> run_report)"). Python: `from .db import f`, `import app.db as d` then
+`d.f()`, `from . import db`, `Class.method()` and the methods of classes the file imports (matched by name when exactly one matches). PHP: a plain function (one global
+namespace: the one project function of that name), `Class::method()`, `$this->method()`, and `$object->method()` among the classes the file mentions (`use`, `new`, a type
+hint, a promoted constructor property). The project's `.php` files are read once for names (no parse); a file is parsed only when a call leads to it.
+
+**Checks clear the value.** Inside the branch a check guards, and after a failed check that stops the function (`return`, `raise`, `abort()`, `exit`, `die`, `throw`), the
+checked name is not the caller's text: Python `x.isdigit()` / `isalnum()`, `x in COLLECTION`, `x == "literal"`, `re.fullmatch(...)`, an anchored `re.match`,
+`isinstance(x, int)`, a function named `is_valid*` / `validate*` / `is_safe*`; PHP `is_numeric`, `ctype_*`, `in_array`, `filter_var(..., FILTER_VALIDATE_*)`, `preg_match` anchored at both
+ends, `=== "literal"`. `a and b` checks both; `a or b` checks nothing. A check that does not say what the value IS (`startswith`, `strlen`, `array_key_exists`) does not clear it.
+
+**Templates.** A value handed to a template (`render_template("page.html", name=v)`, `render(request, "page.html", {"name": v})`, Laravel `view("page", ["name" => $v])` / `compact()` / `->with()`) is
+looked up in the project's `templates` / `resources/views` folder; it is cross-site scripting when the template prints that variable unescaped: `{{ name|safe }}`, `{{ name }}` inside
+`{% autoescape off %}`, Blade `{!! $name !!}` (not when it is wrapped in `e()`, `htmlspecialchars`, `strip_tags` there). A template that is not found is not guessed.
 
 | | Request input |
 |---|---|
@@ -392,16 +407,16 @@ text). An unknown function is not followed. A helper defined **in the same file*
 | `ssrf` | `requests`, `httpx`, `urllib`, `aiohttp` (a URL whose scheme and host are written in the code is fine) | `curl_init`, `CURLOPT_URL`, Guzzle / `Http::get`, `fsockopen`, `get_headers` |
 | `open-redirect` | `redirect`, `HttpResponseRedirect`, `RedirectResponse` (not when `url_has_allowed_host_and_scheme` or similar is used) | `header("Location: ...")`, `redirect()`, `Redirect::to` |
 | `xss` | a returned HTML string in a view (Flask sends it as HTML), `HttpResponse`, `HTMLResponse`, `make_response`, `Markup`, `mark_safe` | `echo`, `print`, `<?= ?>` |
-| `mass-assignment` | not yet | `Model::create($request->all())`, `->fill`, `->update`, `firstOrCreate`... |
-| `insecure-jwt` | `jwt.decode(..., verify=False)`, `verify_signature: False`, the `none` algorithm | not yet |
-| `csrf` | `@csrf_exempt` | not yet |
+| `mass-assignment` | `Model.objects.create(**request.POST.dict())`, `User(**request.json)`, `.update(request.json)`, `insert_one(request.get_json())` (not when a form's `cleaned_data` / a serializer's `validated_data` / a schema's `.load()` is used) | `Model::create($request->all())`, `->fill`, `->update`, `firstOrCreate`... |
+| `insecure-jwt` | `jwt.decode(..., verify=False)`, `verify_signature: False`, the `none` algorithm | `JWT::decode(..., ['none'])`, a payload read by `explode('.', $token)` and `base64_decode` |
+| `csrf` | `@csrf_exempt` | `$except = ['*']`, `validateCsrfTokens(except: ['*'])`, `withoutMiddleware(VerifyCsrfToken)`, a Blade `<form method="post">` without `@csrf` (a form that includes a partial is not judged) |
 | `debug-mode` | `app.run(debug=True)`, `DEBUG = True` (not when read from the environment) | `ini_set("display_errors", 1)`, `phpinfo()` |
 | `hardcoded-secret` | provider token formats, `SECRET_KEY = "..."`, `password="..."`, dictionary entries | the same, `define("DB_PASSWORD", "...")`, array entries, properties |
 
-**Known limits.** Flow stays in one file; `flask.g`, class attributes and values stored in dictionaries are not followed; a decorator that
+**Known limits.** A value is followed through calls to the project's own functions, not through `include` / `require` of a script that shares variables with the including one (how DVWA builds its pages), `flask.g`, class attributes, or values stored in dictionaries or sessions; a validation inside a helper function that returns a boolean is only understood by its name; a decorator that
 transforms the arguments is not understood; Django's ORM (`filter`, `get`) is treated as safe because it parameterizes (a `**kwargs` expansion
 from request data is not examined); Python's `str.format` in an SQL string is reported, `sql.SQL(...).format(sql.Identifier(x))` (psycopg2) is not
-recognised as safe and is reported; PHP include / require resolution across files and Blade / Twig templates are not read. Test files (`test_*.py`,
+recognised as safe and is reported; Twig templates and Django `{% autoescape %}` in a parent template are not read (a template that extends another is judged by its own text). Test files (`test_*.py`,
 `*_test.py`, `conftest.py`, `*Test.php`) and `venv` / `site-packages` / `vendor` are skipped like JavaScript tests and `node_modules`.
 
 ## `ssrf` (high)

@@ -3,6 +3,7 @@ import { Analyzer } from "../analyzers/base-analyzer";
 import { ParsedFile, SupportedLanguage } from "../parsers/ast-parser";
 import { SyntaxNode, findNodes, snippet, toLocation } from "../parsers/utils";
 import { isFixturePath } from "../analyzers/hardcoded-secret";
+import { bladeUnsafeUse, findTemplate } from "../templates";
 import { findKnownSecrets, isPlaceholder, isSensitiveName, isSigningSecretName, looksLikeSecret, normalizeName, redact } from "../secrets/detect";
 import { Finding } from "../types";
 import { argumentsOf, calleeName, carriedBy, trackTaint } from "./engine";
@@ -34,7 +35,8 @@ function controllerOrigins(method: SyntaxNode): string[] {
   const modifier = method.namedChildren.find((c) => c.type === "visibility_modifier")?.text ?? "public";
   if (modifier !== "public" || method.childForFieldName("name")?.text.startsWith("__")) return [];
   return parameterNames(method)
-    .filter((p) => !NUMERIC_TYPE.test(p.type) && !FRAMEWORK_TYPE.test(p.type))
+    // `show(Training $training)`: Laravel loads the model by the id in the URL, so it is a record, not the caller's text
+    .filter((p) => !NUMERIC_TYPE.test(p.type) && !FRAMEWORK_TYPE.test(p.type) && !/^\??\\?[A-Z]\w*(?:\\\w+)*$/.test(p.type.replace(/\s/g, "")))
     .map((p) => p.name);
 }
 
@@ -69,6 +71,40 @@ function assignedName(literal: SyntaxNode): string | undefined {
   }
   if (parent.type === "const_element" || parent.type === "property_element") return parent.namedChild(0)?.text.replace(/^\$/, "");
   return undefined;
+}
+
+/** `view("page", ["k" => $v])`, `view("page", compact("k"))`, `view("page")->with("k", $v)`: the template name and what it is handed. */
+function viewCall(node: SyntaxNode): { name: string; values: Array<{ key: string; value: SyntaxNode | string }> } | undefined {
+  const isView = (n: SyntaxNode): boolean => (n.type === "function_call_expression" && calleeName(n) === "view") || (n.type === "scoped_call_expression" && /^(?:View::make|Response::view)$/.test(calleeName(n)));
+  const values: Array<{ key: string; value: SyntaxNode | string }> = [];
+  let root: SyntaxNode | undefined;
+  if (isView(node)) root = node;
+  else if (node.type === "member_call_expression" && node.childForFieldName("name")?.text === "with") {
+    // view("page")->with("k", $v): walk down the chain to the view() call
+    let current: SyntaxNode | null = node;
+    while (current && current.type === "member_call_expression") {
+      if (current.childForFieldName("name")?.text === "with") {
+        const [key, value] = argumentsOf(current);
+        if (key?.type === "string" && value) values.push({ key: key.text.slice(1, -1), value });
+      }
+      current = current.childForFieldName("object");
+    }
+    if (current && isView(current)) root = current;
+  }
+  if (!root) return undefined;
+  const args = argumentsOf(root);
+  const first = args[root.type === "scoped_call_expression" ? 0 : 0];
+  if (first?.type !== "string") return undefined;
+  const data = args[1];
+  if (data?.type === "array_creation_expression") {
+    for (const element of data.namedChildren) {
+      const [key, value] = element.namedChildren;
+      if (element.type === "array_element_initializer" && key?.type === "string" && value) values.push({ key: key.text.slice(1, -1), value });
+    }
+  } else if (data?.type === "function_call_expression" && calleeName(data) === "compact") {
+    for (const name of argumentsOf(data)) if (name.type === "string") values.push({ key: name.text.slice(1, -1), value: `$${name.text.slice(1, -1)}` });
+  }
+  return { name: first.text.slice(1, -1), values };
 }
 
 export class PhpAnalyzer implements Analyzer {
@@ -122,6 +158,27 @@ export class PhpAnalyzer implements Analyzer {
             break;
           }
         }
+        // A value handed to a Blade view that prints it raw ({!! $name !!}).
+        const view = viewCall(node);
+        if (view) {
+          const file = findTemplate(project.context.root, view.name, "blade");
+          for (const { key, value } of file ? view.values : []) {
+            const via = typeof value === "string" ? (tainted.has(value) ? value : undefined) : carriedBy(value, tainted);
+            const use = via === undefined || !file ? undefined : bladeUnsafeUse(file, key);
+            if (via === undefined || !use) continue;
+            add({
+              ruleId: "xss",
+              severity: "high",
+              confidence: "medium",
+              message:
+                `User-controlled input ('${via}') is handed to the view as $${key}, and ${project.context.displayPath(use.file)}:${use.line} prints it raw (${use.how}). ` +
+                `A value with <script> runs in your visitors' browsers. Print it with {{ $${key} }}, which escapes it.`,
+              location: toLocation(node, filePath),
+              sourceSnippet: via,
+              sinkSnippet: snippet(node, text),
+            });
+          }
+        }
         const helper = project.resolve(node, filePath, parsed, scope, tainted);
         if (helper) {
           for (const [index, hit] of project.summary(helper)) {
@@ -168,6 +225,69 @@ export class PhpAnalyzer implements Analyzer {
           location: toLocation(call, filePath),
           sourceSnippet: "phpinfo()",
           sinkSnippet: snippet(call, text),
+        });
+      }
+    }
+
+    // 3b. A JWT read without checking its signature, and CSRF protection switched off (Laravel).
+    const at = (index: number): { line: number; column: number } => {
+      const before = text.slice(0, index);
+      return { line: before.split("\n").length, column: index - before.lastIndexOf("\n") };
+    };
+    const place = (index: number, length: number): Finding["location"] => {
+      const { line, column } = at(index);
+      return { file: filePath, startLine: line, startColumn: column, endLine: line, endColumn: column + length };
+    };
+    const lineAt = (index: number): string => (text.split("\n")[at(index).line - 1] ?? "").trim().slice(0, 160);
+    for (const call of findNodes(root, (n) => n.type === "scoped_call_expression" || n.type === "function_call_expression")) {
+      const name = calleeName(call);
+      const args = argumentsOf(call);
+      if (/^(?:Firebase\\JWT\\)?JWT::decode$/.test(name) && /["']none["']/i.test(args[2]?.text ?? "")) {
+        add({
+          ruleId: "insecure-jwt",
+          severity: "critical",
+          confidence: "high",
+          message: "JWT::decode accepts the \"none\" algorithm: a token without a signature is valid, so anyone can forge a token with any user id or role. Pass only the algorithm you sign with (new Key($secret, \"HS256\")).",
+          location: toLocation(call, filePath),
+          sourceSnippet: "algorithm none",
+          sinkSnippet: snippet(call, text),
+        });
+      }
+      if (name === "base64_decode" && /explode\(\s*["']\.["']/.test(args[0]?.text ?? "")) {
+        add({
+          ruleId: "insecure-jwt",
+          severity: "high",
+          confidence: "medium",
+          message: "A token's payload is read by splitting it at the dots and decoding the middle part, without checking the signature. Anyone can write such a token. Verify it with a JWT library (JWT::decode with the key and the algorithm) before trusting a claim.",
+          location: toLocation(call, filePath),
+          sourceSnippet: "payload decoded without verification",
+          sinkSnippet: snippet(call, text),
+        });
+      }
+    }
+    for (const m of text.matchAll(/\$except\s*=\s*\[[^\]]*["']\*["']|validateCsrfTokens\(\s*except:\s*\[[^\]]*["']\*["']|withoutMiddleware\([^)]*VerifyCsrfToken/g)) {
+      add({
+        ruleId: "csrf",
+        severity: "medium",
+        confidence: "high",
+        message: "CSRF protection is switched off for every route (or for the route this is attached to): another site can make a signed-in visitor's browser send a form to this application. Remove the exception, and list only the webhook URLs that really cannot send a token.",
+        location: place(m.index ?? 0, m[0].length),
+        sourceSnippet: "CSRF exception",
+        sinkSnippet: lineAt(m.index ?? 0),
+      });
+    }
+    if (/\.blade\.php$/i.test(filePath)) {
+      for (const m of text.matchAll(/<form\b[^>]*\bmethod\s*=\s*["']?(?:post|put|patch|delete)["']?[^>]*>([\s\S]*?)<\/form>/gi)) {
+        // a form that includes a partial or a component may get its @csrf there: not judged
+        if (/@csrf|csrf_field\s*\(|csrf_token\s*\(|name\s*=\s*["']_token["']|@include|@component|@livewire|@each|<x-|<livewire:/.test(m[1] ?? "")) continue;
+        add({
+          ruleId: "csrf",
+          severity: "medium",
+          confidence: "medium",
+          message: "This form posts data but carries no CSRF token (no @csrf). Laravel rejects such a request when the CSRF middleware is on, so the page is broken, or the protection was switched off for it. Add @csrf inside the form.",
+          location: place(m.index ?? 0, Math.min(m[0].length, 80)),
+          sourceSnippet: "form without @csrf",
+          sinkSnippet: lineAt(m.index ?? 0),
         });
       }
     }
