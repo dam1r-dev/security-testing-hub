@@ -2,6 +2,31 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
+## 0.7.1 - 2026-10-20
+
+### Changed
+- **Python and PHP follow data across files.** A call that is handed the caller's value is followed into the project's own code, up to three calls
+  deep, and the finding is reported at the call with the place the value ends up ("reaches the vulnerable call at app/db.py:8 (via report_for ->
+  run_report)"). Python: `from .db import f`, `import app.db as d`, `from . import db`, methods of imported classes. PHP: global functions,
+  `Class::method()`, `$this->service->method()`, services injected into a controller. The names of the project's PHP functions are read once from
+  the text (no parse); a file is parsed only when a call leads to it.
+- **Value checks clear the taint:** Python `isdigit()`, `in COLLECTION`, `== "literal"`, `re.fullmatch`, `isinstance`, `is_valid*()`; PHP `is_numeric`,
+  `ctype_*`, `in_array`, `filter_var(FILTER_VALIDATE_*)`, an anchored `preg_match`; inside the branch the check guards, and after a failed check that
+  stops the function (`return`, `raise`, `abort()`, `exit`, `die`, `throw`). A check that does not say what the value is (`startswith`, `strlen`,
+  `array_key_exists`) clears nothing.
+- **Templates are read.** A value handed to `render_template` / `render` / Laravel `view()` that the template prints unescaped (`{{ x|safe }}`,
+  `autoescape off`, Blade `{!! $x !!}`) is cross-site scripting.
+- **New checks:** Python mass assignment (`Model.objects.create(**request.POST.dict())`, `User(**data)`, `insert_one(request.get_json())`); PHP `JWT::decode`
+  with the `none` algorithm or a payload read without verification, CSRF switched off (`$except = ['*']`, `validateCsrfTokens(except: ['*'])`), Blade
+  forms without `@csrf`.
+- Less noise: a controller parameter typed with a class is a record Laravel loaded (route-model binding), not the caller's text; a Blade form that
+  includes a partial is not judged; `{!! e(...) !!}` is not a raw print; `DEBUG = True` in a `dev` / `test` settings file is not reported.
+- Dependabot: the `tree-sitter` family and `@types/vscode` are updated by hand (a "minor" bump of a 0.x parser package breaks the build); GitHub
+  Actions updated (checkout 7, setup-node 7, codeql-action 4, the Pages actions).
+
+Measured on the 25 Python and PHP projects of the validation (docs/validation.md, round 13). The cross-file flow is tested on fixtures; no real project
+in that sample needed it, so its precision and recall on real code are not measured.
+
 ## 0.7.0 - 2026-10-15
 
 ### Added
@@ -36,10 +61,7 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
 - **Python and PHP.** Flask, FastAPI and Django, plain PHP scripts and Laravel are scanned: SQL / command / code / template injection,
   deserialization, path traversal, SSRF, open redirect, reflected XSS, mass assignment (Laravel), `@csrf_exempt`, JWT without verification,
   debug mode and hard-coded secrets, in the same report, score, ignore comments, baseline and web scanner. Typed FastAPI parameters and Flask
-  converters are understood as safe. Data flow follows the project's own functions across files (imports, module aliases, class methods, up to
-  three calls deep, reported at the call with the place it ends up), value checks (`isdigit`, `in`, `fullmatch`, `is_numeric`, `in_array`, an
-  anchored `preg_match`, early exits) clear the taint, templates are read (`{{ x|safe }}`, `{!! $x !!}`), plus Python mass assignment, PHP JWT and
-  CSRF (`$except = ['*']`, Blade forms without `@csrf`) checks. The grammars are optional
+  converters are understood as safe; helpers in the same file are followed one call deep, other files are not yet. The grammars are optional
   packages: a machine that cannot install one lists those files as skipped. New rule `debug-mode` (30 rules in all). Fixtures:
   `examples/vulnerable-python-app`, `examples/vulnerable-php-app`; see docs/rules.md and docs/validation.md.
 - **Four new rules (29 in all, before `debug-mode`):** `mass-assignment` (the whole request body written to the database), `prototype-pollution`
