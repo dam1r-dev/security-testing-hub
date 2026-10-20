@@ -2,7 +2,7 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
-## Unreleased
+## 0.7.3 - 2026-10-20
 
 ### Added
 - **PHP follows variables shared through `include` / `require`.** The variables an included file leaves holding the caller's text are the caller's in the including script (`$html` set in `source/low.php`,
