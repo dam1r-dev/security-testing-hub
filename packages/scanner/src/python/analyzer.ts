@@ -177,7 +177,7 @@ export class PythonAnalyzer implements Analyzer {
             if (file) {
               for (const { key, value } of templateContext(call, fn)) {
                 const via = carriedBy(value, tainted);
-                const use = via === undefined ? undefined : jinjaUnsafeUse(file, key);
+                const use = via === undefined ? undefined : jinjaUnsafeUse(file, key, project.context.root);
                 if (via === undefined || !use) continue;
                 add({
                   ruleId: "xss",

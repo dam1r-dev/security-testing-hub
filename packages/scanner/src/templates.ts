@@ -85,14 +85,48 @@ function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+const MAX_RELATED = 12;
+// `{% extends "base.html" %}`, `{% include "parts/row.html" %}`, `{% embed %}` (Twig): templates that print with the same variables
+const JINJA_RELATED = /\{%-?\s*(?:extends|include|embed)\s+["']([^"']+)["']/g;
+// `@extends('layouts.app')`, `@include('parts.row')`, `@includeIf('x')`, `@component('x')`
+const BLADE_RELATED = /@(?:extends|include|includeIf|includeFirst|component)\s*\(\s*\[?\s*["']([^"']+)["']/g;
+
+/**
+ * The template and the ones it pulls in (its parent layout, its includes, theirs): a value handed to `page.html` is printed by
+ * `base.html` too when page.html extends it. Up to 12 files.
+ */
+export function relatedTemplates(root: string, file: string, kind: "jinja" | "blade"): string[] {
+  const out = [file];
+  for (let i = 0; i < out.length && out.length < MAX_RELATED; i++) {
+    const text = readTemplate(out[i] as string);
+    if (!text) continue;
+    const pattern = kind === "blade" ? BLADE_RELATED : JINJA_RELATED;
+    pattern.lastIndex = 0;
+    for (let m = pattern.exec(text); m !== null && out.length < MAX_RELATED; m = pattern.exec(text)) {
+      const found = findTemplate(root, m[1] as string, kind);
+      if (found && !out.includes(found)) out.push(found);
+    }
+  }
+  return out;
+}
+
 export interface UnsafeUse {
   file: string;
   line: number;
   how: string;
 }
 
+/** `{{ key|safe }}` (or `|raw`, or inside `{% autoescape false %}`) in the template or in a template it extends or includes. */
+export function jinjaUnsafeUse(file: string, key: string, root?: string): UnsafeUse | undefined {
+  for (const each of root ? relatedTemplates(root, file, "jinja") : [file]) {
+    const use = jinjaUnsafeUseIn(each, key);
+    if (use) return use;
+  }
+  return undefined;
+}
+
 /** `{{ key|safe }}`, `{{ key.attr | safe }}`, `{{ key|raw }}` (Twig), or `{{ key }}` inside `{% autoescape false %}`. */
-export function jinjaUnsafeUse(file: string, key: string): UnsafeUse | undefined {
+function jinjaUnsafeUseIn(file: string, key: string): UnsafeUse | undefined {
   const text = readTemplate(file);
   if (!text) return undefined;
   const name = escapeRegex(key);
@@ -108,8 +142,17 @@ export function jinjaUnsafeUse(file: string, key: string): UnsafeUse | undefined
   return undefined;
 }
 
+/** `{!! $key !!}` in the view or in a view it extends or includes. */
+export function bladeUnsafeUse(file: string, key: string, root?: string): UnsafeUse | undefined {
+  for (const each of root ? relatedTemplates(root, file, "blade") : [file]) {
+    const use = bladeUnsafeUseIn(each, key);
+    if (use) return use;
+  }
+  return undefined;
+}
+
 /** `{!! $key !!}` and `{!! $key->name !!}`, which Blade prints raw. */
-export function bladeUnsafeUse(file: string, key: string): UnsafeUse | undefined {
+function bladeUnsafeUseIn(file: string, key: string): UnsafeUse | undefined {
   const text = readTemplate(file);
   if (!text) return undefined;
   const expression = new RegExp(`\\{!!([^}]*\\$${escapeRegex(key)}\\b[^}]*)!!\\}`, "g");

@@ -392,7 +392,7 @@ ends, `=== "literal"`. `a and b` checks both; `a or b` checks nothing. A check t
 
 **Templates.** A value handed to a template (`render_template("page.html", name=v)`, `render(request, "page.html", {"name": v})`, Laravel `view("page", ["name" => $v])` / `compact()` / `->with()`) is
 looked up in the project's `templates` / `resources/views` folder; it is cross-site scripting when the template prints that variable unescaped: `{{ name|safe }}`, `{{ name }}` inside
-`{% autoescape off %}`, Blade `{!! $name !!}` (not when it is wrapped in `e()`, `htmlspecialchars`, `strip_tags` there). A template that is not found is not guessed.
+`{% autoescape off %}`, Blade `{!! $name !!}` (not when it is wrapped in `e()`, `htmlspecialchars`, `strip_tags` there), Twig `{{ name|raw }}` (Symfony `$this->render("page.html.twig", [...])`). The templates a template extends or includes are read too (`{% extends %}`, `{% include %}`, `{% embed %}`, `@extends`, `@include`, `@component`; up to 12 files), so a `|safe` in the layout or in a partial counts. A template that is not found is not guessed.
 
 | | Request input |
 |---|---|
@@ -422,7 +422,7 @@ looked up in the project's `templates` / `resources/views` folder; it is cross-s
 **Known limits.** A value is followed through calls to the project's own functions, not through `flask.g`, class attributes, or values stored in dictionaries or sessions; a validation inside a helper function that returns a boolean is only understood by its name; a decorator that
 transforms the arguments is not understood; Django's ORM (`filter`, `get`) is treated as safe because it parameterizes (a `**kwargs` expansion
 from request data is not examined); Python's `str.format` in an SQL string is reported, `sql.SQL(...).format(sql.Identifier(x))` (psycopg2) is not
-recognised as safe and is reported; Twig templates and Django `{% autoescape %}` in a parent template are not read (a template that extends another is judged by its own text). Test files (`test_*.py`,
+recognised as safe and is reported; a variable renamed on the way into an include (`{% include 'x.html' with a=b %}`, `@include('x', ['a' => $b])`) is not followed. Test files (`test_*.py`,
 `*_test.py`, `conftest.py`, `*Test.php`) and `venv` / `site-packages` / `vendor` are skipped like JavaScript tests and `node_modules`.
 
 ## `ssrf` (high)
