@@ -2,6 +2,13 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
+## Unreleased
+
+### Changed
+- **Third-party libraries copied into the project are skipped with a note**: JavaScript with a bundler's output at the top (`webpackBootstrap`),
+  or with a library licence banner (`/*!`, `@license`, "Released under the MIT license") in `public/`, `static/`, `assets/`, `plugins/`, `lib/`.
+  A Laravel app with 74 jQuery plugins and a webpack `app.js` in `public/`: 26 s -> 1 s, the same findings (validation round 16).
+
 ## 0.7.3 - 2026-10-20
 
 ### Added
