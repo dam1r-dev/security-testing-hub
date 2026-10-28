@@ -6,11 +6,12 @@ import { findKnownSecrets, isDemoLogin, isPlaceholder, isSensitiveName, isSignin
 import { Finding } from "../types";
 import { Analyzer } from "../analyzers/base-analyzer";
 import { ProjectContext } from "../taint/project";
-import { calleeText, callArguments, carriedBy, DECODES, trackTaint, withSlashes } from "./engine";
+import { calleeText, callArguments, carriedBy, DECODES, Origin, trackTaint, withSlashes } from "./engine";
 import { findTemplate, jinjaUnsafeUse } from "../templates";
 import { massAssignments } from "./mass";
 import { PythonProject, argumentFor } from "./project";
 import { decoratorsOf, originsOf } from "./origins";
+import { djangoUrlParams } from "./django-urls";
 import { HTML_IN_STRING, XSS_RETURN_MESSAGE, sinksOf } from "./sinks";
 
 /**
@@ -81,6 +82,28 @@ function templateContext(call: SyntaxNode, fn: SyntaxNode): Array<{ key: string;
   return out;
 }
 
+/**
+ * Django: what `urls.py` says a view's URL parameters can hold. `<int:pk>` / `<slug:s>` / `(?P<id>\d+)` carry nothing of the caller's text,
+ * `<name>` / `<str:name>` is one segment (no "/"), `<path:p>` is any text. A view no route names keeps the default (any text).
+ */
+function withDjangoConverters(origins: Origin[], fn: SyntaxNode, context: ProjectContext): Origin[] {
+  if (!origins.some((o) => o.why === "URL parameter")) return origins;
+  const routes = djangoUrlParams(context);
+  let view = fn.childForFieldName("name")?.text ?? "";
+  // a class-based view: the routes name the class (`PostDetail.as_view()`)
+  const klass = fn.parent?.type === "block" && fn.parent.parent?.type === "class_definition" ? fn.parent.parent : fn.parent?.parent?.type === "block" && fn.parent.parent.parent?.type === "class_definition" ? fn.parent.parent.parent : undefined;
+  if (klass) view = klass.childForFieldName("name")?.text ?? view;
+  const params = routes.get(view);
+  if (!params) return origins;
+  const out: Origin[] = [];
+  for (const origin of origins) {
+    const kind = origin.why === "URL parameter" ? params.get(origin.name) : undefined;
+    if (kind === "safe") continue;
+    out.push(kind === "segment" ? { ...origin, segment: true } : origin);
+  }
+  return out;
+}
+
 export class PythonAnalyzer implements Analyzer {
   readonly languages: readonly SupportedLanguage[] = ["python"];
 
@@ -104,7 +127,7 @@ export class PythonAnalyzer implements Analyzer {
     // 2. The data flow, function by function.
     for (const fn of functions) {
       checkBudgetNow();
-      const origins = originsOf(fn);
+      const origins = withDjangoConverters(originsOf(fn), fn, project.context);
       const originNames = new Set(origins.map((o) => o.name));
       const decorators = decoratorsOf(fn);
       const isRoute = decorators.some((d) => /^@[\w.]+\.(?:route|get|post|put|delete|patch|api_route)\s*\(/.test(d));

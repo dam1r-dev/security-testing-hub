@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { fixPromptFor, looksVendored, scanPath, scanSource } from "../src";
+import { parseUrlsFile } from "../src/python/django-urls";
 
 jest.setTimeout(60_000);
 
@@ -559,5 +560,68 @@ describe("third-party libraries and bundles copied into the project (round 16)",
     expect(results.find((r) => r.file.endsWith("server.js"))?.findings.length).toBeGreaterThan(0);
     // a single file named on the command line is always read
     expect(scanPath(path.join(dir, "public", "assets", "plugins", "lib", "lib.js"), { config: false }).results[0]?.findings.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Django: what urls.py says a URL parameter can hold (round 16)", () => {
+  it("reads path() converters and re_path() groups", () => {
+    const routes = parseUrlsFile(
+      [
+        "urlpatterns = [",
+        "    path('users/<int:pk>/', views.user_detail, name='user'),",
+        "    path('posts/<slug:slug>/', PostDetail.as_view()),",
+        "    path('files/<name>/', views.download),",
+        "    path('docs/<path:rest>/', views.docs),",
+        "    re_path(r'^items/(?P<item_id>\\d+)/(?P<tag>[-\\w]+)/(?P<part>[^/]+)/(?P<rest>.+)$', views.item),",
+        "    path('api/', include('api.urls')),",
+        "]",
+      ].join("\n"),
+    );
+    expect(Object.fromEntries(routes.get("user_detail") ?? [])).toEqual({ pk: "safe" });
+    expect(Object.fromEntries(routes.get("PostDetail") ?? [])).toEqual({ slug: "safe" });
+    expect(Object.fromEntries(routes.get("download") ?? [])).toEqual({ name: "segment" });
+    expect(Object.fromEntries(routes.get("docs") ?? [])).toEqual({ rest: "text" });
+    expect(Object.fromEntries(routes.get("item") ?? [])).toEqual({ item_id: "safe", tag: "safe", part: "segment", rest: "text" });
+    expect(routes.has("include")).toBe(false);
+  });
+
+  it("a view whose URL parameter is a number, a slug or one segment is judged by what it can hold", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hub-django-"));
+    fs.writeFileSync(
+      path.join(dir, "urls.py"),
+      "from django.urls import path\nfrom . import views\nurlpatterns = [\n" +
+        "    path('a/<int:pk>/', views.by_number),\n    path('b/<slug:slug>/', views.by_slug),\n    path('c/<name>/', views.by_name),\n" +
+        "    path('d/<path:rest>/', views.by_path),\n    path('e/<slug:slug>/', views.Detail.as_view()),\n]\n",
+    );
+    fs.writeFileSync(
+      path.join(dir, "views.py"),
+      [
+        "import os",
+        "from django.db import connection",
+        "def by_number(request, pk):",
+        "    connection.cursor().execute(f\"SELECT * FROM t WHERE id = {pk}\")",
+        "def by_slug(request, slug):",
+        "    connection.cursor().execute(f\"SELECT * FROM t WHERE s = '{slug}'\")",
+        "def by_name(request, name):",
+        "    connection.cursor().execute(f\"SELECT * FROM t WHERE n = '{name}'\")",
+        "    return open(os.path.join('/srv/files', name)).read()",
+        "def by_path(request, rest):",
+        "    return open(os.path.join('/srv/files', rest)).read()",
+        "def not_routed(request, pk):",
+        "    connection.cursor().execute(f\"SELECT * FROM t WHERE id = {pk}\")",
+        "class Detail(View):",
+        "    def get(self, request, slug):",
+        "        connection.cursor().execute(f\"SELECT * FROM t WHERE s = '{slug}'\")",
+        "",
+      ].join("\n"),
+    );
+    const hits = found(dir);
+    expect(hits).not.toContain("views.py:4:sql-injection"); // <int:pk>
+    expect(hits).not.toContain("views.py:6:sql-injection"); // <slug:slug>
+    expect(hits).toContain("views.py:8:sql-injection"); // <name>: one segment is still text for SQL
+    expect(hits).not.toContain("views.py:9:path-traversal"); // ...but cannot leave the folder
+    expect(hits).toContain("views.py:11:path-traversal"); // <path:rest>
+    expect(hits).toContain("views.py:13:sql-injection"); // no route names it: any text, as before
+    expect(hits).not.toContain("views.py:16:sql-injection"); // a class-based view routed with <slug:slug>
   });
 });
