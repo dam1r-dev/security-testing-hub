@@ -2,7 +2,7 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
-## Unreleased
+## 0.7.4 - 2026-10-28
 
 ### Added
 - **Templates are followed into the layouts and partials they use** (`{% extends %}`, `{% include %}`, `@extends`, `@include`): a `|safe` or `{!! !!}`
