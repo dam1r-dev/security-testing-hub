@@ -478,6 +478,26 @@ Such a value is no longer reported for `path-traversal` (it still is for SQL, co
 
 Not done: Django `path()` converters (they live in `urls.py`, not next to the view), and a lone `..` as the whole segment.
 
+## Round 16: speed on copied libraries, Django URL converters, templates that extend others
+
+Three changes measured on the corpora already triaged (rounds 9-15: 93 projects, no new downloads).
+
+**Third-party libraries copied into `public/`.** JavaScript with a bundler's output at the top (`webpackBootstrap`) or with a library licence banner (`/*!`, `@license`,
+"Released under the MIT license") in a folder of static files is skipped with a note. On the slowest project of round 14 (a Laravel app with 74 jQuery / EasyUI / lodash
+files and a webpack `app.js` under `public/`) the scan went from **26 s to 1 s**. Those 75 files are the only ones the rule skips in all four corpora (checked by hand: every one
+is a third-party library or the bundle), and the findings are identical in every corpus (46 / 25 / 123 / 19).
+
+**Django URL converters.** A view's URL parameters are judged by the project's `urls.py`: `<int:pk>`, `<slug:s>`, `<uuid:u>` and `(?P<id>\d+)` carry nothing of the
+caller's text, `<name>` / `<str:name>` is one segment (no "/": not path traversal), `<path:p>` is any text. The corpora have 17 routes with parameters (pygoat, HearWell,
+CareerHub, ...); none of their findings depended on an `int` or `slug` parameter, so the counts do not move. The change is pinned by tests (function and class-based views).
+
+**Templates that extend or include others, and Twig.** A value handed to `page.html` is now checked in the layout it extends and the partials it includes (Jinja, Django,
+Blade), and `$this->render("x.html.twig", [...])` is read with `{{ x|raw }}` as Twig's unescaped print. No change in the corpora: their unescaped prints were already in the
+rendered template itself (pygoat), or the values were not the caller's. Tests cover a `|safe` in an included part, `{!! !!}` in a Blade partial, and `|raw` in a Twig parent.
+
+Still open: a variable renamed on the way into an include (`with a=b`), Django `register_converter` (a custom converter is treated as any text), and `include()` prefixes
+(`path("users/<int:id>/", include(...))`: the prefix's parameters are not passed on to the included views).
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are

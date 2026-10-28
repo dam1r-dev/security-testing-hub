@@ -3,7 +3,7 @@ import { Analyzer } from "../analyzers/base-analyzer";
 import { ParsedFile, SupportedLanguage } from "../parsers/ast-parser";
 import { SyntaxNode, findNodes, snippet, toLocation } from "../parsers/utils";
 import { isFixturePath } from "../analyzers/hardcoded-secret";
-import { bladeUnsafeUse, findTemplate } from "../templates";
+import { bladeUnsafeUse, findTemplate, jinjaUnsafeUse } from "../templates";
 import { findKnownSecrets, isPlaceholder, isSensitiveName, isSigningSecretName, looksLikeSecret, normalizeName, redact } from "../secrets/detect";
 import { Finding } from "../types";
 import { argumentsOf, calleeName, carriedBy, trackTaint } from "./engine";
@@ -107,6 +107,21 @@ function viewCall(node: SyntaxNode): { name: string; values: Array<{ key: string
   return { name: first.text.slice(1, -1), values };
 }
 
+/** Symfony / Twig: `$this->render("page.html.twig", ["k" => $v])`, `$twig->render(...)`, `$this->renderView(...)`. */
+function twigCall(node: SyntaxNode): { name: string; values: Array<{ key: string; value: SyntaxNode }> } | undefined {
+  if (node.type !== "member_call_expression" || !/^(?:render|renderView|display)$/.test(node.childForFieldName("name")?.text ?? "")) return undefined;
+  const [first, data] = argumentsOf(node);
+  if (first?.type !== "string" || !/\.twig["']$/.test(first.text)) return undefined;
+  const values: Array<{ key: string; value: SyntaxNode }> = [];
+  if (data?.type === "array_creation_expression") {
+    for (const element of data.namedChildren) {
+      const [key, value] = element.namedChildren;
+      if (element.type === "array_element_initializer" && key?.type === "string" && value) values.push({ key: key.text.slice(1, -1), value });
+    }
+  }
+  return { name: first.text.slice(1, -1), values };
+}
+
 export class PhpAnalyzer implements Analyzer {
   readonly languages: readonly SupportedLanguage[] = ["php"];
 
@@ -170,7 +185,7 @@ export class PhpAnalyzer implements Analyzer {
           const file = findTemplate(project.context.root, view.name, "blade");
           for (const { key, value } of file ? view.values : []) {
             const via = typeof value === "string" ? (tainted.has(value) ? value : undefined) : carriedBy(value, tainted);
-            const use = via === undefined || !file ? undefined : bladeUnsafeUse(file, key);
+            const use = via === undefined || !file ? undefined : bladeUnsafeUse(file, key, project.context.root);
             if (via === undefined || !use) continue;
             add({
               ruleId: "xss",
@@ -184,6 +199,25 @@ export class PhpAnalyzer implements Analyzer {
               sinkSnippet: snippet(node, text),
             });
           }
+        }
+        // The same for a Twig template that prints it raw ({{ name|raw }}).
+        const twig = twigCall(node);
+        const twigFile = twig ? findTemplate(project.context.root, twig.name, "jinja") : undefined;
+        for (const { key, value } of twig && twigFile ? twig.values : []) {
+          const via = carriedBy(value, tainted);
+          const use = via === undefined || !twigFile ? undefined : jinjaUnsafeUse(twigFile, key, project.context.root);
+          if (via === undefined || !use) continue;
+          add({
+            ruleId: "xss",
+            severity: "high",
+            confidence: "medium",
+            message:
+              `User-controlled input ('${via}') is handed to the template as ${key}, and ${project.context.displayPath(use.file)}:${use.line} prints it raw (${use.how}). ` +
+              `A value with <script> runs in your visitors' browsers. Print it with {{ ${key} }}, which Twig escapes.${fromInclude(via)}`,
+            location: toLocation(node, filePath),
+            sourceSnippet: via,
+            sinkSnippet: snippet(node, text),
+          });
         }
         const helper = project.resolve(node, filePath, parsed, scope, tainted);
         if (helper) {

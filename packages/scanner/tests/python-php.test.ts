@@ -625,3 +625,54 @@ describe("Django: what urls.py says a URL parameter can hold (round 16)", () => 
     expect(hits).not.toContain("views.py:16:sql-injection"); // a class-based view routed with <slug:slug>
   });
 });
+
+describe("templates that extend or include others; Twig (round 16)", () => {
+  const project = (files: Record<string, string>): string => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hub-tpl-"));
+    for (const [name, body] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
+      fs.writeFileSync(path.join(dir, name), body);
+    }
+    return dir;
+  };
+
+  it("Jinja / Django: a |safe in the layout the page extends, or in a part it includes, is found", () => {
+    const view = "from flask import render_template, request\n@app.route('/p')\ndef p():\n    return render_template('page.html', name=request.args['n'], title=request.args['t'])\n";
+    const dir = project({
+      "app.py": view,
+      "templates/page.html": "{% extends 'base.html' %}{% block body %}{% include 'parts/hello.html' %}{% endblock %}",
+      "templates/base.html": "<title>{{ title }}</title>{% block body %}{% endblock %}",
+      "templates/parts/hello.html": "<p>Hello {{ name|safe }}</p>",
+    });
+    const hits = scanPath(dir, { config: false }).results.flatMap((r) => r.findings.filter((f) => f.ruleId === "xss").map((f) => f.message));
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatch(/parts\/hello\.html:1/);
+    // the layout escapes `title`: nothing else is reported
+    const safe = project({ "app.py": view, "templates/page.html": "{% extends 'base.html' %}", "templates/base.html": "<title>{{ title }}</title><p>{{ name }}</p>" });
+    expect(scanPath(safe, { config: false }).results.flatMap((r) => r.findings.filter((f) => f.ruleId === "xss"))).toHaveLength(0);
+  });
+
+  it("Blade: a {!! !!} in a view the page @includes is found", () => {
+    const dir = project({
+      "app/Http/Controllers/PageController.php": "<?php\nclass PageController {\n  public function show(Request $request) {\n    return view('page', ['bio' => $request->input('bio')]);\n  }\n}\n",
+      "resources/views/page.blade.php": "@extends('layouts.app')\n@section('content') @include('parts.bio') @endsection\n",
+      "resources/views/layouts/app.blade.php": "<html>@yield('content')</html>\n",
+      "resources/views/parts/bio.blade.php": "<div>{!! $bio !!}</div>\n",
+    });
+    const hits = scanPath(dir, { config: false }).results.flatMap((r) => r.findings.filter((f) => f.ruleId === "xss").map((f) => f.message));
+    expect(hits.some((m) => /parts\/bio\.blade\.php:1/.test(m))).toBe(true);
+  });
+
+  it("Twig: $this->render('x.html.twig', [...]) with |raw in the template (or its parent)", () => {
+    const controller = (template: string): string =>
+      `<?php\nclass PageController extends AbstractController {\n  public function show(Request $request) {\n    return $this->render('${template}', ['bio' => $request->query->get('bio'), 'name' => $request->get('name')]);\n  }\n}\n`;
+    const dir = project({
+      "src/Controller/PageController.php": controller("page/show.html.twig"),
+      "templates/page/show.html.twig": "{% extends 'base.html.twig' %}{% block body %}<p>{{ name }}</p>{% endblock %}",
+      "templates/base.html.twig": "<html>{{ bio|raw }}{% block body %}{% endblock %}</html>",
+    });
+    const hits = scanPath(dir, { config: false }).results.flatMap((r) => r.findings.filter((f) => f.ruleId === "xss").map((f) => f.message));
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatch(/base\.html\.twig:1/);
+  });
+});

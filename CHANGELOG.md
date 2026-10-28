@@ -4,6 +4,11 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
 
 ## Unreleased
 
+### Added
+- **Templates are followed into the layouts and partials they use** (`{% extends %}`, `{% include %}`, `@extends`, `@include`): a `|safe` or `{!! !!}`
+  in `base.html` or `parts/row.html` is found for a value handed to `page.html`.
+- **Twig** (Symfony): `$this->render("page.html.twig", ["bio" => $request->get("bio")])` with `{{ bio|raw }}` in the template is XSS.
+
 ### Changed
 - **Django: URL parameters are judged by `urls.py`.** `path("users/<int:pk>/", views.detail)` (and `<slug:>`, `<uuid:>`, `re_path` groups such as `(?P<id>d+)`)
   no longer makes `pk` the caller's text in `detail(request, pk)`; `<name>` / `<str:name>` is one URL segment (not path traversal). Class-based views too (`Detail.as_view()`).
