@@ -113,6 +113,10 @@ disclosure) that have no rule at all.
 `generated` / `__generated__` (machine-written code), `vendor` / `vendors`
 (bundled libraries), test directories (`test`, `tests`, `__tests__`,
 `__mocks__`, `e2e`, `cypress`), and `*.test.*`, `*.spec.*`, `*.min.js` files.
+Files that are skipped **with a note** in the report: a file over 2 MB, a minified file without `.min` in its name (very long
+lines), and a third-party library or bundle copied in as a plain file: JavaScript with a bundler's output at the top
+(`webpackBootstrap`, `__webpack_require__`), or with a library's licence banner (`/*!`, `@license`, "Released under the MIT
+license") in a folder of static files (`public`, `static`, `assets`, `plugins`, `lib`, ...).
 Test code was the biggest false-positive source on real projects — see
 [validation.md](validation.md). Pass a single test file path explicitly to
 scan it anyway.

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { fixPromptFor, scanPath, scanSource } from "../src";
+import { fixPromptFor, looksVendored, scanPath, scanSource } from "../src";
 
 jest.setTimeout(60_000);
 
@@ -532,5 +532,32 @@ describe("validation round 14: layered projects", () => {
       expect(php("$page['body'] .= '<p>' . $_GET['q'] . '</p>';\necho $page['body'];", "xss")).toHaveLength(1);
       expect(php("$_SESSION['q'] = $_GET['q'];\necho $_SESSION['other'];", "xss")).toHaveLength(0);
     });
+  });
+});
+
+describe("third-party libraries and bundles copied into the project (round 16)", () => {
+  const vulnerable = "app.get('/x', (req, res) => { exec('echo ' + req.query.a); });\n";
+  const banner = "/*!\n * SomeLib v1.2.3\n * Released under the MIT license\n */\n";
+
+  it("looksVendored: a bundler's output anywhere, a library banner only in a folder of static files", () => {
+    expect(looksVendored("public/js/app.js", "/******/ (function(modules) { // webpackBootstrap\n")).toBe(true);
+    expect(looksVendored("public/assets/plugins/lib/lib.js", banner + "(function(){})();\n")).toBe(true);
+    expect(looksVendored("static/vendor-ish/lodash.js", "/**\n * @license\n * Lodash\n */\n")).toBe(true);
+    expect(looksVendored("src/server.js", banner + vulnerable)).toBe(false); // the project's own code with a licence header
+    expect(looksVendored("public/assets/plugins/lib/types.ts", banner)).toBe(false); // only JavaScript files
+    expect(looksVendored("public/js/site.js", "// my code\n" + vulnerable)).toBe(false); // no banner
+  });
+
+  it("a scan skips them with a note and still reads the project's own files", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hub-vendor-"));
+    fs.mkdirSync(path.join(dir, "public", "assets", "plugins", "lib"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "public", "assets", "plugins", "lib", "lib.js"), banner + vulnerable);
+    fs.writeFileSync(path.join(dir, "src", "server.js"), banner + vulnerable);
+    const results = scanPath(dir, { config: false }).results;
+    expect(results.find((r) => r.file.endsWith("lib.js"))?.parseError).toMatch(/third-party library/);
+    expect(results.find((r) => r.file.endsWith("server.js"))?.findings.length).toBeGreaterThan(0);
+    // a single file named on the command line is always read
+    expect(scanPath(path.join(dir, "public", "assets", "plugins", "lib", "lib.js"), { config: false }).results[0]?.findings.length).toBeGreaterThan(0);
   });
 });

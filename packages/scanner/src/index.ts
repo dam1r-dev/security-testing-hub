@@ -111,6 +111,27 @@ export function looksMinified(text: string): boolean {
   return text.length / lines > 300;
 }
 
+// Webpack / Parcel / SystemJS output: the build of the project's code plus its dependencies, not the code itself.
+const BUNDLER_MARK = /webpackBootstrap|__webpack_require__|__webpack_modules__|parcelRequire|\bSystem\.register\(/;
+// The banner a published library puts at its top: `/*! jQuery v3.4.1 | (c) ... | jquery.org/license */`, `@license`, "Released under the MIT license".
+const LIBRARY_BANNER = /@license|@preserve|^\s*\/\*!|Released under (?:the )?(?:MIT|BSD|Apache)|Licensed under (?:the )?|\(c\)\s*\d{4}/im;
+// Folders a web app serves files from as they are: a library copied there is a download, not the project's code.
+const STATIC_FOLDER = /(?:^|\/)(?:public|static|assets|plugins|lib|libs|third[-_]party|bower_components|wwwroot|web)\//i;
+
+/**
+ * A third-party library or a bundle copied into the project as a plain file (`public/assets/plugins/lodash/lodash.js`, a webpack
+ * `public/js/app.js`). Not minified, so `looksMinified` lets it through, and a 300-600 KB library takes 3-5 s to analyse while holding
+ * nothing the project wrote. Only JavaScript files are judged; a library banner counts only in a folder of static files, so the
+ * project's own code with a licence header elsewhere is still read.
+ */
+export function looksVendored(relativePath: string, text: string): boolean {
+  if (!/\.(?:js|mjs|cjs)$/i.test(relativePath)) return false;
+  const head = text.slice(0, 2048);
+  if (BUNDLER_MARK.test(head)) return true;
+  const firstComment = /^\s*\/\*[\s\S]*?\*\//.exec(head)?.[0] ?? "";
+  return firstComment !== "" && LIBRARY_BANNER.test(firstComment) && STATIC_FOLDER.test(relativePath.split("\\").join("/"));
+}
+
 export function defaultAnalyzers(): Analyzer[] {
   return [
     new SqlInjectionAnalyzer(),
@@ -280,6 +301,9 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
       }
       sourceCode = fs.readFileSync(file, "utf8");
       if (looksMinified(sourceCode)) return { file, findings: [], parseError: "Skipped: the file looks minified or bundled (very long lines), not hand-written code." };
+      if (stat.isDirectory() && looksVendored(path.relative(targetPath, file), sourceCode)) {
+        return { file, findings: [], parseError: "Skipped: a third-party library or a bundle (licence banner or bundler output in a folder of static files), not the project's code." };
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { file, findings: [], parseError: `Failed to read file: ${message}` };
