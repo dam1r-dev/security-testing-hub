@@ -6,6 +6,7 @@ import { Analyzer } from "./analyzers/base-analyzer";
 import { SqlInjectionAnalyzer } from "./analyzers/sql-injection";
 import { XssAnalyzer } from "./analyzers/xss";
 import { TemplateXssAnalyzer } from "./analyzers/template-xss";
+import { HardeningAnalyzer, RegexInjectionAnalyzer } from "./analyzers/hardening";
 import { CommandInjectionAnalyzer } from "./analyzers/command-injection";
 import { PathTraversalAnalyzer } from "./analyzers/path-traversal";
 import { CsrfAnalyzer } from "./analyzers/csrf";
@@ -138,6 +139,8 @@ export function defaultAnalyzers(): Analyzer[] {
     new SqlInjectionAnalyzer(),
     new XssAnalyzer(),
     new TemplateXssAnalyzer(),
+    new HardeningAnalyzer(),
+    new RegexInjectionAnalyzer(),
     new CommandInjectionAnalyzer(),
     new PathTraversalAnalyzer(),
     new CsrfAnalyzer(),

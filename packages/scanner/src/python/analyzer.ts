@@ -12,6 +12,7 @@ import { massAssignments } from "./mass";
 import { PythonProject, argumentFor } from "./project";
 import { decoratorsOf, originsOf } from "./origins";
 import { djangoUrlParams } from "./django-urls";
+import { hardeningFindings } from "./hardening";
 import { HTML_IN_STRING, XSS_RETURN_MESSAGE, sinksOf } from "./sinks";
 
 /**
@@ -231,6 +232,9 @@ export class PythonAnalyzer implements Analyzer {
         },
       }, segmentNames);
     }
+
+    // Weak crypto, login cookies without HttpOnly, certificate checks switched off (patterns, no data flow).
+    for (const finding of hardeningFindings(root, text, filePath, DEVELOPMENT_FILE.test(filePath.split(/[/\\]/).slice(-3).join("/")))) add(finding);
 
     // 3. Checks that need no data flow.
     for (const call of findNodes(root, (n) => n.type === "call")) {

@@ -4,6 +4,7 @@ import { ParsedFile, SupportedLanguage } from "../parsers/ast-parser";
 import { SyntaxNode, findNodes, snippet, toLocation } from "../parsers/utils";
 import { isFixturePath } from "../analyzers/hardcoded-secret";
 import { bladeUnsafeUse, findTemplate, jinjaUnsafeUse } from "../templates";
+import { hardeningFindings } from "./hardening";
 import { findKnownSecrets, isPlaceholder, isSensitiveName, isSigningSecretName, looksLikeSecret, normalizeName, redact } from "../secrets/detect";
 import { Finding } from "../types";
 import { argumentsOf, calleeName, carriedBy, trackTaint } from "./engine";
@@ -247,6 +248,9 @@ export class PhpAnalyzer implements Analyzer {
         },
       });
     }
+
+    // Weak crypto, login cookies without httponly, certificate checks switched off (patterns, no data flow).
+    for (const finding of hardeningFindings(root, text, filePath)) add(finding);
 
     // 3. Checks that need no data flow.
     for (const call of findNodes(root, (n) => n.type === "function_call_expression")) {

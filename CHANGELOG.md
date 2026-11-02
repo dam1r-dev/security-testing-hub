@@ -9,6 +9,10 @@ Both packages (`security-hub-scanner`, `security-hub`) are released together at 
   Pug `!{}` / `!=`, Handlebars `{{{ }}}`, Nunjucks / Swig `| safe`, in the view and the partials it includes. Only keys printed raw are reported.
 - **`autoescape: false`** (`swig.setDefaults`, `nunjucks.configure`, `Environment`, `Handlebars.compile({ noEscape: true })`) is a finding: every value the page prints is then raw.
   OWASP NodeGoat: 5 new findings (the setting and 4 pages that reflect `userName`, `userId`, ...), none lost.
+- **Four new rules (30 -> 34), for JavaScript, TypeScript, Python and PHP** — the mistakes an assistant makes most often with the standard library:
+  `weak-crypto` (MD5 / SHA-1 over a password, `Math.random()` / `random` / `rand()` for a token or reset code, bcrypt cost below 10, ECB / DES / RC4, Django `PASSWORD_HASHERS`),
+  `insecure-cookie` (a login cookie without HttpOnly, `secure: false`, `SESSION_COOKIE_SECURE = False`), `tls-verification` (`rejectUnauthorized: false`, `NODE_TLS_REJECT_UNAUTHORIZED=0`,
+  `verify=False`, `CURLOPT_SSL_VERIFYPEER` false) and `regex-injection` (a pattern built from the request: ReDoS). On the realistic test app the scanner finds 13 problems instead of 4.
 - **Coverage in every report.** A scan says what it did not look at: files in languages without rules (Go, Ruby, Java, C#, Rust, ... and Vue / Svelte / Astro components),
   skipped bundles and libraries, files that did not parse. The JSON summary has `coverage`; the text, Markdown, HTML and UI reports and the GitHub Action log show the notes.
 - `security-hub docs [rule]` lists the 30 rule ids and links the documentation (it was a placeholder that promised "Phase 7").

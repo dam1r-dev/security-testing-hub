@@ -107,6 +107,21 @@ const HOW_TO_FIX: Record<VulnerabilityType, string> = {
     "Do not keep the login token in localStorage, sessionStorage or a cookie set from JavaScript. Let the server set it as a cookie with " +
     "HttpOnly, Secure and SameSite=Lax (or Strict), and read the user from a /me endpoint. Remove the token from the client code and " +
     "from places such as Redux state that are persisted to storage.",
+  "weak-crypto":
+    "Replace the weak primitive. Passwords: hash with bcrypt (cost 12), scrypt or argon2 and compare with the library's verify function; never MD5 or SHA-1. " +
+    "Tokens, reset codes, session ids and nonces: crypto.randomBytes(32).toString('hex') or crypto.randomUUID() in Node.js, secrets.token_urlsafe() in " +
+    "Python, random_bytes() in PHP; never Math.random(), random.random() or rand(). Encryption: AES-256-GCM with a fresh random IV per message, never ECB, DES, RC4 or createCipher.",
+  "insecure-cookie":
+    "Set the flags on every cookie that carries a login or a session: HttpOnly (scripts cannot read it), Secure (only over HTTPS) and SameSite=Lax or " +
+    "Strict. In Express: res.cookie(name, value, { httpOnly: true, secure: true, sameSite: 'lax' }); in express-session set cookie: { httpOnly: true, secure: true }. " +
+    "In Django keep SESSION_COOKIE_SECURE = True and SESSION_COOKIE_HTTPONLY = True; in PHP pass the httponly and secure arguments to setcookie().",
+  "tls-verification":
+    "Remove the code that turns certificate checking off (rejectUnauthorized: false, NODE_TLS_REJECT_UNAUTHORIZED = 0, verify=False, CURLOPT_SSL_VERIFYPEER false). " +
+    "If the server uses a private certificate authority, give the client that authority's certificate (the ca option, NODE_EXTRA_CA_CERTS, verify='/path/ca.pem', " +
+    "CURLOPT_CAINFO) instead of disabling the check, and never ship the switch to production.",
+  "regex-injection":
+    "Do not build a regular expression from request data. Escape the text so it is matched literally (lodash escapeRegExp, or value.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'); " +
+    "re.escape() in Python, preg_quote() in PHP), cap its length, or search with a plain substring or a database LIKE with bound parameters.",
   "debug-mode":
     "Turn debug mode off for anything that is reachable from the internet. In Flask do not call app.run(debug=True): read it from an " +
     "environment variable that is only set on your laptop, and serve production with gunicorn or uvicorn. In Django set DEBUG from the " +

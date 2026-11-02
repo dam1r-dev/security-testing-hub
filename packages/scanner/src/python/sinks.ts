@@ -29,6 +29,7 @@ const FILE_ARG01 = /^(?:shutil\.copy|shutil\.copy2|shutil\.copyfile|shutil\.copy
 const PATH_METHOD = /^(?:read_text|read_bytes|open|write_text|write_bytes|unlink|rmdir|iterdir|glob|rglob|touch|mkdir|rename|replace)$/;
 const SSRF_CALL = new RegExp(`^(?:requests|httpx|urllib3|urllib\\.request|http\\.client|aiohttp)\\.(?:${HTTP_METHODS}|urlopen|Request|HTTPConnection|HTTPSConnection)$|^(?:urlopen|urllib\\.urlopen|urllib2\\.urlopen)$`);
 const REDIRECT_CALL = /^(?:redirect|flask\.redirect|shortcuts\.redirect|HttpResponseRedirect|HttpResponsePermanentRedirect|RedirectResponse|redirect_to)$/;
+const REGEX_CALL = /^(?:re|regex)\.(?:compile|search|match|fullmatch|findall|finditer|sub|subn|split)$/;
 const HTML_CALL = /^(?:HttpResponse|HTMLResponse|make_response|flask\.make_response|Markup|markupsafe\.Markup|flask\.Markup|mark_safe|safestring\.mark_safe|SafeString)$/;
 
 // `https://api.example.com/users/` + id: the scheme and the whole host are written in the code, so the caller picks a path, not a server.
@@ -206,6 +207,18 @@ export function sinksOf(call: SyntaxNode, fileText: string): SinkSpec[] {
           `Redirect only to paths you build yourself, or check the target with url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}) (Django) / an allowlist first.`,
       });
     }
+  }
+
+  if (REGEX_CALL.test(name) && first) {
+    specs.push({
+      rule: "regex-injection",
+      severity: "medium",
+      confidence: "medium",
+      args: [first],
+      message: (via) =>
+        `User-controlled input ('${via}') becomes a regular expression. A crafted pattern such as (a+)+$ makes the match take minutes and freezes the server (ReDoS), and a pattern like .* matches every record. ` +
+        "Escape the text first (re.escape(value)) or search with a plain 'in' / str.find.",
+    });
   }
 
   if (HTML_CALL.test(name) && first) {
