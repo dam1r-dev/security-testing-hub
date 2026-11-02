@@ -20,7 +20,7 @@ interface Index {
 
 const indexes = new Map<string, Index>();
 
-function buildIndex(root: string, folderNames: ReadonlySet<string>): Index {
+function buildIndex(root: string, folderNames: ReadonlySet<string>, extensions: RegExp = EXTENSIONS): Index {
   const byRelative = new Map<string, string>();
   const stack: Array<{ dir: string; relativeToTemplates?: string }> = [{ dir: root }];
   let seen = 0;
@@ -39,7 +39,7 @@ function buildIndex(root: string, folderNames: ReadonlySet<string>): Index {
         if (SKIP_DIRS.has(entry.name)) continue;
         if (relativeToTemplates !== undefined) stack.push({ dir: full, relativeToTemplates: `${relativeToTemplates}${entry.name}/` });
         else stack.push({ dir: full, relativeToTemplates: folderNames.has(entry.name) ? "" : undefined });
-      } else if (relativeToTemplates !== undefined && entry.isFile() && EXTENSIONS.test(entry.name)) {
+      } else if (relativeToTemplates !== undefined && entry.isFile() && extensions.test(entry.name)) {
         seen++;
         const key = `${relativeToTemplates}${entry.name}`;
         if (!byRelative.has(key)) byRelative.set(key, full);
@@ -61,9 +61,191 @@ export function findTemplate(root: string, name: string, kind: "jinja" | "blade"
   return index.byRelative.get(wanted);
 }
 
+// ---- Node view engines (Express `res.render("profile", { bio })`, Fastify `reply.view`, Koa `ctx.render`) ----
+
+const VIEW_EXTENSIONS = /\.(?:ejs|pug|jade|hbs|handlebars|mustache|njk|nunjucks|swig|html?|twig)$/i;
+const VIEW_FOLDERS: ReadonlySet<string> = new Set(["views", "view", "templates", "template"]);
+const VIEW_SUFFIX = /\.(?:ejs|pug|jade|hbs|handlebars|mustache|njk|nunjucks|swig|html?|twig)$/i;
+
+export type ViewEngine = "ejs" | "pug" | "hbs" | "nunjucks";
+
+function engineOf(file: string): ViewEngine[] {
+  const lower = file.toLowerCase();
+  if (lower.endsWith(".ejs")) return ["ejs"];
+  if (/\.(?:pug|jade)$/.test(lower)) return ["pug"];
+  if (/\.(?:hbs|handlebars|mustache)$/.test(lower)) return ["hbs"];
+  if (/\.(?:njk|nunjucks|swig|twig)$/.test(lower)) return ["nunjucks"];
+  return ["ejs", "nunjucks"]; // a .html view: either engine can be registered for it
+}
+
+/** The view file for `res.render("admin/users")` (or `"users.ejs"`), searched in `views` / `templates` folders. */
+export function findViewTemplate(root: string, name: string): string | undefined {
+  const cacheKey = `view:${path.resolve(root)}`;
+  let index = indexes.get(cacheKey);
+  if (!index) {
+    index = buildIndex(root, VIEW_FOLDERS, VIEW_EXTENSIONS);
+    for (const [key, value] of [...index.byRelative]) {
+      const bare = key.replace(VIEW_SUFFIX, "");
+      if (!index.byRelative.has(bare)) index.byRelative.set(bare, value);
+    }
+    indexes.set(cacheKey, index);
+  }
+  const wanted = name.replace(/^[./\\]+/, "").split("\\").join("/");
+  return index.byRelative.get(wanted) ?? index.byRelative.get(wanted.replace(VIEW_SUFFIX, ""));
+}
+
+const VIEW_RELATED: Record<ViewEngine, RegExp> = {
+  ejs: /\binclude\(\s*["']([^"']+)["']/g,
+  pug: /^[ \t]*(?:include|extends)[ \t]+([^\s]+)/gm,
+  hbs: /\{\{>\s*([\w./-]+)/g,
+  nunjucks: /\{%-?\s*(?:extends|include|embed|import|from)\s+["']([^"']+)["']/g,
+};
+
+/**
+ * The view and the partials it pulls in by name (`include('partials/nav')`, `include nav`, `{{> nav}}`, `{% include "nav.njk" %}`). A layout that
+ * wraps the view implicitly (express-ejs-layouts, express-handlebars' `{{{body}}}`) is NOT followed: its raw `body` is the rendered view.
+ */
+export function relatedViews(root: string, file: string): string[] {
+  const out = [file];
+  for (let i = 0; i < out.length && out.length < MAX_RELATED; i++) {
+    const current = out[i] as string;
+    const text = readTemplate(current);
+    if (!text) continue;
+    for (const engine of engineOf(current)) {
+      const pattern = VIEW_RELATED[engine];
+      pattern.lastIndex = 0;
+      for (let m = pattern.exec(text); m !== null && out.length < MAX_RELATED; m = pattern.exec(text)) {
+        const name = m[1] as string;
+        const sibling = [name, `${name}.ejs`, `${name}.pug`, `${name}.hbs`, `${name}.njk`].map((n) => path.resolve(path.dirname(current), n)).find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+        const found = sibling ?? findViewTemplate(root, name) ?? findViewTemplate(root, `partials/${name}`);
+        if (found && !out.includes(found)) out.push(found);
+      }
+    }
+  }
+  return out;
+}
+
+// An expression that escapes (or sanitises) on its way out: the raw tag only carries markup that is already safe.
+const VIEW_ESCAPED = /(?:escape|encode|sanitiz|purif|clean|strip|xss|DOMPurify|sanitizeHtml)\w*\s*\(/i;
+
+function mentions(expression: string, key: string): boolean {
+  return new RegExp(`(?<![\\w$.])(?:locals\\.|this\\.)?${escapeRegex(key)}\\b`).test(expression);
+}
+
+function ejsUnsafeUseIn(file: string, text: string, key: string): UnsafeUse | undefined {
+  // <%- value %>: EJS prints it as it is (<%= %> escapes). `<%- include(...) %>` pulls in a partial.
+  const raw = /<%-\s*([\s\S]*?)\s*-?%>/g;
+  for (let m = raw.exec(text); m !== null; m = raw.exec(text)) {
+    const expression = m[1] ?? "";
+    if (/^include\s*\(/.test(expression) || VIEW_ESCAPED.test(expression) || !mentions(expression, key)) continue;
+    return { file, line: lineOf(text, m.index), how: `<%- ${expression.trim().slice(0, 40)} %>` };
+  }
+  return undefined;
+}
+
+function pugUnsafeUseIn(file: string, text: string, key: string): UnsafeUse | undefined {
+  // !{value} and p!= value: Pug escapes #{value} and p= value, and prints these as they are
+  const interpolation = /!\{([^}]*)\}/g;
+  for (let m = interpolation.exec(text); m !== null; m = interpolation.exec(text)) {
+    const expression = m[1] ?? "";
+    if (!VIEW_ESCAPED.test(expression) && mentions(expression, key)) return { file, line: lineOf(text, m.index), how: `!{${expression.trim().slice(0, 40)}}` };
+  }
+  const buffered = /^[^\S\n]*[\w.#-]*(?:\([^)\n]*\))?!=[^\S\n]*(.+)$/gm;
+  for (let m = buffered.exec(text); m !== null; m = buffered.exec(text)) {
+    const expression = m[1] ?? "";
+    if (!VIEW_ESCAPED.test(expression) && mentions(expression, key)) return { file, line: lineOf(text, m.index), how: `!= ${expression.trim().slice(0, 40)}` };
+  }
+  return undefined;
+}
+
+function hbsUnsafeUseIn(file: string, text: string, key: string): UnsafeUse | undefined {
+  // {{{value}}} and {{& value}}: Handlebars / Mustache print them as they are ({{value}} escapes)
+  const raw = /\{\{\{([^}]+)\}\}\}|\{\{&\s*([^}]+)\}\}/g;
+  for (let m = raw.exec(text); m !== null; m = raw.exec(text)) {
+    const expression = (m[1] ?? m[2] ?? "").trim();
+    if (!VIEW_ESCAPED.test(expression) && mentions(expression, key)) return { file, line: lineOf(text, m.index), how: m[0].slice(0, 40) };
+  }
+  return undefined;
+}
+
+// `swig.setDefaults({ autoescape: false })`, `nunjucks.configure("views", { autoescape: false })`, `new nunjucks.Environment(loader, { autoescape: false })`
+const AUTOESCAPE_OFF = /(?:setDefaults|configure|Environment)\s*\([^;]*?autoescape\s*:\s*false/;
+const SCRIPT_FILE = /\.(?:[cm]?js|ts)$/;
+const SKIP_PROJECT_DIRS = new Set(["node_modules", ".git", "dist", "build", "coverage", ".next", "vendor", "public", "static"]);
+const autoescapeOffRoots = new Map<string, boolean>();
+
+/** Does any server file of the project switch the template engine's escaping off? A text search over at most 1500 script files. */
+export function engineAutoescapeOff(root: string): boolean {
+  const key = path.resolve(root);
+  const known = autoescapeOffRoots.get(key);
+  if (known !== undefined) return known;
+  let found = false;
+  let seen = 0;
+  const stack = [key];
+  while (stack.length > 0 && !found && seen < 1500) {
+    const dir = stack.pop() as string;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true }) as fs.Dirent[];
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!SKIP_PROJECT_DIRS.has(entry.name)) stack.push(full);
+      } else if (entry.isFile() && SCRIPT_FILE.test(entry.name)) {
+        seen++;
+        const text = readTemplate(full);
+        if (text && AUTOESCAPE_OFF.test(text)) {
+          found = true;
+          break;
+        }
+      }
+    }
+  }
+  autoescapeOffRoots.set(key, found);
+  return found;
+}
+
+/** `{{ key }}` in a Nunjucks / Swig / Twig view when the engine does not escape: unless the print passes through `| escape` / `| e`. */
+function plainPrintUseIn(file: string, text: string, key: string): UnsafeUse | undefined {
+  const print = /\{\{-?([^}]*)\}\}/g;
+  for (let m = print.exec(text); m !== null; m = print.exec(text)) {
+    const expression = m[1] ?? "";
+    if (mentions(expression, key) && !/\|\s*(?:e|escape|forceescape|urlencode|striptags|dump)\b/.test(expression)) {
+      return { file, line: lineOf(text, m.index), how: `{{ ${expression.trim().slice(0, 40)} }} with autoescape turned off` };
+    }
+  }
+  return undefined;
+}
+
+/** How a Node view (and the partials it includes) prints `key` unescaped, if it does. */
+export function viewUnsafeUse(file: string, key: string, root: string): UnsafeUse | undefined {
+  const escapingOff = engineAutoescapeOff(root);
+  for (const each of relatedViews(root, file)) {
+    const text = readTemplate(each);
+    if (!text) continue;
+    for (const engine of engineOf(each)) {
+      const use =
+        engine === "ejs"
+          ? ejsUnsafeUseIn(each, text, key)
+          : engine === "pug"
+            ? pugUnsafeUseIn(each, text, key)
+            : engine === "hbs"
+              ? hbsUnsafeUseIn(each, text, key)
+              : (escapingOff ? plainPrintUseIn(each, text, key) : undefined) ?? jinjaUnsafeUseIn(each, key);
+      if (use) return use;
+    }
+  }
+  return undefined;
+}
+
 /** Forget what was read (a new scan of the same folder must see edited templates). */
 export function forgetTemplates(): void {
   indexes.clear();
+  autoescapeOffRoots.clear();
 }
 
 function readTemplate(file: string): string | undefined {

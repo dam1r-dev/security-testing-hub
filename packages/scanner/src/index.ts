@@ -5,6 +5,7 @@ import { JS_LANGUAGES, parseFile } from "./parsers/ast-parser";
 import { Analyzer } from "./analyzers/base-analyzer";
 import { SqlInjectionAnalyzer } from "./analyzers/sql-injection";
 import { XssAnalyzer } from "./analyzers/xss";
+import { TemplateXssAnalyzer } from "./analyzers/template-xss";
 import { CommandInjectionAnalyzer } from "./analyzers/command-injection";
 import { PathTraversalAnalyzer } from "./analyzers/path-traversal";
 import { CsrfAnalyzer } from "./analyzers/csrf";
@@ -136,6 +137,7 @@ export function defaultAnalyzers(): Analyzer[] {
   return [
     new SqlInjectionAnalyzer(),
     new XssAnalyzer(),
+    new TemplateXssAnalyzer(),
     new CommandInjectionAnalyzer(),
     new PathTraversalAnalyzer(),
     new CsrfAnalyzer(),

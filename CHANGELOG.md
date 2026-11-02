@@ -2,6 +2,23 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
+## Unreleased
+
+### Added
+- **XSS through view engines.** `res.render("page", { bio: req.body.bio })` (also `reply.view`, `ctx.render`) is checked against the template: EJS `<%- %>`,
+  Pug `!{}` / `!=`, Handlebars `{{{ }}}`, Nunjucks / Swig `| safe`, in the view and the partials it includes. Only keys printed raw are reported.
+- **`autoescape: false`** (`swig.setDefaults`, `nunjucks.configure`, `Environment`, `Handlebars.compile({ noEscape: true })`) is a finding: every value the page prints is then raw.
+  OWASP NodeGoat: 5 new findings (the setting and 4 pages that reflect `userName`, `userId`, ...), none lost.
+- **Coverage in every report.** A scan says what it did not look at: files in languages without rules (Go, Ruby, Java, C#, Rust, ... and Vue / Svelte / Astro components),
+  skipped bundles and libraries, files that did not parse. The JSON summary has `coverage`; the text, Markdown, HTML and UI reports and the GitHub Action log show the notes.
+- `security-hub docs [rule]` lists the 30 rule ids and links the documentation (it was a placeholder that promised "Phase 7").
+
+### Changed
+- **A scan that analysed no source code is "not rated", not "100/100 — Good"** (an empty folder, a wrong path, a project in Go or Ruby). The JSON `score` has `rated: false`.
+- **`--fail-on` over nothing exits with 2** ("cannot be checked") instead of passing: a CI job pointed at the wrong folder no longer turns green.
+- An invalid `--severity` / `--fail-on` value is a one-line usage error (exit 2), not a stack trace.
+- Package descriptions, keywords and the README introduction now describe the real product (JavaScript, TypeScript, Python, PHP; 30 rules) instead of "Node.js/Express apps".
+
 ## 0.7.4 - 2026-10-28
 
 ### Added
