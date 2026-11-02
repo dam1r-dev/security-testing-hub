@@ -2,7 +2,7 @@ import * as path from "path";
 import { Finding, ScanSummary, Severity } from "../types";
 import { fenced, toFixPrompt } from "./fix-prompt";
 import { mascotAlt, mascotImageUrl, mascotSay } from "./mascot";
-import { computeScore } from "./score";
+import { computeScore, coverageNotes } from "./score";
 
 /** Hidden marker so a bot can find and update its own comment instead of posting a new one each push. */
 export const MARKDOWN_MARKER = "<!-- security-testing-hub-report -->";
@@ -63,16 +63,17 @@ export function toMarkdown(summary: ScanSummary, options: MarkdownOptions = {}):
   if (options.mascot !== false) {
     lines.push(`<img src="${mascotImageUrl(score.color)}" alt="${mascotAlt(score.color)}" width="88" align="right" />`, "");
   }
-  lines.push(`## 🛡️ Security Testing Hub: ${SCORE_ICON[score.color]} ${score.value}/100 (${score.label})`, "");
-  if (options.mascot !== false) lines.push(`*${mascotSay(score.color)}*`, "");
+  lines.push(score.rated ? `## 🛡️ Security Testing Hub: ${SCORE_ICON[score.color]} ${score.value}/100 (${score.label})` : "## 🛡️ Security Testing Hub: ⚪ not rated", "");
+  if (options.mascot !== false && score.rated) lines.push(`*${mascotSay(score.color)}*`, "");
 
   const counts =
     `critical **${score.bySeverity.critical}** · high **${score.bySeverity.high}** · ` +
     `medium **${score.bySeverity.medium}** · low **${score.bySeverity.low}**`;
-  lines.push(findings.length === 0 ? "No findings. 🎉" : counts, "");
+  lines.push(findings.length === 0 ? (score.rated ? "No findings. 🎉" : "No findings, but no source code was analysed.") : counts, "");
 
   const notes: string[] = [];
   if (options.scopeNote) notes.push(options.scopeNote);
+  notes.push(...coverageNotes(summary));
   if (summary.filteredOutCount) notes.push(`${summary.filteredOutCount} more finding(s) in files this change does not touch are not listed.`);
   if (summary.suppressedCount) notes.push(`${summary.suppressedCount} finding(s) hidden by \`security-hub-ignore\` comments.`);
   if (summary.disabledCount) notes.push(`${summary.disabledCount} finding(s) are not listed: their rules are disabled in \`.security-hub.json\`.`);

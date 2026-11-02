@@ -74,10 +74,24 @@ describe("CLI argument parsing (run)", () => {
     expect(errorSpy.mock.calls.flat().join(" ")).toContain("Invalid format");
   });
 
-  it("throws on an invalid --severity value", () => {
-    expect(() => run(["node", "security-hub", "scan", "./some-app", "--severity", "extreme"])).toThrow(
-      /Invalid severity/,
-    );
+  it("reports an invalid --severity or --fail-on value as a usage error (exit 2), without scanning", () => {
+    run(["node", "security-hub", "scan", "./some-app", "--severity", "extreme"]);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/Invalid severity "extreme"/));
+    expect(process.exitCode).toBe(2);
+    expect(mockRunScan).not.toHaveBeenCalled();
+    process.exitCode = undefined;
+    run(["node", "security-hub", "scan", "./some-app", "--fail-on", "nope"]);
+    expect(process.exitCode).toBe(2);
+    expect(mockRunScan).not.toHaveBeenCalled();
+  });
+
+  it("'docs' lists the rule ids; an unknown rule is a usage error", () => {
+    run(["node", "security-hub", "docs"]);
+    expect(logSpy.mock.calls.flat().join("\n")).toMatch(/30 rules[\s\S]*sql-injection[\s\S]*debug-mode/);
+    process.exitCode = undefined;
+    run(["node", "security-hub", "docs", "not-a-rule"]);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/Unknown rule "not-a-rule"/));
+    expect(process.exitCode).toBe(2);
   });
 
   it("dispatches 'lab <name>' with --stop", () => {

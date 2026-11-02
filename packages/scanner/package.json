@@ -1,7 +1,7 @@
 {
   "name": "security-hub-scanner",
   "version": "0.7.4",
-  "description": "Tree-sitter based SAST engine for Node.js/Express and Next.js apps: SQL injection, XSS, command injection, path traversal, SSRF, CSRF, IDOR, broken access control and more.",
+  "description": "The engine behind security-hub: Tree-sitter parsing, taint analysis and 30 rules for JavaScript, TypeScript, Python and PHP. Use the `security-hub` CLI unless you are building your own tooling.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -20,15 +20,27 @@
     "tree-sitter-typescript": "^0.23.2"
   },
   "keywords": [
-    "sast",
     "security",
+    "sast",
     "static-analysis",
     "vulnerability-scanner",
+    "tree-sitter",
+    "vibe-coding",
+    "ai-generated-code",
+    "owasp",
     "sql-injection",
     "xss",
+    "secrets",
+    "supabase",
+    "firebase",
     "nextjs",
     "express",
-    "tree-sitter"
+    "python",
+    "php",
+    "django",
+    "flask",
+    "laravel",
+    "fastapi"
   ],
   "license": "MIT",
   "author": "Damir Panzhazov",

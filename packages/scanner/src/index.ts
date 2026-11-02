@@ -39,11 +39,11 @@ import { emptyConfig, HubConfig, loadConfig } from "./config";
 import { forgetTemplates } from "./templates";
 import { applyInlineSuppressions, compileIgnorePatterns, parseIgnoreFile } from "./suppress";
 import { ProjectContext } from "./taint/project";
-import { Finding, ScanResult, ScanSummary } from "./types";
+import { Coverage, Finding, ScanResult, ScanSummary } from "./types";
 
 export * from "./types";
 export { toSarif, toSarifString, SarifOptions } from "./output/sarif";
-export { computeScore, SecurityScore, ScoreColor } from "./output/score";
+export { computeScore, coverageNotes, SecurityScore, ScoreColor } from "./output/score";
 export { toHtml } from "./output/html";
 export { MASCOT_NAME, MASCOT_IMAGE_BASE, mascotDataUri, mascotImageUrl, mascotSay, mascotAlt } from "./output/mascot";
 export { toMarkdown, MARKDOWN_MARKER, MarkdownOptions } from "./output/markdown";
@@ -217,7 +217,31 @@ export function scanSource(
   return result;
 }
 
+// Languages with no rules here. Counted (never analysed) so the report can say what a clean result does not cover.
+const UNSUPPORTED_LANGUAGES: Record<string, string> = {
+  ".go": "Go",
+  ".rb": "Ruby",
+  ".java": "Java",
+  ".kt": "Kotlin",
+  ".cs": "C#",
+  ".rs": "Rust",
+  ".swift": "Swift",
+  ".scala": "Scala",
+  ".dart": "Dart",
+  ".ex": "Elixir",
+  ".exs": "Elixir",
+  ".c": "C",
+  ".cpp": "C++",
+  ".cc": "C++",
+  // components whose <script> is JavaScript, but which are not read as a whole
+  ".vue": "Vue components",
+  ".svelte": "Svelte components",
+  ".astro": "Astro components",
+};
+
 interface WalkOptions {
+  /** Filled in while walking: files of languages without rules, by language. */
+  unsupported?: Record<string, number>;
   includeTests: boolean;
   isIgnored: (relativePath: string) => boolean;
 }
@@ -235,6 +259,9 @@ function walkDirectory(rootDir: string, options: WalkOptions): string[] {
         if (DEFAULT_IGNORED_DIRS.has(entry.name)) continue;
         if (!options.includeTests && TEST_DIRS.has(entry.name)) continue;
         stack.push(fullPath);
+      } else if (entry.isFile() && options.unsupported && UNSUPPORTED_LANGUAGES[path.extname(entry.name).toLowerCase()]) {
+        const language = UNSUPPORTED_LANGUAGES[path.extname(entry.name).toLowerCase()] as string;
+        options.unsupported[language] = (options.unsupported[language] ?? 0) + 1;
       } else if (
         entry.isFile() &&
         SUPPORTED_EXTENSIONS.has(path.extname(entry.name)) &&
@@ -283,7 +310,8 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
   const config = options.config === false ? emptyConfig() : (options.config ?? loadConfig(stat.isDirectory() ? targetPath : path.dirname(targetPath)).config);
   const includeTests = options.includeTests ?? config.includeTests ?? false;
   const isIgnored = compileIgnorePatterns([...config.ignore, ...readIgnoreFile(targetPath), ...(options.ignore ?? [])]);
-  const files = stat.isDirectory() ? walkDirectory(targetPath, { includeTests, isIgnored }) : [targetPath];
+  const unsupported: Record<string, number> = {};
+  const files = stat.isDirectory() ? walkDirectory(targetPath, { includeTests, isIgnored, unsupported }) : [targetPath];
   // Shared by every file of this scan so a call can be followed into another file.
   const context = new ProjectContext(stat.isDirectory() ? targetPath : path.dirname(targetPath));
 
@@ -337,8 +365,19 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
     }
   }
 
+  // What was really read: the first `files.length` results are the source files, the rest are .env, backend-config and exposed-file checks.
+  const sourceResults = results.slice(0, files.length);
+  const wasSkipped = (r: ScanResult): boolean => /^(?:Skipped|Failed to read)/.test(r.parseError ?? "");
+  const coverage: Coverage = {
+    analyzed: sourceResults.filter((r) => !wasSkipped(r)).length,
+    skipped: sourceResults.filter(wasSkipped).length,
+    parseErrors: sourceResults.filter((r) => !wasSkipped(r) && /syntax errors/.test(r.parseError ?? "")).length,
+    unsupported,
+  };
+
   return {
     filesScanned: files.length + envResults.length + backendResults.length + exposedResults.length,
+    coverage,
     findingsCount: results.reduce((sum, r) => sum + r.findings.length, 0),
     results,
     durationMs: Date.now() - start,

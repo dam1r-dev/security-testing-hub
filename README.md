@@ -4,11 +4,19 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 An open-source static analysis (SAST) scanner built for **"vibe coders"** —
-people shipping Node.js apps fast with AI coding assistants, who don't
+people shipping web apps fast with AI coding assistants, who don't
 always have time to review every line an LLM generates for injection bugs.
-Point it at your project (Express **or** Next.js App Router); it parses the
-real AST (via [Tree-sitter](https://tree-sitter.github.io/tree-sitter/)) and
-flags untrusted input flowing into dangerous sinks.
+Point it at a **JavaScript / TypeScript** (Express, Next.js, SvelteKit, Remix,
+Nuxt, Hono, tRPC), **Python** (Flask, FastAPI, Django) or **PHP** (plain
+scripts, Laravel, Slim) project; it parses the real AST (via
+[Tree-sitter](https://tree-sitter.github.io/tree-sitter/)) and flags untrusted
+input flowing into dangerous sinks, plus the access-control, secret and
+database-rule mistakes that need no data flow.
+
+A clean report only means something for the code that was read, so every
+report lists what it did **not** cover (files in other languages, skipped
+bundles and libraries, files that did not parse), and a scan that analysed
+nothing is shown as "not rated" instead of 100/100.
 
 <p align="center"><img src="docs/demo.svg" alt="A terminal: security-hub scan finds SQL injection, command injection and a hard-coded secret in a deliberately broken app, score 0 of 100, with Armo the armadillo alarmed" width="860"></p>
 
@@ -21,7 +29,7 @@ AI pair-programmers are great at shipping features and often silently
 reproduce the same handful of injection bugs (string-built SQL, unescaped
 response bodies, `exec()` with interpolated input) because that's what's
 common in training data. This tool is a fast, local pre-commit/CI check
-tuned for exactly the patterns that show up in "vibe-coded" Express apps.
+tuned for exactly the patterns that show up in "vibe-coded" web apps.
 
 ## What it detects (30 rules)
 

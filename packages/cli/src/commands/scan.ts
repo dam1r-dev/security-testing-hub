@@ -20,6 +20,7 @@ import {
   filterSummary,
   SEVERITY_RANK,
   computeScore,
+  coverageNotes,
   Finding,
   ScanSummary,
   Severity,
@@ -86,7 +87,8 @@ function renderText(summary: ScanSummary): string {
   }
 
   const score = computeScore(summary);
-  const badge = SCORE_COLOR_CHALK[score.color](` ${score.value}/100 — ${score.label} `);
+  const badge = score.rated ? SCORE_COLOR_CHALK[score.color](` ${score.value}/100 — ${score.label} `) : chalk.bgYellow.black(" not rated — no source code was analysed ");
+  for (const note of coverageNotes(summary)) lines.push(chalk.yellow(`⚠  ${note}`));
   const breakdown =
     `critical ${score.bySeverity.critical} · high ${score.bySeverity.high} · ` +
     `medium ${score.bySeverity.medium} · low ${score.bySeverity.low}`;
@@ -188,6 +190,11 @@ export function runScan(targetPath: string, options: ScanCommandOptions): number
 
   writeOutput(output, outFile);
 
+  // A gate over nothing is not a pass: the wrong folder, or a project in a language without rules, must not turn a CI job green.
+  if (failOn && summary.coverage && summary.coverage.analyzed === 0) {
+    console.error(chalk.red("--fail-on cannot be checked: no JavaScript, TypeScript, Python or PHP source was analysed. Check the path (and --ignore)."));
+    return 2;
+  }
   if (failOn) {
     const threshold = SEVERITY_RANK[failOn];
     const hasBlockingFinding = summary.results.some((r) =>

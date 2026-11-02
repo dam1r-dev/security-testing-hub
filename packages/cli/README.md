@@ -1,10 +1,15 @@
 # security-hub
 
-Open-source SAST scanner CLI for Node.js/Express and Next.js App Router
-apps — catches SQL injection, XSS, command injection, path traversal,
-SSRF, CSRF, IDOR, broken access control, insecure file upload and
-username enumeration. Built for AI-assisted ("vibe coded") projects,
-where the usual injection bugs slip in fast.
+Open-source security scanner for AI-assisted ("vibe coded") projects, where
+the usual bugs slip in fast. 30 rules for **JavaScript, TypeScript, Python
+and PHP** (Express, Next.js, SvelteKit, Remix, Nuxt, Flask, FastAPI, Django,
+Laravel, Slim): SQL / command / code injection, XSS, path traversal, SSRF,
+open redirect, CSRF, IDOR and broken access control, leaked secrets, unsafe
+Supabase and Firebase rules, JWT and CORS mistakes, and more.
+
+A report says what it did *not* look at: files in languages without rules,
+skipped bundles and libraries, files that did not parse. A scan that analysed
+nothing is "not rated", never "100/100".
 
 Full docs, rule reference, attack playbook (EN/RU/KK), and the scanner
 engine's source live in the main repo:

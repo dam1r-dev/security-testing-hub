@@ -213,7 +213,7 @@ export function renderUiPage(options: UiPageOptions): string {
       privacy: 'Everything runs on your computer. Your code is never uploaded anywhere.',
       download: 'Download HTML report', up: 'Up', close: 'Close', selectFolder: 'Select this folder',
       home: 'Home', all: 'All', critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low',
-      Good: 'Good', 'Needs attention': 'Needs attention', 'At risk': 'At risk',
+      'Not rated': 'Not rated', Good: 'Good', 'Needs attention': 'Needs attention', 'At risk': 'At risk',
       summary: '{n} finding(s) in {f} scanned file(s), {ms} ms.',
       noFindings: 'No findings \\u2014 nice work. Remember this is a heuristic scanner, not a guarantee.',
       parseWarn: '{n} file(s) could not be fully parsed, so results for them may be incomplete.',
@@ -230,7 +230,7 @@ export function renderUiPage(options: UiPageOptions): string {
       privacy: '\\u0412\\u0441\\u0451 \\u0440\\u0430\\u0431\\u043e\\u0442\\u0430\\u0435\\u0442 \\u043d\\u0430 \\u0432\\u0430\\u0448\\u0435\\u043c \\u043a\\u043e\\u043c\\u043f\\u044c\\u044e\\u0442\\u0435\\u0440\\u0435. \\u041a\\u043e\\u0434 \\u043d\\u0438\\u043a\\u0443\\u0434\\u0430 \\u043d\\u0435 \\u043e\\u0442\\u043f\\u0440\\u0430\\u0432\\u043b\\u044f\\u0435\\u0442\\u0441\\u044f.',
       download: '\\u0421\\u043a\\u0430\\u0447\\u0430\\u0442\\u044c HTML-\\u043e\\u0442\\u0447\\u0451\\u0442', up: '\\u0412\\u0432\\u0435\\u0440\\u0445', close: '\\u0417\\u0430\\u043a\\u0440\\u044b\\u0442\\u044c', selectFolder: '\\u0412\\u044b\\u0431\\u0440\\u0430\\u0442\\u044c \\u044d\\u0442\\u0443 \\u043f\\u0430\\u043f\\u043a\\u0443',
       home: '\\u0414\\u043e\\u043c\\u0430\\u0448\\u043d\\u044f\\u044f', all: '\\u0412\\u0441\\u0435', critical: '\\u041a\\u0440\\u0438\\u0442\\u0438\\u0447\\u0435\\u0441\\u043a\\u0438\\u0435', high: '\\u0412\\u044b\\u0441\\u043e\\u043a\\u0438\\u0435', medium: '\\u0421\\u0440\\u0435\\u0434\\u043d\\u0438\\u0435', low: '\\u041d\\u0438\\u0437\\u043a\\u0438\\u0435',
-      Good: '\\u0425\\u043e\\u0440\\u043e\\u0448\\u043e', 'Needs attention': '\\u0422\\u0440\\u0435\\u0431\\u0443\\u0435\\u0442 \\u0432\\u043d\\u0438\\u043c\\u0430\\u043d\\u0438\\u044f', 'At risk': '\\u0415\\u0441\\u0442\\u044c \\u0440\\u0438\\u0441\\u043a',
+      'Not rated': '\\u041d\\u0435\\u0020\\u043e\\u0446\\u0435\\u043d\\u0435\\u043d\\u043e', Good: '\\u0425\\u043e\\u0440\\u043e\\u0448\\u043e', 'Needs attention': '\\u0422\\u0440\\u0435\\u0431\\u0443\\u0435\\u0442 \\u0432\\u043d\\u0438\\u043c\\u0430\\u043d\\u0438\\u044f', 'At risk': '\\u0415\\u0441\\u0442\\u044c \\u0440\\u0438\\u0441\\u043a',
       summary: '\\u041d\\u0430\\u0445\\u043e\\u0434\\u043e\\u043a: {n}, \\u0444\\u0430\\u0439\\u043b\\u043e\\u0432 \\u043f\\u0440\\u043e\\u0432\\u0435\\u0440\\u0435\\u043d\\u043e: {f}, {ms} \\u043c\\u0441.',
       noFindings: '\\u041d\\u0438\\u0447\\u0435\\u0433\\u043e \\u043d\\u0435 \\u043d\\u0430\\u0439\\u0434\\u0435\\u043d\\u043e \\u2014 \\u0445\\u043e\\u0440\\u043e\\u0448\\u0430\\u044f \\u0440\\u0430\\u0431\\u043e\\u0442\\u0430. \\u041d\\u043e \\u044d\\u0442\\u043e \\u044d\\u0432\\u0440\\u0438\\u0441\\u0442\\u0438\\u0447\\u0435\\u0441\\u043a\\u0438\\u0439 \\u0441\\u043a\\u0430\\u043d\\u0435\\u0440, \\u0430 \\u043d\\u0435 \\u0433\\u0430\\u0440\\u0430\\u043d\\u0442\\u0438\\u044f.',
       parseWarn: '\\u0424\\u0430\\u0439\\u043b\\u043e\\u0432, \\u043a\\u043e\\u0442\\u043e\\u0440\\u044b\\u0435 \\u043d\\u0435 \\u0443\\u0434\\u0430\\u043b\\u043e\\u0441\\u044c \\u0440\\u0430\\u0437\\u043e\\u0431\\u0440\\u0430\\u0442\\u044c \\u043f\\u043e\\u043b\\u043d\\u043e\\u0441\\u0442\\u044c\\u044e: {n}. \\u0414\\u043b\\u044f \\u043d\\u0438\\u0445 \\u0440\\u0435\\u0437\\u0443\\u043b\\u044c\\u0442\\u0430\\u0442 \\u043c\\u043e\\u0436\\u0435\\u0442 \\u0431\\u044b\\u0442\\u044c \\u043d\\u0435\\u043f\\u043e\\u043b\\u043d\\u044b\\u043c.',
@@ -247,7 +247,7 @@ export function renderUiPage(options: UiPageOptions): string {
       privacy: '\\u0411\\u0430\\u0440\\u043b\\u044b\\u0493\\u044b \\u0441\\u0456\\u0437\\u0434\\u0456\\u04a3 \\u043a\\u043e\\u043c\\u043f\\u044c\\u044e\\u0442\\u0435\\u0440\\u0456\\u04a3\\u0456\\u0437\\u0434\\u0435 \\u0436\\u04b1\\u043c\\u044b\\u0441 \\u0456\\u0441\\u0442\\u0435\\u0439\\u0434\\u0456. \\u041a\\u043e\\u0434 \\u0438\\u043d\\u0442\\u0435\\u0440\\u043d\\u0435\\u0442\\u043a\\u0435 \\u0436\\u0456\\u0431\\u0435\\u0440\\u0456\\u043b\\u043c\\u0435\\u0439\\u0434\\u0456.',
       download: 'HTML \\u0435\\u0441\\u0435\\u043f\\u0442\\u0456 \\u0436\\u04af\\u043a\\u0442\\u0435\\u0443', up: '\\u0416\\u043e\\u0493\\u0430\\u0440\\u044b', close: '\\u0416\\u0430\\u0431\\u0443', selectFolder: '\\u041e\\u0441\\u044b \\u049b\\u0430\\u043b\\u0442\\u0430\\u043d\\u044b \\u0442\\u0430\\u04a3\\u0434\\u0430\\u0443',
       home: '\\u04ae\\u0439 \\u049b\\u0430\\u043b\\u0442\\u0430\\u0441\\u044b', all: '\\u0411\\u0430\\u0440\\u043b\\u044b\\u0493\\u044b', critical: '\\u041a\\u0440\\u0438\\u0442\\u0438\\u043a\\u0430\\u043b\\u044b\\u049b', high: '\\u0416\\u043e\\u0493\\u0430\\u0440\\u044b', medium: '\\u041e\\u0440\\u0442\\u0430\\u0448\\u0430', low: '\\u0422\\u04e9\\u043c\\u0435\\u043d',
-      Good: '\\u0416\\u0430\\u049b\\u0441\\u044b', 'Needs attention': '\\u041d\\u0430\\u0437\\u0430\\u0440 \\u0430\\u0443\\u0434\\u0430\\u0440\\u0443 \\u043a\\u0435\\u0440\\u0435\\u043a', 'At risk': '\\u049a\\u0430\\u0443\\u0456\\u043f \\u0431\\u0430\\u0440',
+      'Not rated': '\\u0411\\u0430\\u0493\\u0430\\u043b\\u0430\\u043d\\u0431\\u0430\\u0434\\u044b', Good: '\\u0416\\u0430\\u049b\\u0441\\u044b', 'Needs attention': '\\u041d\\u0430\\u0437\\u0430\\u0440 \\u0430\\u0443\\u0434\\u0430\\u0440\\u0443 \\u043a\\u0435\\u0440\\u0435\\u043a', 'At risk': '\\u049a\\u0430\\u0443\\u0456\\u043f \\u0431\\u0430\\u0440',
       summary: '\\u0422\\u0430\\u0431\\u044b\\u043b\\u044b\\u043c\\u0434\\u0430\\u0440: {n}, \\u0442\\u0435\\u043a\\u0441\\u0435\\u0440\\u0456\\u043b\\u0433\\u0435\\u043d \\u0444\\u0430\\u0439\\u043b\\u0434\\u0430\\u0440: {f}, {ms} \\u043c\\u0441.',
       noFindings: '\\u0415\\u0448\\u0442\\u0435\\u04a3\\u0435 \\u0442\\u0430\\u0431\\u044b\\u043b\\u043c\\u0430\\u0434\\u044b \\u2014 \\u0436\\u0430\\u049b\\u0441\\u044b \\u0436\\u04b1\\u043c\\u044b\\u0441. \\u0411\\u0456\\u0440\\u0430\\u049b \\u0431\\u04b1\\u043b \\u044d\\u0432\\u0440\\u0438\\u0441\\u0442\\u0438\\u043a\\u0430\\u043b\\u044b\\u049b \\u0441\\u043a\\u0430\\u043d\\u0435\\u0440, \\u043a\\u0435\\u043f\\u0456\\u043b\\u0434\\u0456\\u043a \\u0435\\u043c\\u0435\\u0441.',
       parseWarn: '\\u0422\\u043e\\u043b\\u044b\\u049b \\u0442\\u0430\\u043b\\u0434\\u0430\\u043d\\u0431\\u0430\\u0493\\u0430\\u043d \\u0444\\u0430\\u0439\\u043b\\u0434\\u0430\\u0440: {n}. \\u0415\\u0441\\u0435\\u043f \\u0442\\u043e\\u043b\\u044b\\u049b \\u0431\\u043e\\u043b\\u043c\\u0430\\u0443\\u044b \\u043c\\u04af\\u043c\\u043a\\u0456\\u043d.',
@@ -333,10 +333,10 @@ export function renderUiPage(options: UiPageOptions): string {
     var ring = $('ring');
     ring.style.setProperty('--v', String(score.value));
     ring.style.setProperty('--c', colors.main);
-    $('ring-value').textContent = String(score.value);
+    $('ring-value').textContent = score.rated === false ? '\u2013' : String(score.value);
     $('ring-value').style.color = colors.main;
     var label = $('score-label');
-    label.textContent = t(score.label);
+    label.textContent = t(score.rated === false ? 'Not rated' : score.label);
     label.style.color = colors.main;
     var say = 'Armo: \\u201c' + t({ green: 'armoGreen', yellow: 'armoYellow', red: 'armoRed' }[score.color]) + '\\u201d';
     $('mascot-say').textContent = say;
@@ -344,6 +344,8 @@ export function renderUiPage(options: UiPageOptions): string {
     $('mascot').alt = say;
     var sub = fmt('summary', { n: score.totalFindings, f: data.summary.filesScanned, ms: data.summary.durationMs });
     if (data.summary.suppressedCount) sub += ' ' + fmt('suppressed', { n: data.summary.suppressedCount });
+    // what a clean result does not cover (nothing analysed, other languages, skipped files)
+    if (data.coverage && data.coverage.length) sub += ' \u26a0 ' + data.coverage.join(' ');
     $('score-sub').textContent = sub;
 
     var stats = $('stats');
