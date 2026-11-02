@@ -2,7 +2,7 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
-## Unreleased
+## 0.8.0 - 2026-11-03
 
 ### Added
 - **XSS through view engines.** `res.render("page", { bio: req.body.bio })` (also `reply.view`, `ctx.render`) is checked against the template: EJS `<%- %>`,
