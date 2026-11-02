@@ -171,7 +171,9 @@ async function run(env, overrides = {}) {
   const summary = scanner.filterSummary(raw, { minSeverity, files: changed });
   const score = scanner.computeScore(summary);
   const findings = summary.results.flatMap((r) => r.findings);
-  deps.log(`Scanned ${summary.filesScanned} file(s): ${findings.length} finding(s), score ${score.value}/100 (${score.label}).`);
+  deps.log(`Scanned ${summary.filesScanned} file(s): ${findings.length} finding(s), ${score.rated ? `score ${score.value}/100 (${score.label})` : "not rated (no source code was analysed)"}.`);
+  // A clean result only covers what was read: say so in the run (other languages, skipped files, a wrong working directory).
+  if (typeof scanner.coverageNotes === "function") for (const note of scanner.coverageNotes(summary)) deps.log(`::warning::${note}`);
 
   // 3. Inline annotations in the PR diff / the run page.
   for (const line of scanner.toGithubAnnotations(summary, { relativeTo: workspace })) deps.log(line);

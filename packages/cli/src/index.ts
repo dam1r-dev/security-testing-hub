@@ -5,7 +5,7 @@ import { runLab } from "./commands/lab";
 import { runUi } from "./commands/ui";
 import { runFix } from "./commands/fix";
 import { runBaseline } from "./commands/baseline";
-import { Severity } from "security-hub-scanner";
+import { RULE_IDS, Severity } from "security-hub-scanner";
 
 // Read at runtime so `--version` can never drift from the published package.json
 // (dist/index.js sits one level below the package root).
@@ -31,7 +31,7 @@ export function run(argv: string[]): void {
 
   program
     .name("security-hub")
-    .description("Open-source SAST scanner for Node.js/Express apps (SQLi, XSS, command injection, path traversal, CSRF)")
+    .description("Open-source security scanner for vibe coders: injection, XSS, broken access control, leaked secrets and unsafe Supabase / Firebase rules in JavaScript, TypeScript, Python and PHP projects")
     .version(PACKAGE_VERSION);
 
   program
@@ -57,11 +57,21 @@ export function run(argv: string[]): void {
         process.exitCode = 2;
         return;
       }
+      let severity: Severity | undefined;
+      let failOn: Severity | undefined;
+      try {
+        severity = opts.severity ? parseSeverity(opts.severity) : undefined;
+        failOn = opts.failOn ? parseSeverity(opts.failOn) : undefined;
+      } catch (err) {
+        console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+        process.exitCode = 2;
+        return;
+      }
       const exitCode = runScan(targetPath, {
         format,
         out: opts.out,
-        severity: opts.severity ? parseSeverity(opts.severity) : undefined,
-        failOn: opts.failOn ? parseSeverity(opts.failOn) : undefined,
+        severity,
+        failOn,
         ignore: opts.ignore.length > 0 ? opts.ignore : undefined,
         includeTests: opts.includeTests,
         changedSince: opts.changedSince,
@@ -132,11 +142,22 @@ export function run(argv: string[]): void {
     });
 
   program
-    .command("docs")
-    .description("Open the rule documentation (coming in Phase 7)")
-    .action(() => {
-      console.log(chalk.yellow("'docs' isn't implemented yet — full rule docs land in Phase 7 of the dev plan."));
-      console.log("For now, see docs/rules.md in the repo.");
+    .command("docs [rule]")
+    .description("List the rule ids (for --ignore comments and .security-hub.json) and where each rule is explained")
+    .action((rule?: string) => {
+      const url = "https://github.com/dam1r-dev/security-testing-hub/blob/main/docs/rules.md";
+      if (rule && !(RULE_IDS as readonly string[]).includes(rule)) {
+        console.error(chalk.red(`Unknown rule "${rule}". Rule ids: ${RULE_IDS.join(", ")}`));
+        process.exitCode = 2;
+        return;
+      }
+      if (rule) {
+        console.log(`${chalk.bold(rule)}: see ${url} (search for \`${rule}\`)`);
+        return;
+      }
+      console.log(chalk.bold(`${RULE_IDS.length} rules`) + chalk.dim(" (use these ids in // security-hub-ignore comments and in .security-hub.json)"));
+      console.log(RULE_IDS.map((id) => `  ${id}`).join("\n"));
+      console.log(`\nWhat each rule catches, how it decides, and what it misses: ${url}`);
     });
 
   program.parse(argv);

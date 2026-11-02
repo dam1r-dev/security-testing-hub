@@ -1,7 +1,7 @@
 import { Finding, ScanSummary, Severity } from "../types";
 import { fixPromptFor, toFixPrompt } from "./fix-prompt";
 import { MASCOT_NAME, mascotAlt, mascotDataUri, mascotSay } from "./mascot";
-import { computeScore, ScoreColor } from "./score";
+import { computeScore, coverageNotes, ScoreColor } from "./score";
 
 const COLOR_HEX: Record<ScoreColor, { main: string; bg: string; ring: string }> = {
   green: { main: "#16a34a", bg: "#f0fdf4", ring: "#16a34a" },
@@ -25,19 +25,19 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function scoreRingSvg(value: number, color: ScoreColor): string {
+function scoreRingSvg(value: number, color: ScoreColor, rated = true): string {
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - value / 100);
   const hex = COLOR_HEX[color];
   return `
-    <svg width="180" height="180" viewBox="0 0 180 180" class="score-ring" role="img" aria-label="Security score ${value} out of 100">
+    <svg width="180" height="180" viewBox="0 0 180 180" class="score-ring" role="img" aria-label="${rated ? `Security score ${value} out of 100` : "Not rated: no source code was analysed"}">
       <circle cx="90" cy="90" r="${radius}" fill="none" stroke="#e5e7eb" stroke-width="14" />
       <circle cx="90" cy="90" r="${radius}" fill="none" stroke="${hex.ring}" stroke-width="14"
         stroke-linecap="round" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"
         transform="rotate(-90 90 90)" />
-      <text x="90" y="82" text-anchor="middle" class="score-value" fill="${hex.main}">${value}</text>
-      <text x="90" y="108" text-anchor="middle" class="score-percent" fill="${hex.main}">/ 100</text>
+      <text x="90" y="82" text-anchor="middle" class="score-value" fill="${hex.main}">${rated ? value : "–"}</text>
+      <text x="90" y="108" text-anchor="middle" class="score-percent" fill="${hex.main}">${rated ? "/ 100" : "not rated"}</text>
     </svg>`;
 }
 
@@ -64,11 +64,12 @@ export function toHtml(summary: ScanSummary, targetPath?: string): string {
   const hex = COLOR_HEX[score.color];
   const allFindings = summary.results.flatMap((r) => r.findings);
   const parseWarnings = summary.results.filter((r) => r.parseError);
+  const coverage = coverageNotes(summary);
 
   const findingsHtml =
     allFindings.length > 0
       ? allFindings.map((f) => findingCard(f, targetPath)).join("\n")
-      : `<p class="empty-state">No findings — nice work. Remember this is a heuristic scanner (see the README's false-negative caveats), not a guarantee.</p>`;
+      : `<p class="empty-state">${score.rated ? "No findings — nice work." : "No findings, but no source code was analysed."} Remember this is a heuristic scanner (see the README's false-negative caveats), not a guarantee.</p>`;
 
   const generatedAt = new Date().toISOString();
 
@@ -130,6 +131,8 @@ export function toHtml(summary: ScanSummary, targetPath?: string): string {
     font-size: 12px; overflow-x: auto; margin: 0;
   }
   .empty-state { color: #16a34a; font-weight: 600; }
+  .coverage { margin: 20px 0; font-size: 14px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 12px 16px; }
+  .coverage p { margin: 4px 0; }
   .parse-warnings { margin: 20px 0; font-size: 13px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 12px 16px; }
   .parse-warnings summary { cursor: pointer; font-weight: 600; }
   footer { margin-top: 40px; font-size: 12px; color: #94a3b8; text-align: center; }
@@ -145,9 +148,9 @@ export function toHtml(summary: ScanSummary, targetPath?: string): string {
 
   <div class="score-card">
     <img class="mascot" src="${mascotDataUri(score.color)}" alt="${escapeHtml(mascotAlt(score.color))}" />
-    ${scoreRingSvg(score.value, score.color)}
+    ${scoreRingSvg(score.value, score.color, score.rated)}
     <div class="score-meta">
-      <p class="score-label">${score.label}</p>
+      <p class="score-label">${score.rated ? score.label : "Not rated"}</p>
       <p class="mascot-say">${MASCOT_NAME}: “${escapeHtml(mascotSay(score.color))}”</p>
       <p class="score-sub">${score.totalFindings} finding(s) across ${summary.filesScanned} scanned file(s). This score is a rough heuristic signal, not a certification — see the README for known false-positive/false-negative rates.</p>
       <div class="stat-row">
@@ -158,6 +161,8 @@ export function toHtml(summary: ScanSummary, targetPath?: string): string {
       </div>
     </div>
   </div>
+
+  ${coverage.length > 0 ? `<div class="coverage" role="note">${coverage.map((note) => `<p>${escapeHtml(note)}</p>`).join("")}</div>` : ""}
 
   ${
     parseWarnings.length > 0

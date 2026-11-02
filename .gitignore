@@ -9,6 +9,8 @@ coverage/
 .env
 .env.local
 *.sarif
+security-report.html
+release-notes-*.tmp.md
 /tmp/
 
 # built by tests/web-parity.test.ts and `npm run site:scanner`

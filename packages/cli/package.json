@@ -1,7 +1,7 @@
 {
   "name": "security-hub",
   "version": "0.7.4",
-  "description": "Open-source SAST scanner CLI for Node.js/Express and Next.js apps — catches SQL injection, XSS, command injection, SSRF, CSRF, IDOR and more, built for AI-assisted (\"vibe coded\") projects.",
+  "description": "Open-source security scanner for vibe coders: finds injection, XSS, broken access control, leaked secrets and unsafe Supabase / Firebase rules in JavaScript, TypeScript, Python and PHP projects (Express, Next.js, Flask, FastAPI, Django, Laravel and more).",
   "main": "dist/index.js",
   "bin": {
     "security-hub": "bin/security-hub.js"
@@ -22,15 +22,27 @@
     "security-hub-scanner": "0.7.4"
   },
   "keywords": [
-    "sast",
     "security",
-    "cli",
+    "sast",
     "static-analysis",
     "vulnerability-scanner",
+    "tree-sitter",
+    "vibe-coding",
+    "ai-generated-code",
+    "owasp",
     "sql-injection",
     "xss",
+    "secrets",
+    "supabase",
+    "firebase",
     "nextjs",
-    "express"
+    "express",
+    "python",
+    "php",
+    "django",
+    "flask",
+    "laravel",
+    "fastapi"
   ],
   "license": "MIT",
   "author": "Damir Panzhazov",

@@ -58,8 +58,22 @@ export interface ScanResult {
   suppressed?: number;
 }
 
+/** What a scan did and did not look at: a clean report only means something for the code that was actually read. */
+export interface Coverage {
+  /** Source files (JavaScript, TypeScript, Python, PHP) that were analysed. */
+  analyzed: number;
+  /** Source files left out with a note: minified or bundled, a third-party library, over the size limit, unreadable. */
+  skipped: number;
+  /** Source files whose syntax the parser could not read completely (their results may be incomplete). */
+  parseErrors: number;
+  /** Files in languages the scanner has no rules for, by language ("Go": 120): their code was not checked at all. */
+  unsupported: Record<string, number>;
+}
+
 export interface ScanSummary {
   filesScanned: number;
+  /** Absent in summaries made before 0.8. */
+  coverage?: Coverage;
   findingsCount: number;
   results: ScanResult[];
   durationMs: number;

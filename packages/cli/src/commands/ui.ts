@@ -5,7 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { spawn } from "child_process";
 import chalk from "chalk";
-import { computeScore, fixPromptFor, scanPath, toFixPrompt, toHtml } from "security-hub-scanner";
+import { computeScore, coverageNotes, fixPromptFor, scanPath, toFixPrompt, toHtml } from "security-hub-scanner";
 import { renderUiPage } from "./ui-page";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
@@ -175,6 +175,7 @@ function scan(rawPath: unknown) {
       suppressedCount: summary.suppressedCount ?? 0,
     },
     score: computeScore(summary),
+    coverage: coverageNotes(summary),
     html: toHtml(summary, target),
   };
 }
