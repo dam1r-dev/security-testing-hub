@@ -36,7 +36,7 @@ tuned for exactly the patterns that show up in "vibe-coded" web apps.
 | Vulnerability | CWE | Analyzer |
 |---|---|---|
 | SQL Injection | [CWE-89](https://cwe.mitre.org/data/definitions/89.html) | `db.query`/`execute`/`knex.raw` taint tracking |
-| Cross-Site Scripting (reflected) | [CWE-79](https://cwe.mitre.org/data/definitions/79.html) | `res.send`/`write`/`end` taint tracking |
+| Cross-Site Scripting (reflected) | [CWE-79](https://cwe.mitre.org/data/definitions/79.html) | `res.send`/`write`/`end` and `res.render` into a raw template print (EJS `<%-`, Pug `!{}`, Handlebars `{{{ }}}`), engines with autoescape off |
 | OS Command Injection | [CWE-78](https://cwe.mitre.org/data/definitions/78.html) | `child_process.exec`/`execSync` taint tracking |
 | Path Traversal | [CWE-22](https://cwe.mitre.org/data/definitions/22.html) | `fs.*` taint tracking |
 | Server-Side Request Forgery (SSRF) | [CWE-918](https://cwe.mitre.org/data/definitions/918.html) | `fetch`/`axios`/`http(s)`/`request`/`got` taint tracking |

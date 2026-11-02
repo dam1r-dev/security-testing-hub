@@ -498,6 +498,31 @@ rendered template itself (pygoat), or the values were not the caller's. Tests co
 Still open: a variable renamed on the way into an include (`with a=b`), Django `register_converter` (a custom converter is treated as any text), and `include()` prefixes
 (`path("users/<int:id>/", include(...))`: the prefix's parameters are not passed on to the included views).
 
+## Round 17: what a scan covers, and XSS through view engines
+
+Found by using the product like a stranger would (every command, odd inputs, then the corpora), not by a new corpus.
+
+**Defects found in the audit (all fixed in 0.8):**
+
+| Defect | Effect |
+|---|---|
+| An empty folder, a wrong path or a project in Go / Ruby / Java scored **100/100 "Good"** with 0 files scanned | false assurance; `--fail-on` passed in CI for a typo in the path |
+| Skipped bundles, libraries and files that did not parse were only a line in the text report | a clean score said nothing about how much of the project was read |
+| `--severity bogus` printed a stack trace | unfriendly; exit code 1 looked like "findings found" |
+| `security-hub docs` printed "coming in Phase 7" | a stub in the public CLI |
+| Package descriptions and the README said "Node.js/Express apps" | npm showed a product that no longer existed (Python, PHP, 30 rules) |
+| `res.render` was never checked: "template engines escape by default" | wrong whenever a view uses `<%- %>`, `!{}`, `{{{ }}}` or the engine's escaping is off |
+
+**Coverage.** Every summary now carries `coverage` (analysed / skipped / parse errors / unsupported languages by name). On the four corpora (93 projects) the scan of a real
+project is unchanged; what changed is what the report admits. Examples from the tests: a Go-only project is "not rated" and names `Go 120`; a mixed project says
+"2 files in languages without rules were not checked (Go 2)".
+
+**XSS through view engines.** Measured on OWASP NodeGoat, which switches Swig's escaping off (`autoescape: false`): **5 new findings, all real** (the setting; the login page reflecting `userName`
+twice; `userId` in the allocations page; the profile page), none lost. The other corpora have no `res.render` with a raw print, so for them nothing changes (corpus 4: 46, corpus 6: 123, corpus 7: 19 findings,
+unchanged). The cases that must stay silent are tested: `<%= %>`, `#{}`, `{{ }}`, an escaped raw print, an implicit layout's `{{{body}}}`, a view that is not found, a value that is not the caller's.
+
+Not done: stored XSS (the value comes from the database, so the flow analysis does not see it; only the engine setting is reported), `...spread` data, a data object built in a variable.
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are

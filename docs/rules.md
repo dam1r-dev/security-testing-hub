@@ -159,9 +159,18 @@ Defined once in `src/analyzers/sources.ts` so every rule stays in sync:
 
 - **Sinks:** `res.send(...)`, `res.write(...)`, `res.end(...)` (object name
   must be `res` or `response`).
-- **Not flagged:** `res.render(...)` — most template engines (EJS, Pug,
-  Handlebars) auto-escape by default, so it's out of scope for this
-  heuristic-level rule rather than a false negative.
+- **Views (since 0.8):** `res.render("page", { bio: req.body.bio })` (also `reply.view`, `ctx.render`, `c.render`) is checked against the
+  template. The view is found in the project's `views` / `templates` folder (with or without its extension) and so are the partials it
+  includes (`<%- include('nav') %>`, `include nav`, `{{> nav}}`, `{% include "nav.njk" %}`). A handed-in value is reported only when
+  the view prints that key **raw**: EJS `<%- bio %>`, Pug `!{bio}` / `p!= bio`, Handlebars `{{{bio}}}` / `{{& bio}}`, Nunjucks / Swig
+  `{{ bio | safe }}`. `<%= bio %>`, `#{bio}`, `{{bio}}` escape and are not reported; neither is a raw print wrapped in an escaping
+  function (`escapeHtml(bio)`, `DOMPurify.sanitize(bio)`). A layout that wraps the view implicitly (`{{{body}}}`) is not followed.
+- **Escaping switched off:** `swig.setDefaults({ autoescape: false })`, `nunjucks.configure(..., { autoescape: false })`,
+  `new nunjucks.Environment(loader, { autoescape: false })` and `Handlebars.compile(src, { noEscape: true })` are a finding of their own
+  (every `{{ value }}` is then raw, and the value is usually stored data the flow analysis cannot see). While such a setting exists
+  in the project, a plain `{{ value }}` in a Swig / Nunjucks / `.html` view counts as a raw print too.
+- **Not followed:** values read from the database (stored XSS) are not the caller's for the flow analysis, so `res.render("page", { posts })` is
+  reported only through the escaping-off finding; a `...spread` in the data object; a data object built in a variable.
 
 ## `command-injection` (critical)
 
