@@ -521,6 +521,13 @@ project is unchanged; what changed is what the report admits. Examples from the 
 twice; `userId` in the allocations page; the profile page), none lost. The other corpora have no `res.render` with a raw print, so for them nothing changes (corpus 4: 46, corpus 6: 123, corpus 7: 19 findings,
 unchanged). The cases that must stay silent are tested: `<%= %>`, `#{}`, `{{ }}`, an escaped raw print, an implicit layout's `{{{body}}}`, a view that is not found, a value that is not the caller's.
 
+**Four new rules, measured.** `weak-crypto`, `insecure-cookie`, `tls-verification`, `regex-injection` (JS, Python, PHP). A hand-written probe app with ten typical assistant mistakes: **4 findings before, 13 after.**
+On the 93 corpus projects (rules fire on patterns, so noise is the risk): corpus 4: +0, corpus 5: +0, corpus 7: +0, corpus 6: +21. Of those 21, **20 are real**: DVWA and pygoat are built to contain these (MD5 login in the
+brute-force pages, `uniqid()` session tokens, the AES-ECB lab, login cookies without HttpOnly, `generate_api_key()` with `random`), and one is a deliberate `verify_peer => false` in an SMTP connection tester (reported with
+low confidence). Three false positives were found first and fixed: a Django settings branch `if "test" in sys.argv:` that switches to MD5 for speed, `PASSWORD_HASHERS` that lists MD5 *after* PBKDF2 (only the first entry hashes
+new passwords), and a TLS inspector (`tls.connect` + `getPeerCertificate()`) that has to accept bad certificates. Patterns that look like the rules but are not were checked by hand and stay silent: `secure: false` in a mail
+transport and a dev-server proxy, `httpOnly: false` on a CSRF cookie that scripts must read, `Math.random()` in 76 files for colours, delays and shuffles (none flagged), MD5 as an ETag, bcrypt cost 4 in test files.
+
 Not done: stored XSS (the value comes from the database, so the flow analysis does not see it; only the engine setting is reported), `...spread` data, a data object built in a variable.
 
 ## What the scanner still misses (false negatives)

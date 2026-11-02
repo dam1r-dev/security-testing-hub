@@ -145,6 +145,26 @@ const RULE_DESCRIPTIONS: Record<VulnerabilityType, { name: string; description: 
     description: "A login token is stored in localStorage, sessionStorage or a script-set cookie, where any script on the page can read it.",
     helpUri: "https://cwe.mitre.org/data/definitions/922.html",
   },
+  "weak-crypto": {
+    name: "Weak cryptography",
+    description: "A password hashed with MD5 or SHA-1, a token built from a predictable random generator, bcrypt with a low cost, or a broken cipher mode.",
+    helpUri: "https://cwe.mitre.org/data/definitions/327.html",
+  },
+  "insecure-cookie": {
+    name: "Insecure cookie",
+    description: "A session or login cookie that scripts can read (no HttpOnly) or that is also sent over plain HTTP (secure: false).",
+    helpUri: "https://cwe.mitre.org/data/definitions/1004.html",
+  },
+  "tls-verification": {
+    name: "Certificate verification disabled",
+    description: "HTTPS certificate checking is switched off, so anyone on the network path can read and change the traffic.",
+    helpUri: "https://cwe.mitre.org/data/definitions/295.html",
+  },
+  "regex-injection": {
+    name: "Regular expression built from user input",
+    description: "Request data becomes a regular expression: a crafted pattern freezes the server (ReDoS) or matches every record.",
+    helpUri: "https://cwe.mitre.org/data/definitions/1333.html",
+  },
   "debug-mode": {
     name: "Debug mode enabled",
     description: "The development server or framework debug mode is on, which exposes an interactive debugger or detailed errors to visitors.",

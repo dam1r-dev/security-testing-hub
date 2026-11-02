@@ -31,7 +31,7 @@ response bodies, `exec()` with interpolated input) because that's what's
 common in training data. This tool is a fast, local pre-commit/CI check
 tuned for exactly the patterns that show up in "vibe-coded" web apps.
 
-## What it detects (30 rules)
+## What it detects (34 rules)
 
 | Vulnerability | CWE | Analyzer |
 |---|---|---|
@@ -57,6 +57,10 @@ tuned for exactly the patterns that show up in "vibe-coded" web apps.
 | Insecure CORS | [CWE-942](https://cwe.mitre.org/data/definitions/942.html) | `cors({ origin: true, credentials: true })`, a reflected `Origin` header with credentials |
 | Insecure JWT use | [CWE-347](https://cwe.mitre.org/data/definitions/347.html) | `none` algorithm, `ignoreExpiration`, `jwt.decode()` trusted without `verify`, tokens that never expire |
 | Missing rate limit on sign-in | [CWE-307](https://cwe.mitre.org/data/definitions/307.html) | a login or one-time-code endpoint that checks the credential itself, in a project with no rate limiting anywhere |
+| Weak cryptography | [CWE-327](https://cwe.mitre.org/data/definitions/327.html) | MD5 / SHA-1 over passwords, `Math.random()` / `random` / `rand()` for tokens, bcrypt cost below 10, ECB / DES / RC4 (JS, Python, PHP) |
+| Insecure cookie | [CWE-1004](https://cwe.mitre.org/data/definitions/1004.html) | login cookie without `HttpOnly`, `secure: false`, `SESSION_COOKIE_SECURE = False` |
+| Certificate verification off | [CWE-295](https://cwe.mitre.org/data/definitions/295.html) | `rejectUnauthorized: false`, `NODE_TLS_REJECT_UNAUTHORIZED=0`, `verify=False`, `CURLOPT_SSL_VERIFYPEER` false |
+| Regex injection / ReDoS | [CWE-1333](https://cwe.mitre.org/data/definitions/1333.html) | `new RegExp(req.query.q)`, `re.search(q, ...)`, `preg_match($_GET[...], ...)` taint tracking |
 | Secrets in public folders | [CWE-538](https://cwe.mitre.org/data/definitions/538.html) | `.env`, keys, database dumps and `.git` inside `public/` or an `express.static` folder; `express.static(__dirname)` at the project root |
 | Vulnerable dependencies (optional, `--audit`) | [CWE-1395](https://cwe.mitre.org/data/definitions/1395.html) | known advisories for the packages in your lock file, from `npm audit` (the one feature that uses the network) |
 | Mass assignment | [CWE-915](https://cwe.mitre.org/data/definitions/915.html) | the whole request body written to the database (`User.create(req.body)`, `data: body`, `new User(req.body)`) |

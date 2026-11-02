@@ -216,6 +216,21 @@ export function sinksOf(node: SyntaxNode, text: string): Sink[] {
     }
   }
 
+  if (node.type === "function_call_expression" && /^(?:preg_match|preg_match_all|preg_replace|preg_replace_callback|preg_split|preg_grep|mb_ereg|mb_eregi|ereg)$/i.test(calleeName(node))) {
+    const pattern = argumentsOf(node)[0];
+    if (pattern) {
+      out.push({
+        rule: "regex-injection",
+        severity: "medium",
+        confidence: "medium",
+        args: [pattern],
+        message: (via) =>
+          `User-controlled input ('${via}') becomes a regular expression. A crafted pattern makes the match take minutes and freezes the server (ReDoS), and the e modifier or a pattern like .* matches or runs far more than intended. ` +
+          "Escape the text first (preg_quote($value, '/')) or search with a plain str_contains / strpos.",
+      });
+    }
+  }
+
   if (node.type === "include_expression" || node.type === "include_once_expression" || node.type === "require_expression" || node.type === "require_once_expression") {
     const target = node.namedChild(0);
     if (target) {

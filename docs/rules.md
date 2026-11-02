@@ -375,6 +375,48 @@ A credential kept where any script can read it: `localStorage.setItem("token", .
 Keys count when they name a credential (`token`, `jwt`, `bearer`, `secret`, `session_id`, `api_key`, `password`). UI state (`theme`, `authMode`), CSRF
 tokens and flags (`hasToken`) do not. The fix is a server-set cookie with `HttpOnly`, `Secure` and `SameSite`.
 
+## `weak-crypto` (high / medium) — pattern match
+
+What an assistant gets wrong most often with the standard library. No data flow is needed to see it; each case is reported at the call.
+
+| Case | JavaScript | Python | PHP | Severity |
+|---|---|---|---|---|
+| A password hashed with MD5 / SHA-1 (the call's argument or the function's name says "password") | `createHash("md5").update(password)` | `hashlib.md5(password...)`, `hashlib.new("sha1", ...)` | `md5($password)`, `sha1(...)`, `hash("md5", ...)` | high |
+| A token, reset code, OTP, nonce or session id from a predictable generator (the variable or function name says so) | `Math.random()` | the `random` module | `rand()`, `mt_rand()`, `uniqid()` | medium |
+| bcrypt with a cost below 10 | `bcrypt.hash(p, 4)`, `genSalt(8)` | `bcrypt.gensalt(rounds=4)` | `password_hash($p, PASSWORD_BCRYPT, ["cost" => 4])` | medium |
+| A broken cipher mode or cipher | `aes-128-ecb`, `des-*`, `rc4`, `createCipher` | `AES.MODE_ECB`, `DES.new`, `ARC4.new` | `openssl_encrypt(..., "aes-128-ecb")`, `mcrypt_*` | medium |
+| Django lists a fast hasher FIRST in `PASSWORD_HASHERS` | | MD5 / SHA-1 / crypt / unsalted | | high |
+
+**Left alone:** MD5 / SHA-1 as a checksum or ETag (the data is not a password); SHA-256 over a password is not this rule (fast, but not broken); `Math.random()` for a colour, a delay, a shuffle or a demo value;
+`secrets` / `crypto.randomBytes` / `random_bytes`; a weak hasher listed after a strong one (it exists to verify and upgrade old hashes); settings inside `if "test" in sys.argv:` and in `settings/dev.py` / `test.py`;
+tests and `e2e` files.
+
+## `insecure-cookie` (medium) — pattern match
+
+A session or login cookie that scripts can read (no `HttpOnly`: one XSS hole or one bad npm package then hands over the account) or that also travels over plain HTTP (`secure: false`).
+Only cookies whose name says they carry the login (`token`, `session`, `sid`, `auth`, `jwt`, `access`, `refresh`, `login`, `remember`) are judged; `theme`, `lang` or a CSRF cookie meant for scripts are not.
+
+- **JavaScript:** `session({ cookie: { httpOnly: false } })`, `cookie: { secure: false }`, `cookieSession({ httpOnly: false })`; `res.cookie("token", v)` without `{ httpOnly: true }`
+  (options kept in a variable are not seen). A `secure: false` outside a cookie (a mail transport, a dev-server proxy) is not this rule.
+- **Python:** `set_cookie("session_token", v)` without `httponly=True`; `SESSION_COOKIE_SECURE = False`, `SESSION_COOKIE_HTTPONLY = False`, `CSRF_COOKIE_SECURE = False` (also `app.config["SESSION_COOKIE_SECURE"]`), not in development or test settings.
+- **PHP:** `setcookie("auth_token", $v)` without the `httponly` argument or option; `ini_set("session.cookie_httponly", 0)`.
+
+## `tls-verification` (high) — pattern match
+
+HTTPS that accepts anyone's certificate: anyone between the app and the server can read and change the traffic.
+
+- **JavaScript:** `rejectUnauthorized: false`, `strictSSL: false`, `process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"`.
+- **Python:** `verify=False` on `requests` / `httpx` / `aiohttp` / a session (not `jwt.decode(verify=False)`, which is `insecure-jwt`), `ssl._create_unverified_context()`, `verify_mode = ssl.CERT_NONE`, `check_hostname = False`.
+- **PHP:** `curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false)` (and `VERIFYHOST` 0), `["verify" => false]` (Guzzle), `verify_peer` / `verify_peer_name` `=> false` in a stream context.
+
+**Left alone / softened:** a JavaScript function that only looks at the certificate (`tls.connect` + `getPeerCertificate()`, nothing written, e.g. an expiry monitor); in PHP and Python a function named like a connection test
+(`testConnection`, `checkCertificate`, `probe`) is still reported, with **low** confidence.
+
+## `regex-injection` (medium) — taint-based
+
+Request data that becomes the pattern: `new RegExp(req.query.q)`, `re.search(q, text)`, `preg_match($_GET["q"], $text)`. A crafted pattern such as `(a+)+$` makes the match take minutes and freezes the server (ReDoS); `.*` matches every record.
+Cleaned by escaping (`escapeRegExp`, `re.escape`, `preg_quote`). The request data as the *subject* of a fixed pattern is fine.
+
 ## Python and PHP
 
 Python (`.py`: Flask, FastAPI, Django) and PHP (`.php`: plain scripts, Laravel, Symfony) are read by their own analyzers (`packages/scanner/src/python`,

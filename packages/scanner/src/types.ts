@@ -28,7 +28,11 @@ export type VulnerabilityType =
   | "prototype-pollution"
   | "webhook-signature"
   | "insecure-token-storage"
-  | "debug-mode";
+  | "debug-mode"
+  | "weak-crypto"
+  | "insecure-cookie"
+  | "tls-verification"
+  | "regex-injection";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 

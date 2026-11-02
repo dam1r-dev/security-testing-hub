@@ -40,6 +40,10 @@ export const RULE_IDS: readonly VulnerabilityType[] = [
   "webhook-signature",
   "insecure-token-storage",
   "debug-mode",
+  "weak-crypto",
+  "insecure-cookie",
+  "tls-verification",
+  "regex-injection",
 ];
 
 // `// security-hub-ignore`, `/* security-hub-ignore */`, `// security-hub-ignore sql-injection, xss -- reason`

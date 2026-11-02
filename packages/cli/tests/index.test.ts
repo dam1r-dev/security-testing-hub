@@ -87,7 +87,7 @@ describe("CLI argument parsing (run)", () => {
 
   it("'docs' lists the rule ids; an unknown rule is a usage error", () => {
     run(["node", "security-hub", "docs"]);
-    expect(logSpy.mock.calls.flat().join("\n")).toMatch(/30 rules[\s\S]*sql-injection[\s\S]*debug-mode/);
+    expect(logSpy.mock.calls.flat().join("\n")).toMatch(/34 rules[\s\S]*sql-injection[\s\S]*debug-mode/);
     process.exitCode = undefined;
     run(["node", "security-hub", "docs", "not-a-rule"]);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/Unknown rule "not-a-rule"/));
