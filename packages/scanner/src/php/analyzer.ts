@@ -5,6 +5,7 @@ import { SyntaxNode, findNodes, snippet, toLocation } from "../parsers/utils";
 import { isFixturePath } from "../analyzers/hardcoded-secret";
 import { bladeUnsafeUse, findTemplate, jinjaUnsafeUse } from "../templates";
 import { hardeningFindings } from "./hardening";
+import { databaseNames, databaseSource } from "./stored";
 import { findKnownSecrets, isPlaceholder, isSensitiveName, isSigningSecretName, looksLikeSecret, normalizeName, redact } from "../secrets/detect";
 import { Finding } from "../types";
 import { argumentsOf, calleeName, carriedBy, trackTaint } from "./engine";
@@ -184,9 +185,25 @@ export class PhpAnalyzer implements Analyzer {
         const view = viewCall(node);
         if (view) {
           const file = findTemplate(project.context.root, view.name, "blade");
+          const stored = databaseNames(scope);
           for (const { key, value } of file ? view.values : []) {
             const via = typeof value === "string" ? (tainted.has(value) ? value : undefined) : carriedBy(value, tainted);
-            const use = via === undefined || !file ? undefined : bladeUnsafeUse(file, key, project.context.root);
+            const use = !file ? undefined : bladeUnsafeUse(file, key, project.context.root);
+            const fromDatabase = via === undefined && use ? databaseSource(value, stored) : undefined;
+            if (fromDatabase !== undefined && use) {
+              add({
+                ruleId: "xss",
+                severity: "high",
+                confidence: "low",
+                message:
+                  `\`${fromDatabase === "the database" ? key : fromDatabase}\` was read from the database and is handed to the view as $${key}, and ${project.context.displayPath(use.file)}:${use.line} prints it raw (${use.how}). ` +
+                  "If any visitor can store text there (a comment, a name, a profile field) this is stored XSS: a value with <script> runs in the browser of everyone who opens the page. Print it with {{ $" + key + " }}, which escapes it, or sanitise rich text (HTMLPurifier) before saving it.",
+                location: toLocation(node, filePath),
+                sourceSnippet: `${fromDatabase} (database)`,
+                sinkSnippet: snippet(node, text),
+              });
+              continue;
+            }
             if (via === undefined || !use) continue;
             add({
               ruleId: "xss",

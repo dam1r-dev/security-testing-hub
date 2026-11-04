@@ -7,6 +7,7 @@ import { SqlInjectionAnalyzer } from "./analyzers/sql-injection";
 import { XssAnalyzer } from "./analyzers/xss";
 import { TemplateXssAnalyzer } from "./analyzers/template-xss";
 import { HardeningAnalyzer, RegexInjectionAnalyzer } from "./analyzers/hardening";
+import { StoredXssAnalyzer } from "./analyzers/stored-xss";
 import { CommandInjectionAnalyzer } from "./analyzers/command-injection";
 import { PathTraversalAnalyzer } from "./analyzers/path-traversal";
 import { CsrfAnalyzer } from "./analyzers/csrf";
@@ -139,6 +140,7 @@ export function defaultAnalyzers(): Analyzer[] {
     new SqlInjectionAnalyzer(),
     new XssAnalyzer(),
     new TemplateXssAnalyzer(),
+    new StoredXssAnalyzer(),
     new HardeningAnalyzer(),
     new RegexInjectionAnalyzer(),
     new CommandInjectionAnalyzer(),
@@ -211,7 +213,16 @@ export function scanSource(
   } finally {
     endBudget();
   }
-  const { kept, suppressed } = applyInlineSuppressions(found, sourceCode);
+  // Two analyzers can describe the same call (a render call whose view prints a request value AND a database row raw): the analyzers run in order of
+  // confidence, so the first finding for a rule at a position is the one kept.
+  const positions = new Set<string>();
+  const unique = found.filter((finding) => {
+    const key = `${finding.ruleId}:${finding.location.startLine}:${finding.location.startColumn}`;
+    if (positions.has(key)) return false;
+    positions.add(key);
+    return true;
+  });
+  const { kept, suppressed } = applyInlineSuppressions(unique, sourceCode);
   const result: ScanResult = { file: filePath, findings: kept };
   if (suppressed > 0) result.suppressed = suppressed;
   if (parsed.tree.rootNode.hasError) {

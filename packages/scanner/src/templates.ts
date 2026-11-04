@@ -128,37 +128,76 @@ export function relatedViews(root: string, file: string): string[] {
 // An expression that escapes (or sanitises) on its way out: the raw tag only carries markup that is already safe.
 const VIEW_ESCAPED = /(?:escape|encode|sanitiz|purif|clean|strip|xss|DOMPurify|sanitizeHtml)\w*\s*\(/i;
 
+/**
+ * The names a template gives to what it was handed under `key`: `{% for post in posts %}` -> post, `posts.forEach(function (post) {` -> post,
+ * `each post in posts` -> post, `{% set p = posts[0] %}` -> p. A list handed in as `posts` is printed through its loop variable, so a raw print of
+ * `post.body` is a raw print of `posts`. Two rounds, for a loop inside a loop.
+ */
+export function keyAliases(text: string, key: string, kind: "jinja" | "ejs" | "pug"): string[] {
+  const names = new Set<string>([key]);
+  for (let round = 0; round < 2; round++) {
+    for (const known of [...names]) {
+      const k = escapeRegex(known);
+      const root = `(?<![\\w$.])${k}\\b`;
+      const found: string[] = [];
+      if (kind === "jinja") {
+        for (const m of text.matchAll(new RegExp(`\\{%-?\\s*for\\s+(\\w+)(?:\\s*,\\s*(\\w+))?\\s+in\\s+[^%]*?${root}`, "g"))) found.push(m[1] as string, m[2] as string);
+        for (const m of text.matchAll(new RegExp(`\\{%-?\\s*set\\s+(\\w+)\\s*=\\s*[^%]*?${root}`, "g"))) found.push(m[1] as string);
+      } else if (kind === "ejs") {
+        for (const m of text.matchAll(new RegExp(`${root}[^%]*?\\.(?:forEach|map|filter|some|every)\\(\\s*(?:function\\s*\\(\\s*|\\(\\s*)?(\\w+)`, "g"))) found.push(m[1] as string);
+        for (const m of text.matchAll(new RegExp(`for\\s*\\(\\s*(?:const|let|var)\\s+(\\w+)\\s+(?:of|in)\\s+${k}\\b`, "g"))) found.push(m[1] as string);
+        for (const m of text.matchAll(new RegExp(`(?:const|let|var)\\s+(\\w+)\\s*=\\s*[^;%]*?${root}`, "g"))) found.push(m[1] as string);
+      } else {
+        for (const m of text.matchAll(new RegExp(`^[ \\t]*(?:each|for)\\s+(\\w+)(?:\\s*,\\s*\\w+)?\\s+in\\s+${k}\\b`, "gm"))) found.push(m[1] as string);
+      }
+      for (const name of found) if (name && !/^(?:in|of|key|index|i|_)$/.test(name)) names.add(name);
+    }
+  }
+  return [...names];
+}
+
+function mentionsAny(expression: string, names: string[]): boolean {
+  return names.some((name) => mentions(expression, name));
+}
+
 function mentions(expression: string, key: string): boolean {
   return new RegExp(`(?<![\\w$.])(?:locals\\.|this\\.)?${escapeRegex(key)}\\b`).test(expression);
 }
 
 function ejsUnsafeUseIn(file: string, text: string, key: string): UnsafeUse | undefined {
+  const names = keyAliases(text, key, "ejs");
   // <%- value %>: EJS prints it as it is (<%= %> escapes). `<%- include(...) %>` pulls in a partial.
   const raw = /<%-\s*([\s\S]*?)\s*-?%>/g;
   for (let m = raw.exec(text); m !== null; m = raw.exec(text)) {
     const expression = m[1] ?? "";
-    if (/^include\s*\(/.test(expression) || VIEW_ESCAPED.test(expression) || !mentions(expression, key)) continue;
+    if (/^include\s*\(/.test(expression) || VIEW_ESCAPED.test(expression) || !mentionsAny(expression, names)) continue;
     return { file, line: lineOf(text, m.index), how: `<%- ${expression.trim().slice(0, 40)} %>` };
   }
   return undefined;
 }
 
 function pugUnsafeUseIn(file: string, text: string, key: string): UnsafeUse | undefined {
+  const names = keyAliases(text, key, "pug");
   // !{value} and p!= value: Pug escapes #{value} and p= value, and prints these as they are
   const interpolation = /!\{([^}]*)\}/g;
   for (let m = interpolation.exec(text); m !== null; m = interpolation.exec(text)) {
     const expression = m[1] ?? "";
-    if (!VIEW_ESCAPED.test(expression) && mentions(expression, key)) return { file, line: lineOf(text, m.index), how: `!{${expression.trim().slice(0, 40)}}` };
+    if (!VIEW_ESCAPED.test(expression) && mentionsAny(expression, names)) return { file, line: lineOf(text, m.index), how: `!{${expression.trim().slice(0, 40)}}` };
   }
   const buffered = /^[^\S\n]*[\w.#-]*(?:\([^)\n]*\))?!=[^\S\n]*(.+)$/gm;
   for (let m = buffered.exec(text); m !== null; m = buffered.exec(text)) {
     const expression = m[1] ?? "";
-    if (!VIEW_ESCAPED.test(expression) && mentions(expression, key)) return { file, line: lineOf(text, m.index), how: `!= ${expression.trim().slice(0, 40)}` };
+    if (!VIEW_ESCAPED.test(expression) && mentionsAny(expression, names)) return { file, line: lineOf(text, m.index), how: `!= ${expression.trim().slice(0, 40)}` };
   }
   return undefined;
 }
 
 function hbsUnsafeUseIn(file: string, text: string, key: string): UnsafeUse | undefined {
+  for (const block of text.matchAll(/\{\{#each\s+([^}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g)) {
+    if (!mentions(block[1] ?? "", key)) continue;
+    const inner = /\{\{\{([^}]+)\}\}\}|\{\{&\s*([^}]+)\}\}/.exec(block[2] ?? "");
+    if (inner && !VIEW_ESCAPED.test(inner[1] ?? inner[2] ?? "")) return { file, line: lineOf(text, (block.index ?? 0) + (block[0].indexOf(inner[0]))), how: `{{#each ${key}}} ... ${inner[0].slice(0, 30)}` };
+  }
   // {{{value}}} and {{& value}}: Handlebars / Mustache print them as they are ({{value}} escapes)
   const raw = /\{\{\{([^}]+)\}\}\}|\{\{&\s*([^}]+)\}\}/g;
   for (let m = raw.exec(text); m !== null; m = raw.exec(text)) {
@@ -211,10 +250,11 @@ export function engineAutoescapeOff(root: string): boolean {
 
 /** `{{ key }}` in a Nunjucks / Swig / Twig view when the engine does not escape: unless the print passes through `| escape` / `| e`. */
 function plainPrintUseIn(file: string, text: string, key: string): UnsafeUse | undefined {
+  const names = keyAliases(text, key, "jinja");
   const print = /\{\{-?([^}]*)\}\}/g;
   for (let m = print.exec(text); m !== null; m = print.exec(text)) {
     const expression = m[1] ?? "";
-    if (mentions(expression, key) && !/\|\s*(?:e|escape|forceescape|urlencode|striptags|dump)\b/.test(expression)) {
+    if (mentionsAny(expression, names) && !/\|\s*(?:e|escape|forceescape|urlencode|striptags|dump)\b/.test(expression)) {
       return { file, line: lineOf(text, m.index), how: `{{ ${expression.trim().slice(0, 40)} }} with autoescape turned off` };
     }
   }
@@ -311,15 +351,17 @@ export function jinjaUnsafeUse(file: string, key: string, root?: string): Unsafe
 function jinjaUnsafeUseIn(file: string, key: string): UnsafeUse | undefined {
   const text = readTemplate(file);
   if (!text) return undefined;
-  const name = escapeRegex(key);
-  const filter = new RegExp(`\\{\\{-?[^}]*(?<![\\w.])${name}\\b[^}]*\\|\\s*(?:safe|raw)\\b`);
-  const direct = filter.exec(text);
-  // `{{ x|e|safe }}` / `{{ x|escape|safe }}` / `{{ x|striptags|safe }}`: escaped first, then marked safe
-  if (direct && !/\|\s*(?:e|escape|striptags|forceescape|urlencode)\b[^}]*\|\s*(?:safe|raw)\b/.test(direct[0])) return { file, line: lineOf(text, direct.index), how: `{{ ${key}|safe }}` };
-  const off = /\{%-?\s*autoescape\s+(?:false|off)\s*-?%\}([\s\S]*?)\{%-?\s*endautoescape/g;
-  for (let m = off.exec(text); m !== null; m = off.exec(text)) {
-    const inside = new RegExp(`\\{\\{-?\\s*(?<![\\w.])${name}\\b`).exec(m[1] ?? "");
-    if (inside) return { file, line: lineOf(text, m.index + (inside.index ?? 0)), how: `{{ ${key} }} inside autoescape off` };
+  for (const alias of keyAliases(text, key, "jinja")) {
+    const name = escapeRegex(alias);
+    const filter = new RegExp(`\\{\\{-?[^}]*(?<![\\w.])${name}\\b[^}]*\\|\\s*(?:safe|raw)\\b`);
+    const direct = filter.exec(text);
+    // `{{ x|e|safe }}` / `{{ x|escape|safe }}` / `{{ x|striptags|safe }}`: escaped first, then marked safe
+    if (direct && !/\|\s*(?:e|escape|striptags|forceescape|urlencode)\b[^}]*\|\s*(?:safe|raw)\b/.test(direct[0])) return { file, line: lineOf(text, direct.index), how: `{{ ${alias}|safe }}` };
+    const off = /\{%-?\s*autoescape\s+(?:false|off)\s*-?%\}([\s\S]*?)\{%-?\s*endautoescape/g;
+    for (let m = off.exec(text); m !== null; m = off.exec(text)) {
+      const inside = new RegExp(`\\{\\{-?\\s*(?<![\\w.])${name}\\b`).exec(m[1] ?? "");
+      if (inside) return { file, line: lineOf(text, m.index + (inside.index ?? 0)), how: `{{ ${alias} }} inside autoescape off` };
+    }
   }
   return undefined;
 }
@@ -337,13 +379,26 @@ export function bladeUnsafeUse(file: string, key: string, root?: string): Unsafe
 function bladeUnsafeUseIn(file: string, key: string): UnsafeUse | undefined {
   const text = readTemplate(file);
   if (!text) return undefined;
-  const expression = new RegExp(`\\{!!([^}]*\\$${escapeRegex(key)}\\b[^}]*)!!\\}`, "g");
+  const names = bladeAliases(text, key);
+  const expression = new RegExp(`\\{!!([^}]*\\$(${names.map(escapeRegex).join("|")})\\b[^}]*)!!\\}`, "g");
   for (let m = expression.exec(text); m !== null; m = expression.exec(text)) {
     // {!! e($x) !!}, {!! nl2br(e(strip_tags($x))) !!}: escaped on the way out; the raw tag only carries the markup the template wrote
     if (BLADE_ESCAPED.test(m[1] ?? "")) continue;
-    return { file, line: lineOf(text, m.index), how: `{!! $${key} !!}` };
+    return { file, line: lineOf(text, m.index), how: `{!! $${m[2]} !!}` };
   }
   return undefined;
+}
+
+/** `@foreach ($posts as $post)` / `@forelse ($posts as $id => $post)`: the loop variable holds what the handed-in list holds. */
+function bladeAliases(text: string, key: string): string[] {
+  const names = new Set<string>([key]);
+  for (let round = 0; round < 2; round++) {
+    for (const known of [...names]) {
+      const loop = new RegExp(`@(?:foreach|forelse)\\s*\\(\\s*\\$${escapeRegex(known)}\\b[^)]*?\\s+as\\s+(?:\\$\\w+\\s*=>\\s*)?\\$(\\w+)`, "g");
+      for (const m of text.matchAll(loop)) if (m[1]) names.add(m[1]);
+    }
+  }
+  return [...names];
 }
 
 const BLADE_ESCAPED = /(?:^|[^\w$>:])(?:e|htmlspecialchars|htmlentities|strip_tags|json_encode|Purifier::clean|clean|Str::of|nl2br\(\s*e)\s*\(/;

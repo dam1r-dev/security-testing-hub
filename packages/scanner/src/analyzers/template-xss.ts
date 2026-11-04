@@ -18,12 +18,12 @@ const RENDER_OBJECT = /^(?:res|response|reply|ctx|context|c)$/;
 const RENDER_METHOD = /^(?:render|view)$/;
 const DETAIL = "{{DETAIL}}";
 
-interface RenderCall {
+export interface RenderCall {
   view: string;
   data: SyntaxNode;
 }
 
-function renderCall(node: SyntaxNode): RenderCall | undefined {
+export function renderCall(node: SyntaxNode): RenderCall | undefined {
   if (node.type !== "call_expression") return undefined;
   const callee = node.childForFieldName("function");
   if (callee?.type !== "member_expression") return undefined;
@@ -38,7 +38,7 @@ function renderCall(node: SyntaxNode): RenderCall | undefined {
 }
 
 /** The values of the data object by the name the template sees: `{ bio: x }`, `{ bio }`, `{ "bio": x }`. Spreads are not followed. */
-function dataEntries(data: SyntaxNode): Array<{ key: string; value: SyntaxNode }> {
+export function dataEntries(data: SyntaxNode): Array<{ key: string; value: SyntaxNode }> {
   const out: Array<{ key: string; value: SyntaxNode }> = [];
   for (const child of data.namedChildren) {
     if (child.type === "pair") {

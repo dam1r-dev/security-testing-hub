@@ -13,6 +13,7 @@ import { PythonProject, argumentFor } from "./project";
 import { decoratorsOf, originsOf } from "./origins";
 import { djangoUrlParams } from "./django-urls";
 import { hardeningFindings } from "./hardening";
+import { databaseNames, databaseSource } from "./stored";
 import { HTML_IN_STRING, XSS_RETURN_MESSAGE, sinksOf } from "./sinks";
 
 /**
@@ -132,7 +133,8 @@ export class PythonAnalyzer implements Analyzer {
       const originNames = new Set(origins.map((o) => o.name));
       const decorators = decoratorsOf(fn);
       const isRoute = decorators.some((d) => /^@[\w.]+\.(?:route|get|post|put|delete|patch|api_route)\s*\(/.test(d));
-      if (origins.length === 0 && !/request\b/.test(fn.text)) continue; // nothing of the caller's in this function
+      // nothing of the caller's in this function (a view that renders rows read from the database is still looked at: stored XSS)
+      if (origins.length === 0 && !/request\b/.test(fn.text) && !(/render|TemplateResponse/.test(fn.text) && databaseNames(fn).size > 0)) continue;
       const redirectGuarded = /url_has_allowed_host_and_scheme|is_safe_url|is_safe_redirect|safe_redirect|allowed_hosts|\.startswith\(\s*["']\/["']\s*\)/.test(fn.text);
 
       for (const m of massAssignments(fn)) {
@@ -176,9 +178,25 @@ export class PythonAnalyzer implements Analyzer {
             const templateName = callArguments(call).positional.find((a) => a.type === "string" && /\.(?:html?|jinja2?|j2|txt|xml)["']$/i.test(a.text));
             const file = templateName ? findTemplate(project.context.root, templateName.text.replace(/^[rbfuRBFU]*["']|["']$/g, ""), "jinja") : undefined;
             if (file) {
+              const stored = databaseNames(fn);
               for (const { key, value } of templateContext(call, fn)) {
                 const via = carriedBy(value, tainted);
-                const use = via === undefined ? undefined : jinjaUnsafeUse(file, key, project.context.root);
+                const use = jinjaUnsafeUse(file, key, project.context.root);
+                const fromDatabase = via === undefined && use ? databaseSource(value, stored) : undefined;
+                if (fromDatabase !== undefined && use) {
+                  add({
+                    ruleId: "xss",
+                    severity: "high",
+                    confidence: "low",
+                    message:
+                      `\`${fromDatabase === "the database" ? key : fromDatabase}\` was read from the database and is handed to the template as \`${key}\`, and ${project.context.displayPath(use.file)}:${use.line} prints it without escaping (${use.how}). ` +
+                      "If any visitor can store text there (a comment, a name, a profile field) this is stored XSS: a value with <script> runs in the browser of everyone who opens the page. Remove |safe (the template then escapes it), or sanitise rich text (bleach.clean) before saving it.",
+                    location: toLocation(call, filePath),
+                    sourceSnippet: `${fromDatabase} (database)`,
+                    sinkSnippet: snippet(call, text),
+                  });
+                  continue;
+                }
                 if (via === undefined || !use) continue;
                 add({
                   ruleId: "xss",

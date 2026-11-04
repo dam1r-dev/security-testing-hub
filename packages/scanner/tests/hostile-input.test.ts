@@ -48,6 +48,8 @@ describe("one failing check does not take the file, or the scan, down", () => {
     sinkSnippet: "",
   };
   const good: Analyzer = { analyze: () => [finding] };
+  // a different rule at the same place: two checks that describe one call with the same rule collapse into one finding, these do not
+  const other: Analyzer = { analyze: () => [{ ...finding, ruleId: "command-injection" }] };
   class Exploding implements Analyzer {
     analyze(): Finding[] {
       throw new RangeError("Maximum call stack size exceeded");
@@ -55,7 +57,7 @@ describe("one failing check does not take the file, or the scan, down", () => {
   }
 
   it("keeps the findings of the other checks and says which check could not finish", () => {
-    const result = scanSource("const a = 1;", "a.js", [good, new Exploding(), good]);
+    const result = scanSource("const a = 1;", "a.js", [good, new Exploding(), other]);
     expect(result.findings).toHaveLength(2);
     expect(result.parseError).toContain("One check (Exploding) could not finish: Maximum call stack size exceeded.");
   });
