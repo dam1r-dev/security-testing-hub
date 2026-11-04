@@ -530,6 +530,22 @@ transport and a dev-server proxy, `httpOnly: false` on a CSRF cookie that script
 
 Not done: stored XSS (the value comes from the database, so the flow analysis does not see it; only the engine setting is reported), `...spread` data, a data object built in a variable.
 
+### Round 18 — stored XSS, include with renamed variables, debug endpoints, security headers, uploads, speed (0.9.0)
+
+Measured on the same 93 open-source projects (corpora 4 to 7; DVWA, pygoat and NodeGoat among them), before and after each step, with the findings read by hand.
+
+- **Stored XSS.** JavaScript: 2 findings on OWASP NodeGoat (`memos.js`, `benefits.js`: rows read through the DAO and handed to Swig pages that print them with autoescape turned off; `benefits.html` shows first and last names typed at sign-up), both low confidence, both real.
+  Python and PHP: 0 new findings in 93 projects (no false positives, and no real case in the corpora either: this half is covered by tests, not by a real project).
+- **Include with renamed variables, Django `include()` prefixes.** 0 findings changed in 93 projects, so the effect on real code is unmeasured (the corpora hold no include with a rename); covered by tests.
+- **`debug-endpoint`.** 2 findings: DVWA's `phpinfo.php` (low confidence: the page checks the login first) and `public/info.php` in a Laravel project (medium). None for `process.env` in a response: no project did that.
+- **`missing-security-headers`.** 22 findings in the first version, 11 after limiting it to projects that serve pages (the rest were JSON APIs on FastAPI, where a CSP protects nothing). All 11 are apps that render or serve pages and never set a header.
+  Reported once per project, low severity, low confidence; this is the noisiest rule, and the one most likely to be switched off in `.security-hub.json`.
+- **`insecure-file-upload` for Python and PHP.** 1 real finding (DVWA `upload/source/low.php`). One false positive found first and fixed: a Flask app that passes the name through its own `safe_filename()` (sanitisers are now recognised by name).
+- **Speed.** Profiling the slowest file (148 KB TypeScript, 3.5 s) showed 70% of the time inside the native parser binding (building an object for every node of the tree, once per search). Sharing one node list per tree: total 179 s -> 133 s, median 735 -> 583 ms, no finding changed.
+  A first version that kept the list of every cached tree made a 1 000-file PHP project slower (19 s -> 30 s, garbage collection); keeping only the last three trees fixed it (14 s).
+
+Not done: SSRF through redirects and `eval` in templates (judged to find little in the corpora), a cache of results between runs (a finding in one file depends on other files, so a per-file cache would be wrong), Go / Ruby / Java rules.
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are

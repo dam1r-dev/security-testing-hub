@@ -2,6 +2,26 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
+## 0.9.0 - 2026-11-05
+
+### Added
+- **Stored XSS.** Text a visitor saved earlier (a comment, a memo, a display name) that is read back from the database and handed to a view that prints it raw is reported
+  (`xss`, low confidence: whether anyone can store markup there is the application's design). JavaScript (a model query, a pool, prisma, a DAO callback such as NodeGoat's
+  `memosDAO.getAllMemos((err, docs) => res.render(...))`), Python (`Post.query.all()`, `Model.objects`, `cursor.fetchall()` into `render_template` with `|safe`) and PHP
+  (Eloquent / `DB::` rows into a Blade view with `{!! !!}`). A loop variable in the template stands for the list it loops over (`{% for post in posts %}`, `forEach`, `@foreach`).
+- **Two new rules (34 -> 36).** `debug-endpoint`: the whole environment in a response (`res.json(process.env)`, `jsonify(dict(os.environ))`, `jsonify(app.config)`, `print_r($_ENV)`),
+  `phpinfo()`, a `/debug` route with no login check, GraphQL introspection / GraphiQL left on. `missing-security-headers`: a web app that serves pages and sets no security header
+  anywhere in the project (one finding per project; low severity, low confidence; silent for a pure JSON API, for helmet / Talisman / a proxy config, and for Django).
+- **`insecure-file-upload` for Python and PHP.** An upload saved under the name the browser sent, with no extension check: `file.save(os.path.join(DIR, file.filename))`,
+  `open(f"uploads/{f.filename}", "wb")`, `default_storage.save(f.name, f)`, `move_uploaded_file($tmp, $dir . $_FILES["f"]["name"])`, Laravel `->move($dir, $file->getClientOriginalName())`.
+  A sanitiser (`secure_filename`, a project `safe_filename`), an extension allow-list or a generated name keeps it quiet. Found: DVWA's low-security upload page.
+- **Templates: an include that is handed the value under another name** (`{% include 'row.html' with item=bio %}`, Twig `with {item: bio} only`, `@include('row', ['item' => $bio])`) is followed.
+  **Django `include()` prefixes:** `path('users/<int:user_id>/', include('users.urls'))` hands `user_id` (a number) to every view of the included `urls.py`, so those views are no longer judged as "any text".
+
+### Changed
+- **Faster.** The sixty whole-tree searches that run on every file now share one list of the tree's nodes instead of each walking the tree through the native parser again.
+  93 real projects: 179 s -> 133 s in total (median 735 -> 583 ms), identical findings. The last three trees are kept, not all: keeping every cached project tree made a 1 000-file PHP project slower.
+
 ## 0.8.0 - 2026-11-03
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "name": "security-hub-scanner",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "The engine behind security-hub: Tree-sitter parsing, taint analysis and 36 rules for JavaScript, TypeScript, Python and PHP. Use the `security-hub` CLI unless you are building your own tooling.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
