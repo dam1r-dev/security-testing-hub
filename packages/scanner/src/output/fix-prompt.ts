@@ -122,6 +122,13 @@ const HOW_TO_FIX: Record<VulnerabilityType, string> = {
   "regex-injection":
     "Do not build a regular expression from request data. Escape the text so it is matched literally (lodash escapeRegExp, or value.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'); " +
     "re.escape() in Python, preg_quote() in PHP), cap its length, or search with a plain substring or a database LIKE with bound parameters.",
+  "debug-endpoint":
+    "Delete the route or call that shows the inside of the server. Never put process.env, os.environ, app.config, $_ENV / $_SERVER or phpinfo() in a response: " +
+    "they hold the database password and every API key. A debugging page may exist only when NODE_ENV (or the framework's debug flag) says development, behind your login. " +
+    "In GraphQL set introspection (and GraphiQL / Playground) to process.env.NODE_ENV !== 'production'.",
+  "missing-security-headers":
+    "Add the standard security headers once, in one place. Express: app.use(helmet()) (npm install helmet). Flask: Talisman(app) from flask-talisman. FastAPI: a middleware " +
+    "that sets Content-Security-Policy, X-Content-Type-Options: nosniff, X-Frame-Options: DENY and Strict-Transport-Security. Start the CSP in report-only mode if the app uses inline scripts, then tighten it.",
   "debug-mode":
     "Turn debug mode off for anything that is reachable from the internet. In Flask do not call app.run(debug=True): read it from an " +
     "environment variable that is only set on your laptop, and serve production with gunicorn or uvicorn. In Django set DEBUG from the " +

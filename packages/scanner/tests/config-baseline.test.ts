@@ -24,6 +24,7 @@ const SQL_ROUTE = [
   "app.get('/user', (req, res) => {",
   '  db.query("SELECT * FROM users WHERE id = " + req.query.id);',
   "});",
+  "app.use(require('helmet')());",
   "",
 ].join("\n");
 

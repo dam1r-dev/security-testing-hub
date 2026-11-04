@@ -8,6 +8,8 @@ import { XssAnalyzer } from "./analyzers/xss";
 import { TemplateXssAnalyzer } from "./analyzers/template-xss";
 import { HardeningAnalyzer, RegexInjectionAnalyzer } from "./analyzers/hardening";
 import { StoredXssAnalyzer } from "./analyzers/stored-xss";
+import { DebugEndpointAnalyzer } from "./analyzers/exposure";
+import { HeaderEvidence } from "./backend/headers";
 import { CommandInjectionAnalyzer } from "./analyzers/command-injection";
 import { PathTraversalAnalyzer } from "./analyzers/path-traversal";
 import { CsrfAnalyzer } from "./analyzers/csrf";
@@ -142,6 +144,7 @@ export function defaultAnalyzers(): Analyzer[] {
     new TemplateXssAnalyzer(),
     new StoredXssAnalyzer(),
     new HardeningAnalyzer(),
+    new DebugEndpointAnalyzer(),
     new RegexInjectionAnalyzer(),
     new CommandInjectionAnalyzer(),
     new PathTraversalAnalyzer(),
@@ -331,6 +334,7 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
   // Shared by every file of this scan so a call can be followed into another file.
   const context = new ProjectContext(stat.isDirectory() ? targetPath : path.dirname(targetPath));
 
+  const headers = new HeaderEvidence();
   const results: ScanResult[] = files.map((file, index) => {
     options.onProgress?.(index, files.length);
     let sourceCode: string;
@@ -352,8 +356,17 @@ export function scanPath(targetPath: string, options: ScanOptions = {}): ScanSum
       const message = err instanceof Error ? err.message : String(err);
       return { file, findings: [], parseError: `Failed to read file: ${message}` };
     }
+    if (stat.isDirectory()) headers.add(file, sourceCode);
     return scanSource(sourceCode, file, analyzers, context);
   });
+
+  // One project-wide finding: the app never sets the browser security headers (low confidence, see backend/headers.ts).
+  const missingHeaders = stat.isDirectory() ? headers.finding(targetPath) : undefined;
+  if (missingHeaders) {
+    const owner = results.find((r) => r.file === missingHeaders.file);
+    if (owner && missingHeaders.kept) owner.findings.push(missingHeaders.finding);
+    else if (owner) owner.suppressed = (owner.suppressed ?? 0) + 1;
+  }
 
   // `.env` files are not source code, but a committed one is the most common secret leak.
   const envResults = stat.isDirectory()

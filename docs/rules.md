@@ -417,6 +417,26 @@ HTTPS that accepts anyone's certificate: anyone between the app and the server c
 Request data that becomes the pattern: `new RegExp(req.query.q)`, `re.search(q, text)`, `preg_match($_GET["q"], $text)`. A crafted pattern such as `(a+)+$` makes the match take minutes and freezes the server (ReDoS); `.*` matches every record.
 Cleaned by escaping (`escapeRegExp`, `re.escape`, `preg_quote`). The request data as the *subject* of a fixed pattern is fine.
 
+
+## `debug-endpoint` (high) — pattern match
+
+A route or a call that hands the inside of the server to whoever asks: the development helper that was added "to see what is going on" and never removed.
+
+- **The whole environment in a response** (high, medium confidence): `res.json(process.env)`, `NextResponse.json({ env: process.env })`, `jsonify(dict(os.environ))`, `return str(os.environ)`,
+  `jsonify(app.config)` (the Flask config holds `SECRET_KEY`), `print_r($_ENV)`, `var_dump($_SERVER)`, `json_encode(getenv())`. One variable (`process.env.NODE_ENV`, `os.environ.get("MODE")`) is not this rule.
+- **`phpinfo()`** (high; low confidence when the file talks about a login): the whole PHP configuration. Not reported in a script that checks `php_sapi_name()` (command line).
+- **A debugging route with no login check** (medium, low confidence): `/debug`, `/_debug`, `/heapdump`, `/phpinfo`, `/actuator/env`, `/server-status` in Express and Flask/FastAPI, when the route and its handler mention
+  no login, role or token and are not registered inside an `if (NODE_ENV !== "production")` / `if app.debug:`.
+- **GraphQL introspection / GraphiQL / Playground** (low, low confidence): `new ApolloServer({ introspection: true })`, `graphqlHTTP({ graphiql: true })` with no `NODE_ENV` condition.
+
+## `missing-security-headers` (low) — project-wide
+
+A web app that serves pages (`res.render`, `render_template`, `express.static`, `HTMLResponse`, `StaticFiles`) and never sets Content-Security-Policy, X-Content-Type-Options, X-Frame-Options or Strict-Transport-Security.
+One finding per project, on the line that creates the app (`express()`, `Flask(__name__)`, `FastAPI()`, `fastify()`, `new Koa()`). **Low severity, low confidence**: a reverse proxy or CDN may set them, and the scanner cannot see that.
+
+**Left alone:** any use of helmet / Flask-Talisman / secure-headers, a hand-written `setHeader("X-Frame-Options", ...)`, a header in `vercel.json`, `netlify.toml`, `_headers`, an nginx / Caddy / `.htaccess` file; a pure JSON API (no pages);
+Django (its SecurityMiddleware is on by default); a single-file scan (no view of the project). Silence it with `// security-hub-ignore missing-security-headers -- the proxy sets them` on the line above `express()`, or in `.security-hub.json`.
+
 ## Python and PHP
 
 Python (`.py`: Flask, FastAPI, Django) and PHP (`.php`: plain scripts, Laravel, Symfony) are read by their own analyzers (`packages/scanner/src/python`,
@@ -562,6 +582,11 @@ recognised as safe and is reported; a variable renamed on the way into an includ
   `path.extname`, ...).
 - Only covers this specific, common bug shape; a `multer(...)` call with no
   `fileFilter` at all isn't flagged (broader risk, different fix).
+- **Python and PHP** (new in 0.9.0, pattern match, no data flow): the upload is saved under the name the browser sent and nothing in the same function checks the extension or
+  the type: `file.save(os.path.join(DIR, file.filename))`, `open(f"uploads/{f.filename}", "wb")`, `default_storage.save(f.name, f)` (Django `request.FILES`),
+  `move_uploaded_file($tmp, $dir . $_FILES["f"]["name"])` (also through a variable, `.=` included), Laravel `->move($dir, $file->getClientOriginalName())`.
+  Left alone: `secure_filename`, a project function named like `safe_filename`/`sanitize_*`, an extension allow-list (`pathinfo` + `in_array`, `.endswith((...))`),
+  `getimagesize`/`finfo`, a Laravel `validate(['f' => 'mimes:...'])`, and a name the server generates (`uuid`, `random_bytes`).
 
 ## `username-enumeration` (medium) — heuristic, exact-wording only
 

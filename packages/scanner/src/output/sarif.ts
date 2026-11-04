@@ -165,6 +165,16 @@ const RULE_DESCRIPTIONS: Record<VulnerabilityType, { name: string; description: 
     description: "Request data becomes a regular expression: a crafted pattern freezes the server (ReDoS) or matches every record.",
     helpUri: "https://cwe.mitre.org/data/definitions/1333.html",
   },
+  "debug-endpoint": {
+    name: "Debug endpoint exposed",
+    description: "A route or call that hands the inside of the server to visitors: the whole environment in a response, phpinfo(), a debug page with no login, GraphQL introspection left on.",
+    helpUri: "https://cwe.mitre.org/data/definitions/215.html",
+  },
+  "missing-security-headers": {
+    name: "Security headers not set",
+    description: "The web app never sets Content-Security-Policy, X-Content-Type-Options, X-Frame-Options or Strict-Transport-Security, so the browser has no second line of defence.",
+    helpUri: "https://cwe.mitre.org/data/definitions/693.html",
+  },
   "debug-mode": {
     name: "Debug mode enabled",
     description: "The development server or framework debug mode is on, which exposes an interactive debugger or detailed errors to visitors.",

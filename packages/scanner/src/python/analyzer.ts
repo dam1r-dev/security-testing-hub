@@ -13,6 +13,7 @@ import { PythonProject, argumentFor } from "./project";
 import { decoratorsOf, originsOf } from "./origins";
 import { djangoUrlParams } from "./django-urls";
 import { hardeningFindings } from "./hardening";
+import { exposureFindings } from "./exposure";
 import { databaseNames, databaseSource } from "./stored";
 import { HTML_IN_STRING, XSS_RETURN_MESSAGE, sinksOf } from "./sinks";
 
@@ -252,6 +253,7 @@ export class PythonAnalyzer implements Analyzer {
     }
 
     // Weak crypto, login cookies without HttpOnly, certificate checks switched off (patterns, no data flow).
+    for (const finding of exposureFindings(root, text, filePath)) add(finding);
     for (const finding of hardeningFindings(root, text, filePath, DEVELOPMENT_FILE.test(filePath.split(/[/\\]/).slice(-3).join("/")))) add(finding);
 
     // 3. Checks that need no data flow.

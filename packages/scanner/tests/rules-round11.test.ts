@@ -103,7 +103,8 @@ describe("rule ids", () => {
   it("the four new rules are known to the ignore list and the settings file", () => {
     for (const id of ["mass-assignment", "prototype-pollution", "webhook-signature", "insecure-token-storage"]) expect(RULE_IDS).toContain(id);
     for (const id of ["weak-crypto", "insecure-cookie", "tls-verification", "regex-injection"]) expect(RULE_IDS).toContain(id);
-    expect(RULE_IDS).toHaveLength(34);
+    for (const id of ["debug-endpoint", "missing-security-headers"]) expect(RULE_IDS).toContain(id);
+    expect(RULE_IDS).toHaveLength(36);
   });
 
   it("// security-hub-ignore works for them", () => {

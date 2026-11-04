@@ -13,9 +13,10 @@ const SQL_ROUTE = [
   "app.get('/user', (req, res) => {",
   '  db.query("SELECT * FROM users WHERE id = " + req.query.id);',
   "});",
+  "app.use(require('helmet')());",
   "",
 ].join("\n");
-const CSRF_ROUTE = "const express = require('express');\nconst app = express();\napp.post('/delete', (req, res) => { res.send('ok'); });\n";
+const CSRF_ROUTE = "const express = require('express');\nconst app = express();\napp.post('/delete', (req, res) => { res.send('ok'); });\napp.use(require('helmet')());\n";
 
 function project(files: Record<string, string>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hub-cli-config-"));

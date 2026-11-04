@@ -40,6 +40,7 @@ describe("runScan against the vulnerable-express-app fixture", () => {
         "insecure-jwt",
         "missing-rate-limit",
         "exposed-files",
+        "missing-security-headers", // the fixture app renders pages and never sets a security header
       ]),
     );
     // Safe, parameterized query in users.js (the /user-safe/:id route) must not be

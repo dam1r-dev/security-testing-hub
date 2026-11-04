@@ -44,6 +44,8 @@ export const RULE_IDS: readonly VulnerabilityType[] = [
   "insecure-cookie",
   "tls-verification",
   "regex-injection",
+  "debug-endpoint",
+  "missing-security-headers",
 ];
 
 // `// security-hub-ignore`, `/* security-hub-ignore */`, `// security-hub-ignore sql-injection, xss -- reason`

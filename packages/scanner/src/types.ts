@@ -32,7 +32,9 @@ export type VulnerabilityType =
   | "weak-crypto"
   | "insecure-cookie"
   | "tls-verification"
-  | "regex-injection";
+  | "regex-injection"
+  | "debug-endpoint"
+  | "missing-security-headers";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 

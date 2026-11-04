@@ -1,7 +1,7 @@
 # security-hub
 
 Open-source security scanner for AI-assisted ("vibe coded") projects, where
-the usual bugs slip in fast. 34 rules for **JavaScript, TypeScript, Python
+the usual bugs slip in fast. 36 rules for **JavaScript, TypeScript, Python
 and PHP** (Express, Next.js, SvelteKit, Remix, Nuxt, Flask, FastAPI, Django,
 Laravel, Slim): SQL / command / code injection, XSS, path traversal, SSRF,
 open redirect, CSRF, IDOR and broken access control, leaked secrets, unsafe

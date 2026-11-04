@@ -5,6 +5,7 @@ import { SyntaxNode, findNodes, snippet, toLocation } from "../parsers/utils";
 import { isFixturePath } from "../analyzers/hardcoded-secret";
 import { bladeUnsafeUse, findTemplate, jinjaUnsafeUse } from "../templates";
 import { hardeningFindings } from "./hardening";
+import { exposureFindings } from "./exposure";
 import { databaseNames, databaseSource } from "./stored";
 import { findKnownSecrets, isPlaceholder, isSensitiveName, isSigningSecretName, looksLikeSecret, normalizeName, redact } from "../secrets/detect";
 import { Finding } from "../types";
@@ -268,6 +269,7 @@ export class PhpAnalyzer implements Analyzer {
 
     // Weak crypto, login cookies without httponly, certificate checks switched off (patterns, no data flow).
     for (const finding of hardeningFindings(root, text, filePath)) add(finding);
+    for (const finding of exposureFindings(root, text, filePath)) add(finding);
 
     // 3. Checks that need no data flow.
     for (const call of findNodes(root, (n) => n.type === "function_call_expression")) {

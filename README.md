@@ -31,7 +31,7 @@ response bodies, `exec()` with interpolated input) because that's what's
 common in training data. This tool is a fast, local pre-commit/CI check
 tuned for exactly the patterns that show up in "vibe-coded" web apps.
 
-## What it detects (34 rules)
+## What it detects (36 rules)
 
 | Vulnerability | CWE | Analyzer |
 |---|---|---|
@@ -61,6 +61,8 @@ tuned for exactly the patterns that show up in "vibe-coded" web apps.
 | Insecure cookie | [CWE-1004](https://cwe.mitre.org/data/definitions/1004.html) | login cookie without `HttpOnly`, `secure: false`, `SESSION_COOKIE_SECURE = False` |
 | Certificate verification off | [CWE-295](https://cwe.mitre.org/data/definitions/295.html) | `rejectUnauthorized: false`, `NODE_TLS_REJECT_UNAUTHORIZED=0`, `verify=False`, `CURLOPT_SSL_VERIFYPEER` false |
 | Regex injection / ReDoS | [CWE-1333](https://cwe.mitre.org/data/definitions/1333.html) | `new RegExp(req.query.q)`, `re.search(q, ...)`, `preg_match($_GET[...], ...)` taint tracking |
+| Debug endpoint exposed | [CWE-215](https://cwe.mitre.org/data/definitions/215.html) | `res.json(process.env)`, `jsonify(dict(os.environ))`, `phpinfo()`, `print_r($_ENV)`, an unguarded `/debug` route, GraphQL introspection left on |
+| Security headers not set | [CWE-693](https://cwe.mitre.org/data/definitions/693.html) | a web app that serves pages and sets no CSP / X-Content-Type-Options / X-Frame-Options / HSTS anywhere in the project (low confidence) |
 | Secrets in public folders | [CWE-538](https://cwe.mitre.org/data/definitions/538.html) | `.env`, keys, database dumps and `.git` inside `public/` or an `express.static` folder; `express.static(__dirname)` at the project root |
 | Vulnerable dependencies (optional, `--audit`) | [CWE-1395](https://cwe.mitre.org/data/definitions/1395.html) | known advisories for the packages in your lock file, from `npm audit` (the one feature that uses the network) |
 | Mass assignment | [CWE-915](https://cwe.mitre.org/data/definitions/915.html) | the whole request body written to the database (`User.create(req.body)`, `data: body`, `new User(req.body)`) |
