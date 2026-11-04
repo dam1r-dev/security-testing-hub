@@ -340,11 +340,61 @@ export interface UnsafeUse {
 
 /** `{{ key|safe }}` (or `|raw`, or inside `{% autoescape false %}`) in the template or in a template it extends or includes. */
 export function jinjaUnsafeUse(file: string, key: string, root?: string): UnsafeUse | undefined {
-  for (const each of root ? relatedTemplates(root, file, "jinja") : [file]) {
-    const use = jinjaUnsafeUseIn(each, key);
+  if (!root) return jinjaUnsafeUseIn(file, key);
+  for (const pass of passedOn(root, file, key, "jinja")) {
+    const use = jinjaUnsafeUseIn(pass.file, pass.key);
     if (use) return use;
   }
   return undefined;
+}
+
+// `{% include "row.html" with item=posts %}`, `{% include 'row.html' with {item: posts} only %}` (Twig): the include sees the value under another name
+const JINJA_PASS = /\{%-?\s*(extends|include|embed)\s+["']([^"']+)["']([^%]*?)-?%\}/g;
+// `@include('row', ['item' => $posts])`, `@component('card', ['body' => $text])`
+const BLADE_PASS = /@(extends|include|includeIf|includeWhen|includeFirst|component)\s*\(\s*\[?\s*["']([^"']+)["']([^\n]*)/g;
+
+interface Pass {
+  file: string;
+  key: string;
+}
+
+/** The names under which a value is handed over in the arguments of an include: `item=posts`, `{item: posts}`, `['item' => $posts]`. */
+function renamedAs(args: string, names: string[], kind: "jinja" | "blade"): string[] {
+  const out: string[] = [];
+  const pairs = kind === "blade" ? args.matchAll(/["'](\w+)["']\s*=>\s*([^,\]]+)/g) : args.matchAll(/(?:^|[\s{,])["']?(\w+)["']?\s*[=:]\s*([^,}\s][^,}]*)/g);
+  for (const m of pairs) {
+    const value = m[2] ?? "";
+    const holds = kind === "blade" ? names.some((n) => new RegExp(`\\$${escapeRegex(n)}\\b`).test(value)) : mentionsAny(value, names);
+    if (holds && m[1]) out.push(m[1]);
+  }
+  return out;
+}
+
+/**
+ * The templates a value reaches, with the name each one knows it by: the template itself, its parent layout and its includes under the same
+ * name, and an include that is handed the value under another name (`with item=posts`) under that one. Up to 12 files.
+ */
+function passedOn(root: string, file: string, key: string, kind: "jinja" | "blade"): Pass[] {
+  const out: Pass[] = [{ file, key }];
+  const seen = new Set<string>([`${file}|${key}`]);
+  for (let i = 0; i < out.length && out.length < MAX_RELATED; i++) {
+    const current = out[i] as Pass;
+    const text = readTemplate(current.file);
+    if (!text) continue;
+    const names = kind === "blade" ? bladeAliases(text, current.key) : keyAliases(text, current.key, "jinja");
+    const pattern = kind === "blade" ? BLADE_PASS : JINJA_PASS;
+    pattern.lastIndex = 0;
+    for (let m = pattern.exec(text); m !== null && out.length < MAX_RELATED; m = pattern.exec(text)) {
+      const found = findTemplate(root, m[2] as string, kind);
+      if (!found) continue;
+      for (const next of new Set([current.key, ...renamedAs(m[3] ?? "", names, kind)])) {
+        if (seen.has(`${found}|${next}`)) continue;
+        seen.add(`${found}|${next}`);
+        out.push({ file: found, key: next });
+      }
+    }
+  }
+  return out;
 }
 
 /** `{{ key|safe }}`, `{{ key.attr | safe }}`, `{{ key|raw }}` (Twig), or `{{ key }}` inside `{% autoescape false %}`. */
@@ -368,8 +418,9 @@ function jinjaUnsafeUseIn(file: string, key: string): UnsafeUse | undefined {
 
 /** `{!! $key !!}` in the view or in a view it extends or includes. */
 export function bladeUnsafeUse(file: string, key: string, root?: string): UnsafeUse | undefined {
-  for (const each of root ? relatedTemplates(root, file, "blade") : [file]) {
-    const use = bladeUnsafeUseIn(each, key);
+  if (!root) return bladeUnsafeUseIn(file, key);
+  for (const pass of passedOn(root, file, key, "blade")) {
+    const use = bladeUnsafeUseIn(pass.file, pass.key);
     if (use) return use;
   }
   return undefined;

@@ -63,6 +63,56 @@ export function parseUrlsFile(text: string, into: Map<string, Map<string, UrlPar
   return into;
 }
 
+const INCLUDE_CALL = /\b(re_path|path|url)\(\s*r?(["'])((?:\\.|(?!\2).)*)\2\s*,\s*include\(\s*\(?\s*["']([\w.]+)["']/g;
+const MAX_INCLUDE_DEPTH = 4;
+
+export interface UrlsFile {
+  file: string;
+  text: string;
+}
+
+/**
+ * A prefix that carries parameters, `path("users/<int:user_id>/", include("users.urls"))`, hands them to every view of the included file (and of
+ * the files that one includes): `def profile(request, user_id)` in users/views.py gets the number the prefix says, not "any text".
+ */
+export function applyIncludePrefixes(files: UrlsFile[], into: Map<string, Map<string, UrlParamKind>>): void {
+  const perFile = new Map<string, Map<string, Map<string, UrlParamKind>>>();
+  for (const { file, text } of files) perFile.set(file, parseUrlsFile(text));
+  const find = (module: string): UrlsFile | undefined => {
+    const wanted = module.replace(/\./g, "/");
+    return files.find((f) => {
+      const normal = f.file.replace(/\\/g, "/").replace(/\.py$/, "");
+      return normal === wanted || normal.endsWith(`/${wanted}`);
+    });
+  };
+  const hand = (target: UrlsFile, params: Map<string, UrlParamKind>, depth: number, visited: Set<string>): void => {
+    if (visited.has(target.file)) return;
+    visited.add(target.file);
+    for (const view of perFile.get(target.file)?.keys() ?? []) {
+      const known = into.get(view) ?? new Map<string, UrlParamKind>();
+      for (const [name, kind] of params) {
+        const before = known.get(name);
+        if (!before || RANK[kind] > RANK[before]) known.set(name, kind);
+      }
+      into.set(view, known);
+    }
+    if (depth >= MAX_INCLUDE_DEPTH) return;
+    for (const nested of target.text.matchAll(INCLUDE_CALL)) {
+      const next = find(nested[4] as string);
+      if (!next) continue;
+      const own = routeParams(nested[3] as string, nested[1] !== "path");
+      hand(next, new Map([...params, ...own]), depth + 1, visited);
+    }
+  };
+  for (const { text } of files) {
+    for (const m of text.matchAll(INCLUDE_CALL)) {
+      const params = routeParams(m[3] as string, m[1] !== "path");
+      const target = params.size > 0 ? find(m[4] as string) : undefined;
+      if (target) hand(target, params, 1, new Set());
+    }
+  }
+}
+
 const cache = new WeakMap<ProjectContext, Map<string, Map<string, UrlParamKind>>>();
 
 /** The project's URL parameters by view, read once per scan from every `urls.py` under the scanned folder. */
@@ -74,6 +124,7 @@ export function djangoUrlParams(context: ProjectContext): Map<string, Map<string
   const stack = [context.root];
   let seen = 0;
   let urlFiles = 0;
+  const collected: UrlsFile[] = [];
   while (stack.length > 0 && seen < MAX_FILES && urlFiles < MAX_URL_FILES) {
     checkBudgetNow();
     const dir = stack.pop() as string;
@@ -98,10 +149,12 @@ export function djangoUrlParams(context: ProjectContext): Map<string, Map<string
         if (!/urlpatterns|\bpath\(|\bre_path\(/.test(text)) continue;
         urlFiles++;
         parseUrlsFile(text, out);
+        collected.push({ file: path.relative(context.root, full), text });
       } catch {
         // unreadable: its routes stay unknown, and their views keep the default (any text)
       }
     }
   }
+  applyIncludePrefixes(collected, out);
   return out;
 }
