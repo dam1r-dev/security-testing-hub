@@ -20,9 +20,51 @@ export function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void 
   }
 }
 
+/**
+ * Every node of a whole tree in pre-order, kept for as long as the tree lives. About sixty `findNodes(rootNode, ...)` calls run on each file
+ * (every analyzer looks for its own kind of node), and each one used to walk the tree again through the native binding, where reading
+ * `namedChildren` builds a new JavaScript object per node: that walk was most of the time a big file took. The list is built once per tree.
+ */
+// Only the last few trees: a project keeps hundreds of parsed trees for cross-file lookups, and a node list per tree held them all in memory
+// (a 1 000-file PHP project went from 19 s to 30 s in garbage collection). The file being analysed is queried again and again; the others are not.
+const KEPT_TREES = 3;
+const wholeTrees: Array<{ tree: object; rootId: number; nodes: SyntaxNode[] }> = [];
+
+function nodesOfWholeTree(root: SyntaxNode): SyntaxNode[] | undefined {
+  const tree = (root as unknown as { tree?: object }).tree;
+  if (!tree) return undefined;
+  const index = wholeTrees.findIndex((entry) => entry.tree === tree);
+  if (index >= 0) {
+    const entry = wholeTrees[index] as (typeof wholeTrees)[number];
+    if (entry.rootId !== root.id) return undefined; // a query over part of the tree walks that part
+    if (index > 0) {
+      wholeTrees.splice(index, 1);
+      wholeTrees.unshift(entry);
+    }
+    return entry.nodes;
+  }
+  if (root.parent) return undefined;
+  const nodes: SyntaxNode[] = [];
+  walk(root, (node) => {
+    nodes.push(node);
+  });
+  wholeTrees.unshift({ tree, rootId: root.id, nodes });
+  if (wholeTrees.length > KEPT_TREES) wholeTrees.length = KEPT_TREES;
+  return nodes;
+}
+
 /** Collects every node for which `predicate` returns true. */
 export function findNodes(root: SyntaxNode, predicate: (node: SyntaxNode) => boolean): SyntaxNode[] {
   const matches: SyntaxNode[] = [];
+  const all = nodesOfWholeTree(root);
+  if (all) {
+    for (let i = 0; i < all.length; i++) {
+      checkBudget();
+      const node = all[i] as SyntaxNode;
+      if (predicate(node)) matches.push(node);
+    }
+    return matches;
+  }
   walk(root, (node) => {
     if (predicate(node)) matches.push(node);
   });
