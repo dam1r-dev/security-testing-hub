@@ -552,12 +552,12 @@ New analyzer, so the first measurement on real code: **15 open-source Go project
 (govwa, Hardw01f/Vulnerability-goapp, damn-vulnerable-golang, Sonatype's intentionally-vulnerable-golang-project) and eleven real programs that serve HTTP
 (gin examples and the realworld app, fiber recipes, chi, filebrowser, gotify, listmonk, MailHog, miniflux, memos, webhook): about 2 000 `.go` files.
 
-- **First pass: 64 Go findings. Read one by one, 27 were wrong; eight fixes later: 37.** What the review found: a GORM struct condition (`db.Where(&UserModel{Username: x})`) taken for SQL text (13 in one
+- **First pass: 64 Go findings. Read one by one, 27 were wrong; eight fixes later: 37 (38 after the branch rule of 0.11.0, below).** What the review found: a GORM struct condition (`db.Where(&UserModel{Username: x})`) taken for SQL text (13 in one
   project); the arguments of a prepared statement (`stmt.Query(x)`) taken for SQL; an open redirect whose address starts with the program's own base URL (`adminURL + "/campaigns#" + tab`);
   a proxy that fixes the host and takes only the path from `r.RequestURI` reported as SSRF; a `redis://user:pass@host` example in a comment and a help text; the NAME of an environment variable
   (`EnvClientSecret = "APP_CLIENT_SECRET"`) taken for a secret; a cookie sent by an HTTP client (`req.AddCookie`) and a cookie cleared on logout taken for login cookies; a certificate check that
   the user switches off by an option (`if cfg.SkipVerify`), reported at full confidence; a redirect after a check against `TrustedURLs`.
-- **What the 37 are:** the three vulnerable training apps with handlers: 16 (govwa 3, Hardw01f 9, damn-vulnerable-golang 4; the fourth training app is about vulnerable dependencies and has no handler: 0, as expected).
+- **What the 37 are:** the three vulnerable training apps with handlers: 17 (govwa 4, Hardw01f 9, damn-vulnerable-golang 4; the fourth training app is about vulnerable dependencies and has no handler: 0, as expected).
   In real programs: SSRF where the program is meant to fetch a user's URL (miniflux 3, memos webhook, the fiber `/proxy` recipe), a cookie with `Secure: false` written on purpose, MD5 for the Fever API's
   mandatory hash, bcrypt cost 4 in MailHog's CLI, `ParseUnverified` in a fiber recipe, a signing secret in the realworld example (marked `#nosec` by its authors), pprof imported by chi's profiler
   middleware, a reflected Origin in memos (low confidence: no credentials in that function), redirects built from the request line (low confidence). These are what the rule says; whether they are bugs depends on the program.
@@ -565,6 +565,27 @@ New analyzer, so the first measurement on real code: **15 open-source Go project
   the training apps' broken access control are not rules in any language. No finding was verified by exploiting it.
 - **Parity:** the browser build (WebAssembly) and the native build give identical findings on `examples/vulnerable-go-app` (the web-parity test).
 - **Speed:** the 15 projects (about 2 000 Go files, plus the TypeScript front ends of memos and filebrowser) took 37 s in total on an idle machine (miniflux: 440 Go files in 6 s); no file reached the time budget.
+
+### Round 20 — Java (0.11.0)
+
+New analyzer, measured on **11 open-source Java projects** (read-only shallow clones, nothing executed): the OWASP Benchmark (2 740 generated servlets with an answer key), three deliberately
+vulnerable apps (java-sec-code, WebGoat, DVJA) and Snyk's java-goof, and real Spring programs (petclinic, jhipster sample, mall, eladmin, halo, spring-boot-examples): about 5 400 `.java` files.
+
+- **Real projects (10 without the Benchmark): 101 findings** at the end, read one by one. What the review removed: `redisTemplate.delete(key)` taken for an outgoing HTTP request (a helper chain
+  reached it from a controller), `new Scanner(inputStream)` taken for a file, an `Integer` request parameter treated as text (a `Map.getOrDefault(id, "/welcome")` redirect), a cookie being cleared
+  (`new Cookie("access_token", "")`), Spring Security's own `SecurityJackson2Modules.enableDefaultTyping` (a safe allow-listed variant), Jackson default typing in a Redis serializer (now low confidence
+  outside web code). The rest is what the rules say: SQL / command / path / SSRF / redirect / SpEL in the vulnerable apps (java-sec-code 43, WebGoat 39), CSRF protection switched off or a
+  wildcard CORS origin in five Spring programs (low confidence when the app is stateless), DES in eladmin's `EncryptUtils`, an upload saved under the browser's file name in several programs. No finding was verified by exploiting it.
+- **Misses, honestly:** DVJA and java-goof give 0 findings: their code is Struts actions and JSP, which this analyzer does not read (java-goof's flaws are mostly vulnerable dependencies). java-sec-code and WebGoat
+  have more bugs than the ones reported (XSS in templates, JNDI, Shiro, Fastjson, deserialization through libraries).
+- **The OWASP Benchmark (an answer key, an adversarial one: many "safe" cases route the value through a map, a list or a constant that is chosen at compile time):** after the first run recall was 4 %
+  for SQL; two ideas changed it: following the value a helper returns (`String bar = new Test().doSomething(request, param)`: recall 28 % -> 89 % for SQL) and treating `java.net.URLDecoder`
+  as the same call as `URLDecoder`. Final scores: SQL injection recall 89 % / precision 61 %, path traversal 83 % / 56 %, XSS 85 % / 71 %, command injection 57 % / 53 %, weak ciphers (`crypto`) 75 % / 100 %.
+  The false positives are almost all the Benchmark's decoys (a value that is replaced by a constant through a branch the compiler can fold, a `ThingFactory` that returns a safe object): real code does
+  not do that on purpose, so these precision numbers are a lower bound for ordinary code, not a measure of it. Hashes (`hash`), `weakrand` and `securecookie` score 0 on purpose: the algorithm
+  comes from a properties file, a variable called `rand` is not a token, and the cookie flags are set through a different API; these classes are matched by name in the other languages too.
+- **Parity:** the browser build (WebAssembly) and the native build give identical findings on `examples/vulnerable-java-app` (the web-parity test).
+- **Speed:** the Benchmark (2 770 files) takes 30 s here, halo (1 775 files) 23 s; the other nine projects 0.1-8 s each.
 
 ## What the scanner still misses (false negatives)
 

@@ -2,7 +2,7 @@
   "name": "security-testing-hub",
   "version": "0.1.0",
   "private": true,
-  "description": "Open-source security scanner for vibe coders: finds injection, XSS, broken access control, leaked secrets and unsafe Supabase / Firebase rules in JavaScript, TypeScript, Python, PHP and Go projects (Express, Next.js, Flask, FastAPI, Django, Laravel and more).",
+  "description": "Open-source security scanner for vibe coders: finds injection, XSS, broken access control, leaked secrets and unsafe Supabase / Firebase rules in JavaScript, TypeScript, Python, PHP, Go and Java projects (Express, Next.js, Flask, FastAPI, Django, Laravel and more).",
   "workspaces": [
     "packages/*"
   ],

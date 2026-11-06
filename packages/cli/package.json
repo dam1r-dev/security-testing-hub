@@ -1,7 +1,7 @@
 {
   "name": "security-hub",
-  "version": "0.10.0",
-  "description": "Open-source security scanner for vibe coders: finds injection, XSS, broken access control, leaked secrets and unsafe Supabase / Firebase rules in JavaScript, TypeScript, Python, PHP and Go projects (Express, Next.js, Flask, FastAPI, Django, Laravel and more).",
+  "version": "0.11.0",
+  "description": "Open-source security scanner for vibe coders: finds injection, XSS, broken access control, leaked secrets and unsafe Supabase / Firebase rules in JavaScript, TypeScript, Python, PHP, Go and Java projects (Express, Next.js, Flask, FastAPI, Django, Laravel and more).",
   "main": "dist/index.js",
   "bin": {
     "security-hub": "bin/security-hub.js"
@@ -19,7 +19,7 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^12.1.0",
-    "security-hub-scanner": "0.10.0"
+    "security-hub-scanner": "0.11.0"
   },
   "keywords": [
     "security",

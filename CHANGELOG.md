@@ -2,6 +2,25 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
+## 0.11.0 - 2026-11-06
+
+### Added
+- **Java.** `.java` files are read by their own analyzer (new optional package `tree-sitter-java`; the browser build loads its WebAssembly grammar too). The caller's text is followed from Servlets
+  (`HttpServletRequest`), Spring MVC / WebFlux (`@RequestParam`, `@PathVariable`, `@RequestBody`, plain handler parameters), JAX-RS, Micronaut, Spark and Javalin into the existing rules: `sql-injection`
+  (JDBC, JdbcTemplate, JPA / Hibernate native queries), `command-injection`, `path-traversal`, `ssrf`, `open-redirect` (also `"redirect:" + x`), `xss`, `insecure-deserialization` (`ObjectInputStream`,
+  SnakeYAML, XStream), `code-injection` (SpEL, OGNL, Groovy, `ScriptEngine`). Patterns without data flow: Spring Security (`csrf` off, `anyRequest().permitAll()`), `insecure-cors`, `weak-crypto`,
+  `tls-verification`, `insecure-cookie`, `insecure-jwt`, `xxe`, Jackson default typing, `hardcoded-secret`. Values are followed into helper methods of the project (`users.findByEmail(name)`) and back out
+  of them (`String bar = helper(request, param)`). Details: docs/rules.md, "Java". `examples/vulnerable-java-app` is the fixture (21 findings).
+- Advice for Java findings in the "Fix with AI" prompts.
+
+### Changed
+- An assignment inside a branch (`case 'B': bar = "clean"`, `else { x = "" }`) no longer clears the taint another branch gave the name (Go and Java), except a fallback after a check of the name itself
+  (`if (!allowed.contains(sort)) sort = DEFAULT;`), which does make it clean. Go corpus: one more finding (govwa's `template.HTML(inlineJS)`), none lost.
+- Java files were counted as "a language without rules" before; they are now analysed (the coverage note names Kotlin, Ruby, C#... instead). `target/` and `.gradle/` are skipped as build output.
+
+### Not in Java yet
+- JSP / Thymeleaf templates, MyBatis XML mappers, Spring Data `@Query`, `application.properties` settings, values kept in a field and read in another method, interface calls with several implementations.
+
 ## 0.10.0 - 2026-11-06
 
 ### Added

@@ -8,7 +8,7 @@ people shipping web apps fast with AI coding assistants, who don't
 always have time to review every line an LLM generates for injection bugs.
 Point it at a **JavaScript / TypeScript** (Express, Next.js, SvelteKit, Remix,
 Nuxt, Hono, tRPC), **Python** (Flask, FastAPI, Django), **PHP** (plain
-scripts, Laravel, Slim) or **Go** (net/http, gin, echo, fiber, chi) project; it parses the real AST (via
+scripts, Laravel, Slim), **Go** (net/http, gin, echo, fiber, chi) or **Java** (Spring MVC and Security, Servlets, JAX-RS, Micronaut, Spark, Javalin) project; it parses the real AST (via
 [Tree-sitter](https://tree-sitter.github.io/tree-sitter/)) and flags untrusted
 input flowing into dangerous sinks, plus the access-control, secret and
 database-rule mistakes that need no data flow.
@@ -72,7 +72,8 @@ tuned for exactly the patterns that show up in "vibe-coded" web apps.
 | Debug mode left on | [CWE-489](https://cwe.mitre.org/data/definitions/489.html) | Flask `app.run(debug=True)`, Django `DEBUG = True`, PHP `display_errors` / `phpinfo()` |
 | Hard-coded secrets | [CWE-798](https://cwe.mitre.org/data/definitions/798.html) | provider token formats (AWS, GitHub, Stripe, OpenAI/Anthropic, Slack, Supabase `service_role`, private keys, DB URLs), guessable `jwt.sign` / `session` secrets, credentials by name, secrets behind `NEXT_PUBLIC_`-style prefixes, committed `.env` files |
 
-**Languages: JavaScript / TypeScript, Python, PHP and Go.** Go (net/http, gin, echo, fiber, chi, gorilla/mux, httprouter; new in 0.10.0) is covered by SQL, command, path,
+**Languages: JavaScript / TypeScript, Python, PHP, Go and Java.** Java (Spring MVC / WebFlux, Servlets, JAX-RS, Micronaut, Spark, Javalin and Spring Security; new in 0.11.0) is covered by SQL, command, path,
+SSRF, redirect, XSS, deserialization and expression injection, plus CSRF / open routes in Spring Security, CORS, weak crypto, certificate checks, cookies, JWT, XXE and secrets (see docs/rules.md). Go (net/http, gin, echo, fiber, chi, gorilla/mux, httprouter; new in 0.10.0) is covered by SQL, command, path,
 SSRF, redirect, XSS and template injection, plus weak crypto, TLS verification, cookies, JWT, CORS, pprof and secrets (see docs/rules.md). Python (Flask, FastAPI, Django) and PHP (plain scripts, Laravel) get the same kind of
 data-flow check: SQL injection, command injection, `eval` / template / file-inclusion injection, unsafe deserialization, path traversal,
 SSRF, open redirect, reflected XSS, plus mass assignment (Laravel), `@csrf_exempt`, a JWT decoded without verification, debug mode and
@@ -355,9 +356,9 @@ matched by the name it is assigned to and never by its value, so the file holds 
 This is a v1 MVP, built to a **realistic** plan (see
 [docs/dev-plan.md](docs/dev-plan.md)) rather than an idealized one:
 
-- **JavaScript / TypeScript, Python, PHP and Go.** Python, PHP and Go are newer and
-  less measured (see docs/validation.md). Go is the youngest (0.10.0): checked on 15 real projects, no stored XSS or
-  struct-field flows yet, and calls through interfaces are not followed.
+- **JavaScript / TypeScript, Python, PHP, Go and Java.** Python, PHP, Go and Java are newer and
+  less measured (see docs/validation.md). Go (0.10.0) and Java (0.11.0) are the youngest: checked on 15 and 11 real projects, no stored XSS or
+  field-to-field flows yet, JSP / Thymeleaf templates are not read, and calls through interfaces with several implementations are not followed.
 - **Taint follows calls, not return values.** Request data is tracked through
   local variables, destructuring and template strings, and **into** the
   project functions you pass it to — across files, through `require`/`import`

@@ -2,8 +2,8 @@
 
 Open-source security scanner for AI-assisted ("vibe coded") projects, where
 the usual bugs slip in fast. 36 rules for **JavaScript, TypeScript, Python,
-PHP and Go** (Express, Next.js, SvelteKit, Remix, Nuxt, Flask, FastAPI, Django,
-Laravel, Slim, net/http, gin, echo, fiber, chi): SQL / command / code injection, XSS, path traversal, SSRF,
+PHP, Go and Java** (Express, Next.js, SvelteKit, Remix, Nuxt, Flask, FastAPI, Django,
+Laravel, Slim, net/http, gin, echo, fiber, chi, Spring, Servlets, JAX-RS): SQL / command / code injection, XSS, path traversal, SSRF,
 open redirect, CSRF, IDOR and broken access control, leaked secrets, unsafe
 Supabase and Firebase rules, JWT and CORS mistakes, and more.
 

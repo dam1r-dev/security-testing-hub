@@ -476,6 +476,42 @@ very common ones such as `Get` or `Close`, are not guessed); the finding is repo
 **Not covered (yet):** stored XSS through `html/template`, values stored in a struct field and read in another function, interface calls with
 several implementations, `regexp` (Go's engine has no catastrophic backtracking), mass assignment, `gorm` struct conditions, `unsafe`.
 
+## Java
+
+Java (`.java`; `src/test`, `*Test.java`, `target/`, `build/` are skipped) is read by its own analyzer (`packages/scanner/src/java`, new in 0.11.0) and reported under the same
+rule ids, so `security-hub-ignore`, `.security-hub.json`, the baseline and the score work as for the other languages. The grammar (`tree-sitter-java`) is an **optional package**.
+
+**Where the caller's text comes from.** A method that takes the request, or values the framework fills from it, is looked at: `HttpServletRequest` (`getParameter`, `getHeader`, `getCookies`,
+`getQueryString`, `getRequestURI`, `getInputStream`, `getPart`), Spring MVC / WebFlux (`@RequestParam`, `@PathVariable`, `@RequestBody`, `@RequestHeader`, `@CookieValue`, `@ModelAttribute`, and a plain
+`String` / DTO parameter of a `@GetMapping` / `@PostMapping` method), JAX-RS (`@QueryParam`, `@PathParam`, `@FormParam`...), Micronaut (`@QueryValue`, `@Body`), Spark and Javalin lambdas
+(`(req, res) -> ...`, `ctx -> ...`), and a wrapper built around the request (`new RequestWrapper(request)`). A number, a boolean, a UUID or a date parameter cannot carry text and is not followed.
+
+**How it is followed.** Statements in the order they run, one method at a time: assignments, `+`, `String.format`, `StringBuilder.append`, string methods, getters of a tainted object, casts,
+ternaries, `new File(x)`, `Paths.get(x)`, JSON mapping (`objectMapper.readValue(body, Dto.class)`), `for (x : tainted)`. What stops it: `Integer.parseInt`, `UUID.fromString`, `HtmlUtils.htmlEscape`,
+`FilenameUtils.getName`, a reassignment to something clean (not inside a branch: after `switch` / `if` the name may hold either value). **Helpers** are followed in both directions: a value handed to a
+method of the project that builds the query (`users.findByEmail(name)`: the only method of that name and argument count in the project, or one of the same file), and the value a helper returns
+(`String bar = helper(request, param)`), up to three calls deep. A name two methods share (an interface and its implementations count once: the interface method has no body) is not guessed.
+
+| Rule | What is reported |
+|---|---|
+| `sql-injection` | `Statement.executeQuery` / `execute` / `executeUpdate`, `Connection.prepareStatement` / `prepareCall`, `JdbcTemplate.query...` / `update`, `EntityManager.createNativeQuery` / `createQuery`, Hibernate `createSQLQuery`, jOOQ `fetch(String)` with text built from the request. A `?` placeholder with the value passed separately is fine. |
+| `command-injection` | `Runtime.exec(String)` with the request in the string, `new ProcessBuilder("sh", "-c", x)`, a program or list taken from the request. A fixed program with the value as one argument is not reported. |
+| `path-traversal` | `new File(x)` / `FileInputStream` / `FileWriter`, `Files.read...` / `write` / `copy`, `getResourceAsStream`, `getRequestDispatcher`, `MultipartFile.transferTo`. Not reported when the method takes `FilenameUtils.getName`, `getFileName()`, a `normalize()` + `startsWith` check or `getCanonicalPath`. |
+| `ssrf` | `new URL(x)` in a method that opens a connection, `new HttpGet(x)`, `URI.create`, `RestTemplate.getForObject` / `exchange`, `WebClient.uri`, `Jsoup.connect`, OkHttp `Request.Builder().url`. A fixed host (`"https://api.example.com/" + id`) is a path choice only; a value from the request line (`getRequestURI`) cannot choose the host. `redisTemplate` / `jdbcTemplate` are not HTTP clients. |
+| `open-redirect` | `response.sendRedirect`, `"redirect:" + x`, `new RedirectView(x)` / `ModelAndView("redirect:" + x)`, `setHeader("Location", x)`: reported when the caller controls the START of the address. Quiet after a check against a host list or `trusted...` / `allowed...`. |
+| `xss` | `response.getWriter().println(x)` / `out.print(x)`, a `@RestController` / `@ResponseBody` method that returns HTML text built from the request (`"<h1>" + name`). Quiet when the content type is JSON / plain text. |
+| `insecure-deserialization` | `new ObjectInputStream(request.getInputStream())`, `XMLDecoder`, SnakeYAML `new Yaml().load(x)`, `XStream.fromXML(x)`; Jackson `enableDefaultTyping()` / `activateDefaultTyping()` (low confidence outside web code). |
+| `code-injection` | SpEL `parseExpression(x)`, OGNL / MVEL / Groovy / `ScriptEngine.eval(x)`, `Class.forName(x)` (low confidence), a Velocity template from a string. |
+| `xxe` | `DocumentBuilderFactory` / `SAXParserFactory` / `XMLInputFactory` / `TransformerFactory.newInstance()` in a file that never disables DTDs or external entities (low confidence outside web code). |
+| `csrf` / `broken-access-control` / `insecure-cors` | Spring Security: `csrf().disable()` (low confidence when the app is `STATELESS`), `anyRequest().permitAll()` (low confidence); CORS `allowedOrigins("*")` with `allowCredentials(true)`; the request's Origin copied into `Access-Control-Allow-Origin`. |
+| `weak-crypto` | `MessageDigest.getInstance("MD5" / "SHA-1")` in code that handles passwords, `Cipher.getInstance("DES" / "RC4" / "AES" (ECB) / "AES/ECB/...")`, `BCryptPasswordEncoder(4)`, `java.util.Random` / `Math.random` for a token. |
+| `tls-verification` | `NoopHostnameVerifier.INSTANCE`, `ALLOW_ALL_HOSTNAME_VERIFIER`, `TrustAllStrategy` / `TrustSelfSignedStrategy`, a `checkServerTrusted()` with an empty body. |
+| `insecure-cookie` / `insecure-jwt` | `new Cookie("session", v)` without `setHttpOnly(true)`, `ResponseCookie.from(...)` without `.httpOnly(true)`; `parseClaimsJwt`, `JWT.decode`, `SignatureAlgorithm.NONE`. |
+| `hardcoded-secret` | Known key formats, a string assigned to a secret-looking name, a key written in `Algorithm.HMAC256("...")` / `signWith` / `SecretKeySpec`. Not reported: comments, example URLs with `user:pass`, the NAME of an environment variable, `${property}` references. |
+
+**Not covered (yet):** JSP / Thymeleaf templates (stored and template XSS), MyBatis `${}` in XML mappers, Spring Data `@Query` strings, values stored in a field and read in another method, calls through an
+interface with several implementations, `application.properties` / `application.yml` settings (actuator exposure, `spring.h2.console`).
+
 ## Python and PHP
 
 Python (`.py`: Flask, FastAPI, Django) and PHP (`.php`: plain scripts, Laravel, Symfony) are read by their own analyzers (`packages/scanner/src/python`,
