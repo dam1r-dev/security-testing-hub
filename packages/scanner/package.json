@@ -1,7 +1,7 @@
 {
   "name": "security-hub-scanner",
-  "version": "0.9.0",
-  "description": "The engine behind security-hub: Tree-sitter parsing, taint analysis and 36 rules for JavaScript, TypeScript, Python and PHP. Use the `security-hub` CLI unless you are building your own tooling.",
+  "version": "0.10.0",
+  "description": "The engine behind security-hub: Tree-sitter parsing, taint analysis and 36 rules for JavaScript, TypeScript, Python, PHP and Go. Use the `security-hub` CLI unless you are building your own tooling.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -52,6 +52,7 @@
   "homepage": "https://github.com/dam1r-dev/security-testing-hub#readme",
   "bugs": "https://github.com/dam1r-dev/security-testing-hub/issues",
   "optionalDependencies": {
+    "tree-sitter-go": "0.23.4",
     "tree-sitter-php": "0.23.12",
     "tree-sitter-python": "0.23.4"
   }

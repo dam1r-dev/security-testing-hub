@@ -437,6 +437,45 @@ One finding per project, on the line that creates the app (`express()`, `Flask(_
 **Left alone:** any use of helmet / Flask-Talisman / secure-headers, a hand-written `setHeader("X-Frame-Options", ...)`, a header in `vercel.json`, `netlify.toml`, `_headers`, an nginx / Caddy / `.htaccess` file; a pure JSON API (no pages);
 Django (its SecurityMiddleware is on by default); a single-file scan (no view of the project). Silence it with `// security-hub-ignore missing-security-headers -- the proxy sets them` on the line above `express()`, or in `.security-hub.json`.
 
+## Go
+
+Go (`.go`; `_test.go` files and `vendor/` are skipped) is read by its own analyzer (`packages/scanner/src/go`, new in 0.10.0) and reported under the
+same rule ids, so `security-hub-ignore`, `.security-hub.json`, the baseline and the score work as for the other languages. The grammar
+(`tree-sitter-go`) is an **optional package** like the Python and PHP ones.
+
+**Where the caller's text comes from.** A function that takes the request or a framework context is looked at: `*http.Request` (`r.URL.Query().Get`,
+`r.FormValue`, `r.PostFormValue`, `r.Form[...]`, `r.Header.Get`, `r.Cookie`, `r.URL.Path`, `r.Body`), gin `*gin.Context` (`Query`, `Param`, `PostForm`,
+`GetHeader`, `FormFile`, `ShouldBindJSON(&x)`...), echo `echo.Context` (`QueryParam`, `Param`, `FormValue`, `Bind(&x)`), fiber `*fiber.Ctx` (`Query`, `Params`,
+`FormValue`, `BodyParser(&x)`), fasthttp, chi (`chi.URLParam`), gorilla/mux (`mux.Vars`), httprouter (`ps.ByName`). Handlers written inline
+(`http.HandleFunc("/x", func(w, r) {...})`) are read as functions of their own.
+
+**How it is followed.** Statements in the order they run, one function at a time: `:=`, `=`, `var`, `range`, `+`, `fmt.Sprintf`, `strings.*`
+conversions, fields and indexes of a tainted value, `json.NewDecoder(r.Body).Decode(&x)` and `c.ShouldBindJSON(&x)` (the variable becomes the caller's).
+What stops it: `strconv.Atoi` and friends, `filepath.Base`, `url.QueryEscape`, `html.EscapeString`, `uuid.Parse`, a number conversion, a reassignment to
+something clean. A struct literal (`&User{Name: x}`) is not text: a GORM condition built from one is a parameterised lookup. **Helpers** in other files
+(`repo.FindUser(name)`) are followed up to three calls deep when the function's name is unambiguous in the project (a name two functions share, and
+very common ones such as `Get` or `Close`, are not guessed); the finding is reported at the call in the handler.
+
+| Rule | What is reported |
+|---|---|
+| `sql-injection` | `db.Query` / `Exec` / `QueryRow` (and `...Context`), sqlx `Get` / `Select`, GORM `Where` / `Order` / `Raw` / `Exec` / `Having` / `Joins` handed text built from the request (`+`, `fmt.Sprintf`). A `?` / `$1` placeholder with the value passed separately is fine; so are a prepared statement's arguments. |
+| `command-injection` | `exec.Command("sh", "-c", x)`, `exec.Command(x)` (the program from the request). A fixed program with the value as one argument is not reported. |
+| `path-traversal` | `os.Open` / `ReadFile` / `WriteFile` / `Create` / `Remove` / `Stat`, `http.ServeFile`, gin `c.File` / `c.SaveUploadedFile` (the upload's `file.Filename`). Not reported when the function takes `filepath.Base`, checks `..`, or uses `securejoin` / `filepath.Rel` / `os.OpenRoot`. |
+| `ssrf` | `http.Get` / `Post` / `NewRequest`, `client.Get` ... with a URL from the request. A fixed host (`"https://api.example.com/" + id`) is a path choice only, and a value from the request line (`r.RequestURI`, `r.URL.Path`) starts with `/`, so it cannot choose the server. |
+| `open-redirect` | `http.Redirect`, gin / echo / fiber `c.Redirect`, `Header().Set("Location", ...)`: reported when the caller controls the START of the address (the code's own prefix `"/items/" + id` or `baseURL + path` makes it safe). Quiet when the function compares the target with a list (`Trusted...`, `allowed...`). Low confidence for values taken from the request line. |
+| `xss` | `fmt.Fprintf(w, ...)` / `w.Write` / `io.WriteString` / echo `c.HTML` / gin `c.Data(..., "text/html", ...)` with the caller's text, and `template.HTML(x)` / `template.JS(x)` conversions. Quiet when the function sets a JSON / plain-text Content-Type. |
+| `code-injection` | `template.New(...).Parse(x)` (the template itself from the request), an embedded interpreter's `RunString(x)`. |
+| `insecure-cors` | `Header().Set("Access-Control-Allow-Origin", <the Origin header>)` (low confidence unless the function also allows credentials); `cors.Config{AllowAllOrigins: true, AllowCredentials: true}`. |
+| `weak-crypto` | `md5` / `sha1` over a password (or inside `hashPassword`), `des` / `rc4` ciphers, `bcrypt.GenerateFromPassword` with cost below 10, `math/rand` for a token / secret / code. |
+| `tls-verification` | `tls.Config{InsecureSkipVerify: true}` and `cfg.InsecureSkipVerify = true` (low confidence inside an `if skip...` option or a function named like a connectivity check). |
+| `insecure-cookie` | `http.Cookie{Name: "session"...}` / fiber `Cookie` without `HttpOnly: true` (or `Secure: false`), gin `c.SetCookie(..., secure=false, httpOnly=false)`, gorilla `sessions.Options{HttpOnly: false}`. A cookie that is sent (`req.AddCookie`) or cleared (empty value) is not reported. |
+| `insecure-jwt` | `jwt.ParseUnverified`. |
+| `debug-endpoint` / `debug-mode` | `import _ "net/http/pprof"` (low confidence), echo `e.Debug = true`. |
+| `hardcoded-secret` | Known key formats, and a string assigned to a secret-looking name (`var jwtSecret = []byte("...")`, `Password: "..."`). Not reported: comments, example URLs with `user:pass`, the NAME of an environment variable. |
+
+**Not covered (yet):** stored XSS through `html/template`, values stored in a struct field and read in another function, interface calls with
+several implementations, `regexp` (Go's engine has no catastrophic backtracking), mass assignment, `gorm` struct conditions, `unsafe`.
+
 ## Python and PHP
 
 Python (`.py`: Flask, FastAPI, Django) and PHP (`.php`: plain scripts, Laravel, Symfony) are read by their own analyzers (`packages/scanner/src/python`,

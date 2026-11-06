@@ -546,6 +546,26 @@ Measured on the same 93 open-source projects (corpora 4 to 7; DVWA, pygoat and N
 
 Not done: SSRF through redirects and `eval` in templates (judged to find little in the corpora), a cache of results between runs (a finding in one file depends on other files, so a per-file cache would be wrong), Go / Ruby / Java rules.
 
+### Round 19 — Go (0.10.0)
+
+New analyzer, so the first measurement on real code: **15 open-source Go projects** (read-only shallow clones, nothing executed): four deliberately vulnerable apps
+(govwa, Hardw01f/Vulnerability-goapp, damn-vulnerable-golang, Sonatype's intentionally-vulnerable-golang-project) and eleven real programs that serve HTTP
+(gin examples and the realworld app, fiber recipes, chi, filebrowser, gotify, listmonk, MailHog, miniflux, memos, webhook): about 2 000 `.go` files.
+
+- **First pass: 64 Go findings. Read one by one, 27 were wrong; eight fixes later: 37.** What the review found: a GORM struct condition (`db.Where(&UserModel{Username: x})`) taken for SQL text (13 in one
+  project); the arguments of a prepared statement (`stmt.Query(x)`) taken for SQL; an open redirect whose address starts with the program's own base URL (`adminURL + "/campaigns#" + tab`);
+  a proxy that fixes the host and takes only the path from `r.RequestURI` reported as SSRF; a `redis://user:pass@host` example in a comment and a help text; the NAME of an environment variable
+  (`EnvClientSecret = "APP_CLIENT_SECRET"`) taken for a secret; a cookie sent by an HTTP client (`req.AddCookie`) and a cookie cleared on logout taken for login cookies; a certificate check that
+  the user switches off by an option (`if cfg.SkipVerify`), reported at full confidence; a redirect after a check against `TrustedURLs`.
+- **What the 37 are:** the three vulnerable training apps with handlers: 16 (govwa 3, Hardw01f 9, damn-vulnerable-golang 4; the fourth training app is about vulnerable dependencies and has no handler: 0, as expected).
+  In real programs: SSRF where the program is meant to fetch a user's URL (miniflux 3, memos webhook, the fiber `/proxy` recipe), a cookie with `Secure: false` written on purpose, MD5 for the Fever API's
+  mandatory hash, bcrypt cost 4 in MailHog's CLI, `ParseUnverified` in a fiber recipe, a signing secret in the realworld example (marked `#nosec` by its authors), pprof imported by chi's profiler
+  middleware, a reflected Origin in memos (low confidence: no credentials in that function), redirects built from the request line (low confidence). These are what the rule says; whether they are bugs depends on the program.
+- **Misses, honestly:** govwa has more bugs than the 3 reported (its XSS and IDOR levels are not found: no stored XSS and no data flow through its template layer yet); Hardw01f's remaining pages and
+  the training apps' broken access control are not rules in any language. No finding was verified by exploiting it.
+- **Parity:** the browser build (WebAssembly) and the native build give identical findings on `examples/vulnerable-go-app` (the web-parity test).
+- **Speed:** the 15 projects (about 2 000 Go files, plus the TypeScript front ends of memos and filebrowser) took 37 s in total on an idle machine (miniflux: 440 Go files in 6 s); no file reached the time budget.
+
 ## What the scanner still misses (false negatives)
 
 After round 3, the remaining misses in the two deliberately vulnerable apps are

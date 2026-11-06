@@ -7,8 +7,8 @@ An open-source static analysis (SAST) scanner built for **"vibe coders"** —
 people shipping web apps fast with AI coding assistants, who don't
 always have time to review every line an LLM generates for injection bugs.
 Point it at a **JavaScript / TypeScript** (Express, Next.js, SvelteKit, Remix,
-Nuxt, Hono, tRPC), **Python** (Flask, FastAPI, Django) or **PHP** (plain
-scripts, Laravel, Slim) project; it parses the real AST (via
+Nuxt, Hono, tRPC), **Python** (Flask, FastAPI, Django), **PHP** (plain
+scripts, Laravel, Slim) or **Go** (net/http, gin, echo, fiber, chi) project; it parses the real AST (via
 [Tree-sitter](https://tree-sitter.github.io/tree-sitter/)) and flags untrusted
 input flowing into dangerous sinks, plus the access-control, secret and
 database-rule mistakes that need no data flow.
@@ -72,7 +72,8 @@ tuned for exactly the patterns that show up in "vibe-coded" web apps.
 | Debug mode left on | [CWE-489](https://cwe.mitre.org/data/definitions/489.html) | Flask `app.run(debug=True)`, Django `DEBUG = True`, PHP `display_errors` / `phpinfo()` |
 | Hard-coded secrets | [CWE-798](https://cwe.mitre.org/data/definitions/798.html) | provider token formats (AWS, GitHub, Stripe, OpenAI/Anthropic, Slack, Supabase `service_role`, private keys, DB URLs), guessable `jwt.sign` / `session` secrets, credentials by name, secrets behind `NEXT_PUBLIC_`-style prefixes, committed `.env` files |
 
-**Languages: JavaScript / TypeScript, Python and PHP.** Python (Flask, FastAPI, Django) and PHP (plain scripts, Laravel) get the same kind of
+**Languages: JavaScript / TypeScript, Python, PHP and Go.** Go (net/http, gin, echo, fiber, chi, gorilla/mux, httprouter; new in 0.10.0) is covered by SQL, command, path,
+SSRF, redirect, XSS and template injection, plus weak crypto, TLS verification, cookies, JWT, CORS, pprof and secrets (see docs/rules.md). Python (Flask, FastAPI, Django) and PHP (plain scripts, Laravel) get the same kind of
 data-flow check: SQL injection, command injection, `eval` / template / file-inclusion injection, unsafe deserialization, path traversal,
 SSRF, open redirect, reflected XSS, plus mass assignment (Laravel), `@csrf_exempt`, a JWT decoded without verification, debug mode and
 hard-coded secrets. Typed FastAPI parameters (`int`, `UUID`...) and Flask `<int:id>` converters are understood as safe. Helpers defined in
@@ -354,9 +355,9 @@ matched by the name it is assigned to and never by its value, so the file holds 
 This is a v1 MVP, built to a **realistic** plan (see
 [docs/dev-plan.md](docs/dev-plan.md)) rather than an idealized one:
 
-- **JavaScript / TypeScript, Python and PHP.** Python and PHP are newer and
-  less measured (see docs/validation.md): their data flow stays inside one file
-  (plus helpers in that file), where the JavaScript analysis follows calls across files.
+- **JavaScript / TypeScript, Python, PHP and Go.** Python, PHP and Go are newer and
+  less measured (see docs/validation.md). Go is the youngest (0.10.0): checked on 15 real projects, no stored XSS or
+  struct-field flows yet, and calls through interfaces are not followed.
 - **Taint follows calls, not return values.** Request data is tracked through
   local variables, destructuring and template strings, and **into** the
   project functions you pass it to — across files, through `require`/`import`

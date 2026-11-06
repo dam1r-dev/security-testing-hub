@@ -2,6 +2,25 @@
 
 Both packages (`security-hub-scanner`, `security-hub`) are released together at the same version.
 
+## 0.10.0 - 2026-11-06
+
+### Added
+- **Go.** `.go` files are read by their own analyzer (new optional package `tree-sitter-go`; the browser build loads its WebAssembly grammar too). The caller's text is followed
+  from `net/http` (`r.URL.Query().Get`, `r.FormValue`, `r.Header`, `r.Body`...), gin, echo, fiber, fasthttp, chi (`chi.URLParam`), gorilla/mux (`mux.Vars`) and httprouter into the
+  existing rules: `sql-injection` (`database/sql`, sqlx, GORM `Where` / `Order` / `Raw`), `command-injection` (`exec.Command("sh", "-c", x)`), `path-traversal` (`os.Open`, `http.ServeFile`,
+  gin `SaveUploadedFile`), `ssrf`, `open-redirect`, `xss` (`fmt.Fprintf(w, ...)`, `template.HTML(x)`), `code-injection` (a template parsed from the request), `insecure-cors`.
+  Patterns without data flow: `weak-crypto` (MD5 / SHA-1 over passwords, DES / RC4, bcrypt cost, `math/rand` tokens), `tls-verification` (`InsecureSkipVerify`), `insecure-cookie`, `insecure-jwt`
+  (`ParseUnverified`), `debug-endpoint` (`net/http/pprof`), `hardcoded-secret`. A value handed to a helper in another file (`repo.FindUser(name)`) is followed up to three calls deep when the
+  function's name is unambiguous. Handlers written inline (`http.HandleFunc("/x", func(w, r) {...})`) are functions of their own. Details: docs/rules.md, "Go".
+  `examples/vulnerable-go-app` is the fixture (18 findings).
+- Advice for Go findings in the "Fix with AI" prompts.
+
+### Changed
+- Go files were counted as "a language without rules" before; they are now analysed (the coverage note names Java, Ruby, Kotlin... instead).
+
+### Not in Go yet
+- Stored XSS, values kept in a struct field and read in another function, calls through an interface with several implementations, `regexp` (Go's engine cannot backtrack catastrophically: there is no ReDoS rule), mass assignment.
+
 ## 0.9.0 - 2026-11-05
 
 ### Added
