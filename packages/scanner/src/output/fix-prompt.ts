@@ -196,9 +196,45 @@ const HOW_TO_FIX_PHP: Partial<Record<VulnerabilityType, string>> = {
   "mass-assignment": "Do not pass $request->all() to create / update / fill. Use $request->validated() with a rule for each accepted field, or $request->only([...]), and keep sensitive columns out of $fillable (or list them in $guarded).",
 };
 
+const HOW_TO_FIX_GO: Partial<Record<VulnerabilityType, string>> = {
+  "sql-injection":
+    "Never build SQL text from request data (+, fmt.Sprintf). Use placeholders and pass the values separately: db.QueryContext(ctx, \"SELECT ... WHERE id = $1\", id) " +
+    "(MySQL: ?; GORM: db.Where(\"name = ?\", name); sqlx: db.Get(&u, \"... $1\", id)). A table or column name cannot be bound: pick it from an allow-list (a map or a switch).",
+  "command-injection":
+    "Do not run a shell with request data. Call a fixed program and pass each value as its own argument: exec.CommandContext(ctx, \"convert\", \"--\", input, output); " +
+    "validate each value against an allow-list or a strict regexp first, and never put the request's text into the program name or into an sh -c string.",
+  "path-traversal":
+    "Reduce the request value to a file name with filepath.Base, join it to a fixed folder, and check that filepath.Clean of the result still starts with that folder. " +
+    "Better: open files through os.OpenRoot / an http.FileServer(http.Dir(root)) so a path cannot leave the root, or look the file up by an id you control.",
+  ssrf:
+    "Parse the URL (url.Parse), allow only https and hosts from an allow-list, resolve the host and refuse loopback, link-local (169.254.0.0/16) and private ranges, " +
+    "and set CheckRedirect on the http.Client so a redirect cannot lead somewhere else. Give the client a timeout.",
+  xss:
+    "Render pages with html/template (it escapes by context) and pass the value as data; never write request data with fmt.Fprintf(w, ...) or w.Write. " +
+    "template.HTML / template.JS mark text as already safe: use them only for text you wrote. For an API reply set Content-Type: application/json and use json.NewEncoder(w).Encode.",
+  "open-redirect":
+    "Redirect only to a path of your own site: accept the target only if it starts with a single \"/\" (not \"//\" or \"/\\\\\"), or parse it (url.Parse) and compare Hostname() with an allow-list. Otherwise redirect to a fixed route.",
+  "code-injection":
+    "Do not parse request text as a template or a script. Keep templates in files you wrote and pass the value as data; map the request to a fixed set of operations instead of evaluating it.",
+  "insecure-cors":
+    "Send back only an origin from a fixed allow-list (the Origin header is compared with it, then echoed), and never combine a wildcard or \"any origin\" policy with AllowCredentials: true.",
+  "weak-crypto":
+    "Hash passwords with bcrypt (golang.org/x/crypto/bcrypt, cost 12) or argon2id; MD5 and SHA-1 are for checksums only. Use crypto/rand (rand.Read) for tokens, codes and keys, never math/rand. Use AES-GCM with a fresh random nonce; avoid DES and RC4.",
+  "tls-verification":
+    "Remove InsecureSkipVerify: true. For a private certificate authority put its certificate in tls.Config.RootCAs (x509.NewCertPool + AppendCertsFromPEM).",
+  "insecure-cookie":
+    "Set HttpOnly: true, Secure: true and SameSite: http.SameSiteLaxMode on login cookies (gin: c.SetCookie(name, value, maxAge, \"/\", domain, true, true)).",
+  "insecure-jwt":
+    "Verify the signature: jwt.Parse(token, keyFunc) where keyFunc checks the signing method (token.Method is *jwt.SigningMethodHMAC) and returns your key. Never use ParseUnverified or the \"none\" algorithm for authentication.",
+  "debug-endpoint":
+    "Do not import net/http/pprof on a public server. Serve it on a separate listener bound to 127.0.0.1 (a private mux), or only in builds for development.",
+  "hardcoded-secret":
+    "Remove the value from the code and rotate it (it stays in the git history). Read it at start-up from an environment variable (os.Getenv) or a secret manager and fail to start when it is missing.",
+};
+
 function adviceFor(finding: Finding): string {
   const file = finding.location.file.toLowerCase();
-  const specific = file.endsWith(".py") ? HOW_TO_FIX_PYTHON[finding.ruleId] : file.endsWith(".php") ? HOW_TO_FIX_PHP[finding.ruleId] : undefined;
+  const specific = file.endsWith(".py") ? HOW_TO_FIX_PYTHON[finding.ruleId] : file.endsWith(".php") ? HOW_TO_FIX_PHP[finding.ruleId] : file.endsWith(".go") ? HOW_TO_FIX_GO[finding.ruleId] : undefined;
   return specific ?? HOW_TO_FIX[finding.ruleId];
 }
 

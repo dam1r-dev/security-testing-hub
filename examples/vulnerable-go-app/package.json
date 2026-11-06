@@ -1,0 +1,1 @@
+{ "name": "vulnerable-go-app", "private": true, "description": "Deliberately vulnerable Go code (net/http, gin, echo): a fixture for the scanner's tests. Do not deploy." }

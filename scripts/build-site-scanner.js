@@ -24,6 +24,7 @@ const WASM_FILES = [
   [path.join(packageDirectory("tree-sitter-typescript"), "tree-sitter-tsx.wasm"), "tree-sitter-tsx.wasm"],
   [path.join(packageDirectory("tree-sitter-python"), "tree-sitter-python.wasm"), "tree-sitter-python.wasm"],
   [path.join(packageDirectory("tree-sitter-php"), "tree-sitter-php.wasm"), "tree-sitter-php.wasm"],
+  [path.join(packageDirectory("tree-sitter-go"), "tree-sitter-go.wasm"), "tree-sitter-go.wasm"],
 ];
 
 const SHIMS = {

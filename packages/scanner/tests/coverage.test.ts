@@ -29,17 +29,17 @@ describe("what a scan covers (0.8)", () => {
   });
 
   it("a project in a language without rules says which one, and how many files", () => {
-    const summary = scanPath(project({ "main.go": "package main\n", "util/a.go": "package util\n", "app.rb": "puts 1\n", "src/App.vue": "<script>1</script>\n" }), { config: false });
-    expect(summary.coverage?.unsupported).toEqual({ Go: 2, Ruby: 1, "Vue components": 1 });
+    const summary = scanPath(project({ "Main.java": "class Main {}\n", "util/A.java": "class A {}\n", "app.rb": "puts 1\n", "src/App.vue": "<script>1</script>\n" }), { config: false });
+    expect(summary.coverage?.unsupported).toEqual({ Java: 2, Ruby: 1, "Vue components": 1 });
     expect(computeScore(summary).rated).toBe(false);
-    expect(coverageNotes(summary).join(" ")).toMatch(/Found 4 files in languages without rules \(Go 2, Ruby 1, Vue components 1\)/);
+    expect(coverageNotes(summary).join(" ")).toMatch(/Found 4 files in languages without rules \(Java 2, Ruby 1, Vue components 1\)/);
   });
 
   it("a mixed project is rated, and the note says how much was left out", () => {
-    const summary = scanPath(project({ "server.js": VULNERABLE, "tools/gen.go": "package main\n", "tools/more.go": "package main\n" }), { config: false });
-    expect(summary.coverage).toMatchObject({ analyzed: 1, skipped: 0, unsupported: { Go: 2 } });
+    const summary = scanPath(project({ "server.js": VULNERABLE, "tools/Gen.java": "class Gen {}\n", "tools/More.java": "class More {}\n" }), { config: false });
+    expect(summary.coverage).toMatchObject({ analyzed: 1, skipped: 0, unsupported: { Java: 2 } });
     expect(computeScore(summary).rated).toBe(true);
-    expect(coverageNotes(summary)).toEqual([expect.stringMatching(/2 files in languages without rules were not checked \(Go 2\).*1 JavaScript, TypeScript, Python or PHP file that was analysed/)]);
+    expect(coverageNotes(summary)).toEqual([expect.stringMatching(/2 files in languages without rules were not checked \(Java 2\).*1 JavaScript, TypeScript, Python, PHP or Go file that was analysed/)]);
     expect(toMarkdown(summary)).toMatch(/> 2 files in languages without rules/);
   });
 

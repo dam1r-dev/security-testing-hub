@@ -33,7 +33,7 @@ function loadNative(): Native {
 
 const native = loadNative();
 
-export type SupportedLanguage = "javascript" | "typescript" | "tsx" | "python" | "php";
+export type SupportedLanguage = "javascript" | "typescript" | "tsx" | "python" | "php" | "go";
 
 /** The languages the JavaScript / TypeScript analyzers understand (a Python or PHP tree has other node types). */
 export const JS_LANGUAGES: readonly SupportedLanguage[] = ["javascript", "typescript", "tsx"];
@@ -47,21 +47,23 @@ const EXTENSION_TO_LANGUAGE: Record<string, SupportedLanguage> = {
   ".tsx": "tsx",
   ".py": "python",
   ".php": "php",
+  ".go": "go",
 };
 
 export function languageForExtension(extension: string): SupportedLanguage | undefined {
   return EXTENSION_TO_LANGUAGE[extension.toLowerCase()];
 }
 
-// Python and PHP are optional packages: a missing one (no prebuilt binary for this machine, an install that skipped optional
+// Python, PHP and Go are optional packages: a missing one (no prebuilt binary for this machine, an install that skipped optional
 // dependencies) turns those files into a visible note instead of breaking the scan. Shared across module registries like the core.
-const OPTIONAL: Record<"python" | "php", { pkg: string; label: string }> = {
+const OPTIONAL: Record<"python" | "php" | "go", { pkg: string; label: string }> = {
   python: { pkg: "tree-sitter-python", label: "Python" },
   php: { pkg: "tree-sitter-php", label: "PHP" },
+  go: { pkg: "tree-sitter-go", label: "Go" },
 };
 
-function optionalGrammar(language: "python" | "php"): unknown {
-  const shared = require("v8") as { __securityHubOptional?: Partial<Record<"python" | "php", unknown>> };
+function optionalGrammar(language: "python" | "php" | "go"): unknown {
+  const shared = require("v8") as { __securityHubOptional?: Partial<Record<"python" | "php" | "go", unknown>> };
   const cache = (shared.__securityHubOptional ??= {});
   if (cache[language] === undefined) {
     const { pkg, label } = OPTIONAL[language];
@@ -81,6 +83,7 @@ function grammarFor(language: SupportedLanguage) {
   switch (language) {
     case "python":
     case "php":
+    case "go":
       return optionalGrammar(language);
     case "javascript":
       return native.javascript;

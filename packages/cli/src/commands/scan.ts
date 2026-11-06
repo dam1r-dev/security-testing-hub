@@ -192,7 +192,7 @@ export function runScan(targetPath: string, options: ScanCommandOptions): number
 
   // A gate over nothing is not a pass: the wrong folder, or a project in a language without rules, must not turn a CI job green.
   if (failOn && summary.coverage && summary.coverage.analyzed === 0) {
-    console.error(chalk.red("--fail-on cannot be checked: no JavaScript, TypeScript, Python or PHP source was analysed. Check the path (and --ignore)."));
+    console.error(chalk.red("--fail-on cannot be checked: no JavaScript, TypeScript, Python, PHP or Go source was analysed. Check the path (and --ignore)."));
     return 2;
   }
   if (failOn) {
