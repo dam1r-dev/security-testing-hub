@@ -35,6 +35,7 @@ beforeAll(async () => {
     python: wasm["tree-sitter-python.wasm"] as Uint8Array,
     php: wasm["tree-sitter-php.wasm"] as Uint8Array,
     go: wasm["tree-sitter-go.wasm"] as Uint8Array,
+    java: wasm["tree-sitter-java.wasm"] as Uint8Array,
   });
 });
 
@@ -72,7 +73,7 @@ function keys(results: { file: string; findings: { ruleId: string; severity: str
 }
 
 describe("the web scanner gives the command line's answer", () => {
-  const examples = ["vulnerable-express-app", "vulnerable-nextjs-app", "vulnerable-supabase-app", "vulnerable-firebase-app", "vulnerable-frameworks", "vulnerable-python-app", "vulnerable-php-app", "vulnerable-go-app"];
+  const examples = ["vulnerable-express-app", "vulnerable-nextjs-app", "vulnerable-supabase-app", "vulnerable-firebase-app", "vulnerable-frameworks", "vulnerable-python-app", "vulnerable-php-app", "vulnerable-go-app", "vulnerable-java-app"];
 
   it.each(examples)("example project %s: same findings, same score", (name) => {
     const root = path.join(repoRoot, "examples", name);
@@ -143,7 +144,7 @@ describe("the site bundle", () => {
         // the real `fs` / `child_process` / native parser must not be in the page's bundle
         expect(worker).not.toMatch(/require\(["'](?:fs|child_process|v8|tree-sitter)["']\)/);
         expect(worker.length).toBeLessThan(600 * 1024);
-        for (const name of ["tree-sitter.wasm", "tree-sitter-javascript.wasm", "tree-sitter-typescript.wasm", "tree-sitter-tsx.wasm", "tree-sitter-python.wasm", "tree-sitter-php.wasm", "tree-sitter-go.wasm"]) {
+        for (const name of ["tree-sitter.wasm", "tree-sitter-javascript.wasm", "tree-sitter-typescript.wasm", "tree-sitter-tsx.wasm", "tree-sitter-python.wasm", "tree-sitter-php.wasm", "tree-sitter-go.wasm", "tree-sitter-java.wasm"]) {
           expect(fs.readFileSync(path.join(dir, name)).subarray(0, 4).toString("hex")).toBe("0061736d"); // "\0asm"
         }
       })

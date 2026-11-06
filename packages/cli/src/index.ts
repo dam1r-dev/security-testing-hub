@@ -31,7 +31,7 @@ export function run(argv: string[]): void {
 
   program
     .name("security-hub")
-    .description("Open-source security scanner for vibe coders: injection, XSS, broken access control, leaked secrets and unsafe Supabase / Firebase rules in JavaScript, TypeScript, Python, PHP and Go projects")
+    .description("Open-source security scanner for vibe coders: injection, XSS, broken access control, leaked secrets and unsafe Supabase / Firebase rules in JavaScript, TypeScript, Python, PHP, Go and Java projects")
     .version(PACKAGE_VERSION);
 
   program

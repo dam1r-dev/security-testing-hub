@@ -35,6 +35,7 @@ import { InsecureTokenStorageAnalyzer } from "./analyzers/token-storage";
 import { PythonAnalyzer } from "./python/analyzer";
 import { PhpAnalyzer } from "./php/analyzer";
 import { GoAnalyzer } from "./go/analyzer";
+import { JavaAnalyzer } from "./java/analyzer";
 import { InsecureCorsAnalyzer } from "./analyzers/cors";
 import { InsecureJwtAnalyzer } from "./analyzers/jwt";
 import { MissingRateLimitAnalyzer } from "./analyzers/rate-limit";
@@ -87,6 +88,8 @@ const DEFAULT_IGNORED_DIRS = new Set([
   "venv",
   "__pycache__",
   "site-packages",
+  "target",
+  ".gradle",
 ]);
 // Skipped unless `includeTests` is set (see ScanOptions).
 const TEST_DIRS = new Set(["test", "tests", "__tests__", "__mocks__", "e2e", "cypress"]);
@@ -96,14 +99,14 @@ const MINIFIED_FILE_PATTERN = /\.min\.[cm]?js$/i;
 // its fake sign-up passwords were reported as leaked credentials).
 const TEST_FILE_PATTERN = /(?:\.(?:test|spec)|[-_](?:test|tests|spec)|^(?:test|tests|spec)[-_][^.]*|^(?:conftest|tests?))\.(?:[cm]?[jt]sx?|py|php|go)$/i;
 // PHPUnit: UserControllerTest.php (case matters: "latest.php" is not a test)
-const PHPUNIT_FILE_PATTERN = /[a-z0-9]Test\.php$/;
+const PHPUNIT_FILE_PATTERN = /[a-z0-9]Test\.php$|[a-z0-9](?:Test|Tests|IT|ITCase)\.java$/;
 /** Optional project-level ignore list, one path pattern per line (see docs/rules.md). */
 export const IGNORE_FILE_NAME = ".security-hub-ignore";
 // Hand-written source is far below this. A multi-megabyte file is a bundle or generated
 // output: it can take minutes to analyse (a 9 MB typescript.js took 52 s) and holds no
 // code a person wrote. Skipped with a visible warning rather than silently.
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
-const SUPPORTED_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".py", ".php", ".go"]);
+const SUPPORTED_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".py", ".php", ".go", ".java"]);
 
 /**
  * A bundle or minified file that does not say so in its name (`public/js/app.js`, `dist/chunk-4f2a.js`): a few very long lines, far from
@@ -175,6 +178,7 @@ export function defaultAnalyzers(): Analyzer[] {
     new PythonAnalyzer(),
     new PhpAnalyzer(),
     new GoAnalyzer(),
+    new JavaAnalyzer(),
   ];
 }
 
@@ -241,7 +245,6 @@ export function scanSource(
 // Languages with no rules here. Counted (never analysed) so the report can say what a clean result does not cover.
 const UNSUPPORTED_LANGUAGES: Record<string, string> = {
   ".rb": "Ruby",
-  ".java": "Java",
   ".kt": "Kotlin",
   ".cs": "C#",
   ".rs": "Rust",

@@ -1,0 +1,1 @@
+{ "name": "vulnerable-java-app", "private": true, "description": "Deliberately vulnerable Java code (Spring MVC, Servlets, Spring Security): a fixture for the scanner's tests. Do not deploy." }

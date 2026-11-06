@@ -33,7 +33,7 @@ function loadNative(): Native {
 
 const native = loadNative();
 
-export type SupportedLanguage = "javascript" | "typescript" | "tsx" | "python" | "php" | "go";
+export type SupportedLanguage = "javascript" | "typescript" | "tsx" | "python" | "php" | "go" | "java";
 
 /** The languages the JavaScript / TypeScript analyzers understand (a Python or PHP tree has other node types). */
 export const JS_LANGUAGES: readonly SupportedLanguage[] = ["javascript", "typescript", "tsx"];
@@ -48,22 +48,24 @@ const EXTENSION_TO_LANGUAGE: Record<string, SupportedLanguage> = {
   ".py": "python",
   ".php": "php",
   ".go": "go",
+  ".java": "java",
 };
 
 export function languageForExtension(extension: string): SupportedLanguage | undefined {
   return EXTENSION_TO_LANGUAGE[extension.toLowerCase()];
 }
 
-// Python, PHP and Go are optional packages: a missing one (no prebuilt binary for this machine, an install that skipped optional
+// Python, PHP, Go and Java are optional packages: a missing one (no prebuilt binary for this machine, an install that skipped optional
 // dependencies) turns those files into a visible note instead of breaking the scan. Shared across module registries like the core.
-const OPTIONAL: Record<"python" | "php" | "go", { pkg: string; label: string }> = {
+const OPTIONAL: Record<"python" | "php" | "go" | "java", { pkg: string; label: string }> = {
   python: { pkg: "tree-sitter-python", label: "Python" },
   php: { pkg: "tree-sitter-php", label: "PHP" },
   go: { pkg: "tree-sitter-go", label: "Go" },
+  java: { pkg: "tree-sitter-java", label: "Java" },
 };
 
-function optionalGrammar(language: "python" | "php" | "go"): unknown {
-  const shared = require("v8") as { __securityHubOptional?: Partial<Record<"python" | "php" | "go", unknown>> };
+function optionalGrammar(language: "python" | "php" | "go" | "java"): unknown {
+  const shared = require("v8") as { __securityHubOptional?: Partial<Record<"python" | "php" | "go" | "java", unknown>> };
   const cache = (shared.__securityHubOptional ??= {});
   if (cache[language] === undefined) {
     const { pkg, label } = OPTIONAL[language];
@@ -84,6 +86,7 @@ function grammarFor(language: SupportedLanguage) {
     case "python":
     case "php":
     case "go":
+    case "java":
       return optionalGrammar(language);
     case "javascript":
       return native.javascript;

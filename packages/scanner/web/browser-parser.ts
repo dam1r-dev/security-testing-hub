@@ -19,6 +19,7 @@ export interface WasmSources {
   python?: Uint8Array;
   php?: Uint8Array;
   go?: Uint8Array;
+  java?: Uint8Array;
 }
 
 const EXTENSION_TO_LANGUAGE: Record<string, SupportedLanguage> = {
@@ -31,6 +32,7 @@ const EXTENSION_TO_LANGUAGE: Record<string, SupportedLanguage> = {
   ".py": "python",
   ".php": "php",
   ".go": "go",
+  ".java": "java",
 };
 
 // Same limit as the native parser: real files parse in milliseconds, a hostile one never finishes.
@@ -41,7 +43,7 @@ let languages: Partial<Record<SupportedLanguage, Parser.Language>> | undefined;
 export async function initParser(sources: WasmSources): Promise<void> {
   await Parser.init({ wasmBinary: sources.runtime });
   languages = {};
-  for (const language of ["javascript", "typescript", "tsx", "python", "php", "go"] as const) {
+  for (const language of ["javascript", "typescript", "tsx", "python", "php", "go", "java"] as const) {
     const wasm = sources[language];
     if (wasm) languages[language] = await Parser.Language.load(wasm);
   }

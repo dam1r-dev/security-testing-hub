@@ -340,6 +340,23 @@ export function trackTaint(
 ): void {
   const tainted = new Set(initial);
   const pathOnly = new Set<string>();
+  // An assignment in one branch (`case "b": bar = "clean"`, `else { x = "" }`) does not undo the taint another branch gave the name.
+  const inBranch = (node: SyntaxNode): boolean => {
+    for (let p: SyntaxNode | null = node.parent; p && p.id !== fn.id; p = p.parent) {
+      if (/^(?:if_statement|for_statement|expression_case|default_case|type_case|communication_case|func_literal)$/.test(p.type)) return true;
+    }
+    return false;
+  };
+  // `if !allowed(x) { x = defaultOrder }`: a check that falls back to a clean value makes the name clean on both paths
+  const fallback = (site: SyntaxNode, name: string): boolean => {
+    const mention = new RegExp("\\b" + name + "\\b");
+    for (let p: SyntaxNode | null = site.parent; p && p.id !== fn.id; p = p.parent) {
+      if (p.type !== "if_statement") continue;
+      const condition = p.childForFieldName("condition")?.text ?? "";
+      if (mention.test(condition) && !/==\s*nil|!=\s*nil|==\s*""|len\(\w+\)\s*==\s*0|\bnil\b/.test(condition)) return true;
+    }
+    return false;
+  };
   const assign = (targets: SyntaxNode | null, values: SyntaxNode | null, additive: boolean): void => {
     if (!targets || !values) return;
     const left = targets.type === "expression_list" ? targets.namedChildren : [targets];
@@ -361,7 +378,7 @@ export function trackTaint(
             if (onlyPath) pathOnly.add(name);
             else pathOnly.delete(name);
           }
-        } else if (!additive && target.type === "identifier") {
+        } else if (!additive && target.type === "identifier" && (!inBranch(target) || fallback(target, name))) {
           tainted.delete(name); // `x = clean`: no longer the caller's text
           pathOnly.delete(name);
         }

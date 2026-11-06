@@ -92,11 +92,11 @@ export function coverageNotes(summary: ScanSummary): string[] {
   if (c.analyzed === 0) {
     notes.push(
       unsupportedTotal > 0
-        ? `No JavaScript, TypeScript, Python, PHP or Go source was analysed, so nothing in this project's code was checked. Found ${count(unsupportedTotal, "file")} in languages without rules (${list}).`
-        : "No JavaScript, TypeScript, Python, PHP or Go source was analysed, so nothing in this project's code was checked. Check the path, and --ignore / .security-hub-ignore.",
+        ? `No JavaScript, TypeScript, Python, PHP, Go or Java source was analysed, so nothing in this project's code was checked. Found ${count(unsupportedTotal, "file")} in languages without rules (${list}).`
+        : "No JavaScript, TypeScript, Python, PHP, Go or Java source was analysed, so nothing in this project's code was checked. Check the path, and --ignore / .security-hub-ignore.",
     );
   } else if (unsupportedTotal > 0) {
-    notes.push(`${count(unsupportedTotal, "file")} in languages without rules were not checked (${list}); this report covers the ${count(c.analyzed, "JavaScript, TypeScript, Python, PHP or Go file")} that ${c.analyzed === 1 ? "was" : "were"} analysed.`);
+    notes.push(`${count(unsupportedTotal, "file")} in languages without rules were not checked (${list}); this report covers the ${count(c.analyzed, "JavaScript, TypeScript, Python, PHP, Go or Java file")} that ${c.analyzed === 1 ? "was" : "were"} analysed.`);
   }
   if (c.skipped > 0) notes.push(`${count(c.skipped, "file")} skipped (minified or bundled, a third-party library, over the size limit, or unreadable); each is listed with its reason.`);
   if (c.parseErrors > 0) notes.push(`${count(c.parseErrors, "file")} could not be parsed completely, so results for ${c.parseErrors === 1 ? "it" : "them"} may be incomplete.`);

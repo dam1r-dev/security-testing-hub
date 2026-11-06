@@ -232,9 +232,47 @@ const HOW_TO_FIX_GO: Partial<Record<VulnerabilityType, string>> = {
     "Remove the value from the code and rotate it (it stays in the git history). Read it at start-up from an environment variable (os.Getenv) or a secret manager and fail to start when it is missing.",
 };
 
+const HOW_TO_FIX_JAVA: Partial<Record<VulnerabilityType, string>> = {
+  "sql-injection":
+    "Never build SQL text from request data (+, String.format, StringBuilder). Use placeholders and pass the values separately: PreparedStatement ps = conn.prepareStatement(\"SELECT ... WHERE name = ?\"); ps.setString(1, name); " +
+    "(JdbcTemplate: jdbc.query(\"... ?\", mapper, name); JPA: createQuery(\"... :name\").setParameter(\"name\", name) or a Spring Data derived query). A table or column name cannot be bound: pick it from an allow-list (a Map or a switch).",
+  "command-injection":
+    "Do not run a shell or a command string with request data. Use new ProcessBuilder(\"convert\", \"--\", input, output) with each value as its own argument (never \"sh -c\"), validate each value against an allow-list or a strict regex first, and prefer a Java API over a command.",
+  "path-traversal":
+    "Reduce the request value to a file name (FilenameUtils.getName / Paths.get(value).getFileName()), resolve it against a fixed folder, and check that the normalized result still starts with that folder: Path p = base.resolve(name).normalize(); if (!p.startsWith(base)) reject. For uploads never use getOriginalFilename() as the path; generate a name.",
+  ssrf:
+    "Parse the URL (new URI(url)), allow only https and hosts from an allow-list, resolve the host and refuse loopback, link-local (169.254.0.0/16) and private ranges, disable redirects (HttpClient.Redirect.NEVER), and set timeouts.",
+  xss:
+    "Escape request data for HTML where it is printed (HtmlUtils.htmlEscape(value) or Encode.forHtml(value) from the OWASP Java Encoder), render pages through Thymeleaf th:text / JSP <c:out> instead of out.println, and send API replies as JSON (produces = application/json), not as HTML text.",
+  "open-redirect":
+    "Redirect only to a path of your own site: accept the target only if it starts with a single \"/\" (not \"//\" or \"/\\\\\"), or parse it (new URI(target)) and compare getHost() with an allow-list. Otherwise redirect to a fixed route.",
+  "code-injection":
+    "Do not evaluate request text as an expression or script (SpEL, OGNL, MVEL, Groovy, ScriptEngine). Map the request to a fixed set of operations. If SpEL is needed, use SimpleEvaluationContext (no method calls, no types), never StandardEvaluationContext.",
+  "insecure-deserialization":
+    "Do not deserialize untrusted data with ObjectInputStream, XMLDecoder, XStream or SnakeYAML's default constructor: use JSON with a fixed target type (Jackson without default typing), or set an ObjectInputFilter / XStream allow-list / new Yaml(new SafeConstructor(new LoaderOptions())).",
+  xxe:
+    "Switch DTDs off before parsing: factory.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true) and factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) (XMLInputFactory: IS_SUPPORTING_EXTERNAL_ENTITIES = false, SUPPORT_DTD = false).",
+  csrf:
+    "Leave Spring Security's CSRF protection on for any app that logs users in with a cookie (http.csrf(Customizer.withDefaults())). Switch it off only for a stateless API that authenticates with a token in the Authorization header and creates no session.",
+  "broken-access-control":
+    "Do not end the rules with anyRequest().permitAll(). List the public routes and require authentication for the rest (anyRequest().authenticated()), then check the owner of the data in the method (@PreAuthorize).",
+  "insecure-cors":
+    "Allow only the exact origins you trust (allowedOrigins(\"https://app.example.com\")), never \"*\" together with allowCredentials(true), and do not copy the request's Origin header into Access-Control-Allow-Origin.",
+  "weak-crypto":
+    "Hash passwords with BCryptPasswordEncoder (cost 12) or Argon2PasswordEncoder; MD5 and SHA-1 are for checksums only. Use SecureRandom for tokens, codes and keys, never java.util.Random. Use Cipher \"AES/GCM/NoPadding\" with a fresh random IV; avoid DES, RC4 and plain \"AES\" (which is ECB).",
+  "tls-verification":
+    "Remove the trust-all trust manager / NoopHostnameVerifier. For a private certificate authority load its certificate into a KeyStore and build the SSLContext from it (TrustManagerFactory).",
+  "insecure-cookie":
+    "Set setHttpOnly(true), setSecure(true) and SameSite on login cookies (Spring: ResponseCookie.from(name, value).httpOnly(true).secure(true).sameSite(\"Lax\")).",
+  "insecure-jwt":
+    "Verify the signature: Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token) (not parseClaimsJwt), or JWT.require(algorithm).build().verify(token) (not JWT.decode). Never accept the \"none\" algorithm.",
+  "hardcoded-secret":
+    "Remove the value from the code and rotate it (it stays in the git history). Read it at start-up from an environment variable (System.getenv), @Value(\"${...}\") backed by the environment, or a secret manager, and fail to start when it is missing.",
+};
+
 function adviceFor(finding: Finding): string {
   const file = finding.location.file.toLowerCase();
-  const specific = file.endsWith(".py") ? HOW_TO_FIX_PYTHON[finding.ruleId] : file.endsWith(".php") ? HOW_TO_FIX_PHP[finding.ruleId] : file.endsWith(".go") ? HOW_TO_FIX_GO[finding.ruleId] : undefined;
+  const specific = file.endsWith(".py") ? HOW_TO_FIX_PYTHON[finding.ruleId] : file.endsWith(".php") ? HOW_TO_FIX_PHP[finding.ruleId] : file.endsWith(".go") ? HOW_TO_FIX_GO[finding.ruleId] : file.endsWith(".java") ? HOW_TO_FIX_JAVA[finding.ruleId] : undefined;
   return specific ?? HOW_TO_FIX[finding.ruleId];
 }
 
